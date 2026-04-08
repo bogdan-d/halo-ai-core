@@ -13,6 +13,7 @@ Welcome to the Halo AI Core knowledge base. Everything you need to run a local A
 ## Core Guides
 
 - [Security](Security.md) — SSH keys only, no exceptions
+- [Security Hardening](Security-Hardening.md) — 7-layer lockdown: firewall, fail2ban, integrity, auto-updates
 - [Systemd Services](Systemd-Services.md) — Managing your services
 - [Caddy Routing](Caddy-Routing.md) — Adding and managing reverse proxy routes
 - [ROCm Tuning](ROCm-Tuning.md) — GPU optimization for gfx1151
