@@ -2,25 +2,51 @@
 
 > Your hardware. Your data. Your rules.
 
-Welcome to the Halo AI Core knowledge base. This wiki covers everything you need to run a local AI platform on AMD Strix Halo hardware.
+Welcome to the Halo AI Core knowledge base. Everything you need to run a local AI platform on AMD hardware and build on top of it.
 
-## Pages
+## Getting Started
 
-- [[Getting Started]] — Clone, install, verify
-- [[Architecture]] — How the pieces fit together
-- [[Components]] — ROCm, Caddy, llama.cpp, Lemonade, Gaia
-- [[Security]] — SSH keys only, no exceptions
-- [[Troubleshooting]] — Common issues and fixes
-- [[Lego Blocks]] — Add-on services you can snap in
-- [[FAQ]] — Frequently asked questions
-- [[Roadmap]] — What's coming next
+- [Getting Started](Getting-Started.md) — Clone, install, verify in 5 minutes
+- [Architecture](Architecture.md) — How the pieces fit together
+- [Components](Components.md) — ROCm, Caddy, llama.cpp, Lemonade, Gaia in detail
 
-## Quick Links
+## Core Guides
 
-- [Install Script](https://github.com/stampby/halo-ai-core/blob/main/install.sh)
-- [Security Guide](https://github.com/stampby/halo-ai-core/blob/main/docs/SECURITY.md)
-- [Discussions](https://github.com/stampby/halo-ai-core/discussions)
+- [Security](Security.md) — SSH keys only, no exceptions
+- [Systemd Services](Systemd-Services.md) — Managing your services
+- [Caddy Routing](Caddy-Routing.md) — Adding and managing reverse proxy routes
+- [ROCm Tuning](ROCm-Tuning.md) — GPU optimization for gfx1151
+
+## Building On Core
+
+- [Lego Blocks](Lego-Blocks.md) — Philosophy and how to add services
+- [Adding a Service](Adding-a-Service.md) — Step-by-step template for new blocks
+- [SSH Mesh](SSH-Mesh.md) — Multi-machine networking
+- [Voice Pipeline](Voice-Pipeline.md) — Whisper + Kokoro + voice cloning
+- [Network Layout](Network-Layout.md) — Three-tier network architecture
+
+## AI & Models
+
+- [Model Management](Model-Management.md) — Loading, switching, and benchmarking models
+- [NPU Acceleration](NPU-Acceleration.md) — XDNA driver and FastFlowLM
+- [Benchmarks](Benchmarks.md) — Performance numbers on Strix Halo
+- [Agents Overview](Agents-Overview.md) — The 17 LLM actors and what they do
+
+## Platform
+
+- [Machine Fleet](Machine-Fleet.md) — Hardware specs and access
+- [Build From Source](Build-From-Source.md) — The philosophy and how-to
+- [Backup and Snapshots](Backup-and-Snapshots.md) — btrfs snapshots and recovery
+
+## Reference
+
+- [FAQ](FAQ.md) — Frequently asked questions
+- [Troubleshooting](Troubleshooting.md) — Common issues and fixes
+- [Roadmap](Roadmap.md) — What's coming next
+- [Glossary](Glossary.md) — Terms and concepts
 
 ---
 
 *Designed and built by the architect*
+
+*"There is no spoon." — The Matrix*
