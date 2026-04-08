@@ -48,6 +48,8 @@ cd halo-ai-core
 ./install.sh --status     # check what's running
 ```
 
+[![Install Demo](https://img.shields.io/badge/asciinema-watch_install_demo-d40000?style=flat&logo=asciinema&logoColor=white)](halo-ai-core-install.cast) *~3 min on strix halo hardware*
+
 ## what you get
 
 | | |
