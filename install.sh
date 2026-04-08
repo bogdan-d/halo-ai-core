@@ -1,0 +1,482 @@
+#!/bin/bash
+# ============================================================
+# Halo AI Core — Install Script
+# Designed and built by the architect
+#
+# "I know kung fu." — Neo, The Matrix
+#
+# Core services for AMD Strix Halo bare-metal AI platform
+# Components: ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
+# ============================================================
+set -e
+
+VERSION="1.0.0"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LOG_FILE="/tmp/halo-ai-core-install.log"
+DRY_RUN=false
+SKIP_ROCM=false
+SKIP_CADDY=false
+SKIP_LLAMA=false
+SKIP_LEMONADE=false
+SKIP_GAIA=false
+PYTHON_VERSION="3.13.4"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+usage() {
+    echo "Halo AI Core v${VERSION} — Install Script"
+    echo ""
+    echo "Usage: ./install.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --dry-run       Show what would be installed without doing it"
+    echo "  --yes-all       Skip all confirmation prompts"
+    echo "  --skip-rocm     Skip ROCm installation"
+    echo "  --skip-caddy    Skip Caddy installation"
+    echo "  --skip-llama    Skip llama.cpp build"
+    echo "  --skip-lemonade Skip Lemonade SDK"
+    echo "  --skip-gaia     Skip Gaia SDK"
+    echo "  --status        Show current install status"
+    echo "  -h, --help      Show this help"
+    exit 0
+}
+
+log() {
+    echo -e "${GREEN}[+]${NC} $1"
+    echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE"
+}
+
+warn() {
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[$(date '+%H:%M:%S')] WARN: $1" >> "$LOG_FILE"
+}
+
+err() {
+    echo -e "${RED}[x]${NC} $1"
+    echo "[$(date '+%H:%M:%S')] ERROR: $1" >> "$LOG_FILE"
+}
+
+info() {
+    echo -e "${BLUE}[i]${NC} $1"
+}
+
+check_status() {
+    echo ""
+    echo "╔══════════════════════════════════════╗"
+    echo "║       Halo AI Core — Status          ║"
+    echo "╚══════════════════════════════════════╝"
+    echo ""
+
+    # ROCm
+    if command -v rocminfo &>/dev/null || [ -f /opt/rocm/bin/rocminfo ]; then
+        GPU=$(/opt/rocm/bin/rocminfo 2>/dev/null | grep "Marketing Name" | grep -v CPU | head -1 | sed 's/.*: *//')
+        echo -e "  ROCm:     ${GREEN}installed${NC} — $GPU"
+    else
+        echo -e "  ROCm:     ${RED}not installed${NC}"
+    fi
+
+    # Caddy
+    if systemctl is-active caddy &>/dev/null; then
+        echo -e "  Caddy:    ${GREEN}running${NC} — $(caddy version 2>/dev/null)"
+    elif command -v caddy &>/dev/null; then
+        echo -e "  Caddy:    ${YELLOW}installed but not running${NC}"
+    else
+        echo -e "  Caddy:    ${RED}not installed${NC}"
+    fi
+
+    # llama.cpp
+    if [ -f /usr/local/bin/llama-server ]; then
+        VER=$(/usr/local/bin/llama-server --version 2>&1 | grep version | head -1)
+        echo -e "  llama.cpp: ${GREEN}installed${NC} — $VER"
+    else
+        echo -e "  llama.cpp: ${RED}not installed${NC}"
+    fi
+
+    # Lemonade
+    if [ -f "$HOME/lemonade-env/bin/lemonade" ]; then
+        VER=$($HOME/lemonade-env/bin/pip show lemonade-sdk 2>/dev/null | grep Version | cut -d' ' -f2)
+        echo -e "  Lemonade: ${GREEN}installed${NC} — v$VER"
+    else
+        echo -e "  Lemonade: ${RED}not installed${NC}"
+    fi
+
+    # Gaia
+    if [ -f "$HOME/gaia-env/bin/gaia" ]; then
+        VER=$($HOME/gaia-env/bin/gaia --version 2>/dev/null)
+        echo -e "  Gaia:     ${GREEN}installed${NC} — v$VER"
+    else
+        echo -e "  Gaia:     ${RED}not installed${NC}"
+    fi
+
+    # Services
+    echo ""
+    echo "  Services:"
+    for svc in caddy sshd llama-server lemonade gaia; do
+        STATUS=$(systemctl is-enabled $svc 2>/dev/null || echo "missing")
+        ACTIVE=$(systemctl is-active $svc 2>/dev/null || echo "inactive")
+        if [ "$STATUS" = "enabled" ]; then
+            echo -e "    $svc: ${GREEN}$STATUS${NC} ($ACTIVE)"
+        else
+            echo -e "    $svc: ${YELLOW}$STATUS${NC} ($ACTIVE)"
+        fi
+    done
+    echo ""
+    exit 0
+}
+
+# Parse args
+YES_ALL=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --dry-run)     DRY_RUN=true; shift ;;
+        --yes-all)     YES_ALL=true; shift ;;
+        --skip-rocm)   SKIP_ROCM=true; shift ;;
+        --skip-caddy)  SKIP_CADDY=true; shift ;;
+        --skip-llama)  SKIP_LLAMA=true; shift ;;
+        --skip-lemonade) SKIP_LEMONADE=true; shift ;;
+        --skip-gaia)   SKIP_GAIA=true; shift ;;
+        --status)      check_status ;;
+        -h|--help)     usage ;;
+        *)             err "Unknown option: $1"; usage ;;
+    esac
+done
+
+# ============================================================
+echo ""
+echo "╔══════════════════════════════════════╗"
+echo "║   Halo AI Core v${VERSION} — Installer    ║"
+echo "║   Designed and built by the architect║"
+echo "╚══════════════════════════════════════╝"
+echo ""
+
+if $DRY_RUN; then
+    warn "DRY RUN — nothing will be installed"
+    echo ""
+fi
+
+# Pre-flight checks
+if [ "$(id -u)" -eq 0 ]; then
+    err "Do not run as root. Run as your user with sudo access."
+    exit 1
+fi
+
+if ! command -v pacman &>/dev/null; then
+    err "This script requires Arch Linux (pacman not found)"
+    exit 1
+fi
+
+if ! sudo -n true 2>/dev/null; then
+    err "Passwordless sudo required. Run: echo '$USER ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$USER"
+    exit 1
+fi
+
+# Confirm
+if ! $YES_ALL && ! $DRY_RUN; then
+    info "This will install Halo AI Core services on $(hostname)"
+    read -p "Continue? [y/N] " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]] || exit 0
+fi
+
+# ============================================================
+# 1. BASE PACKAGES
+# ============================================================
+log "Installing base packages..."
+BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano cmake make"
+
+if $DRY_RUN; then
+    info "Would install: $BASE_PKGS"
+else
+    sudo pacman -Sy --needed --noconfirm $BASE_PKGS >> "$LOG_FILE" 2>&1
+    sudo systemctl enable --now NetworkManager sshd >> "$LOG_FILE" 2>&1
+    log "Base packages installed"
+fi
+
+# ============================================================
+# 2. ROCm
+# ============================================================
+if ! $SKIP_ROCM; then
+    log "Installing ROCm GPU stack..."
+    ROCM_PKGS="rocm-hip-sdk rocm-opencl-sdk hip-runtime-amd rocminfo vulkan-headers vulkan-icd-loader vulkan-radeon shaderc glslang"
+
+    if $DRY_RUN; then
+        info "Would install: $ROCM_PKGS"
+    else
+        sudo pacman -S --needed --noconfirm $ROCM_PKGS >> "$LOG_FILE" 2>&1
+
+        # ROCm PATH and env
+        sudo tee /etc/profile.d/rocm.sh > /dev/null << 'ROCM_ENV'
+export PATH=$PATH:/opt/rocm/bin
+export ROCBLAS_USE_HIPBLASLT=1
+export PYTORCH_ROCM_ARCH=gfx1151
+export HSA_OVERRIDE_GFX_VERSION=11.5.1
+export IOMMU=pt
+ROCM_ENV
+
+        # Add user to video/render
+        sudo usermod -aG video,render "$USER"
+
+        # Source it now
+        export PATH=$PATH:/opt/rocm/bin
+
+        log "ROCm installed — $(/opt/rocm/bin/rocminfo 2>/dev/null | grep 'Marketing Name' | grep -v CPU | head -1 | sed 's/.*: *//')"
+    fi
+else
+    warn "Skipping ROCm"
+fi
+
+# ============================================================
+# 3. CADDY
+# ============================================================
+if ! $SKIP_CADDY; then
+    log "Installing Caddy reverse proxy..."
+
+    if $DRY_RUN; then
+        info "Would install: caddy"
+    else
+        sudo pacman -S --needed --noconfirm caddy >> "$LOG_FILE" 2>&1
+
+        sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYFILE'
+# Halo AI Core — Caddy Reverse Proxy
+# Drop configs in /etc/caddy/conf.d/*.caddy
+
+:80 {
+    respond "halo-ai core — {hostname}"
+}
+
+import /etc/caddy/conf.d/*.caddy
+CADDYFILE
+
+        sudo mkdir -p /etc/caddy/conf.d
+        sudo systemctl enable --now caddy >> "$LOG_FILE" 2>&1
+        log "Caddy installed and running"
+    fi
+else
+    warn "Skipping Caddy"
+fi
+
+# ============================================================
+# 4. PYTHON (via pyenv for 3.13 compatibility)
+# ============================================================
+log "Setting up Python ${PYTHON_VERSION}..."
+
+if $DRY_RUN; then
+    info "Would install Python ${PYTHON_VERSION} via pyenv"
+else
+    if [ ! -f "$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3" ]; then
+        sudo pacman -S --needed --noconfirm tk sqlite openssl zlib xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
+
+        if [ ! -d "$HOME/.pyenv" ]; then
+            curl -s https://pyenv.run | bash >> "$LOG_FILE" 2>&1
+        fi
+
+        export PYENV_ROOT="$HOME/.pyenv"
+        export PATH="$PYENV_ROOT/bin:$PATH"
+        eval "$(pyenv init -)"
+
+        pyenv install -s "${PYTHON_VERSION}" >> "$LOG_FILE" 2>&1
+        log "Python ${PYTHON_VERSION} installed via pyenv"
+    else
+        log "Python ${PYTHON_VERSION} already installed"
+    fi
+fi
+
+PYTHON_BIN="$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3"
+
+# ============================================================
+# 5. LLAMA.CPP
+# ============================================================
+if ! $SKIP_LLAMA; then
+    log "Building llama.cpp from source (ROCm + Vulkan)..."
+
+    if $DRY_RUN; then
+        info "Would clone and build llama.cpp with HIP + Vulkan"
+    else
+        export PATH=$PATH:/opt/rocm/bin
+        export HIP_PATH=/opt/rocm
+        export ROCM_PATH=/opt/rocm
+
+        if [ ! -d "$HOME/llama.cpp" ]; then
+            git clone https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
+        else
+            cd "$HOME/llama.cpp" && git pull >> "$LOG_FILE" 2>&1
+        fi
+
+        cd "$HOME/llama.cpp"
+        rm -rf build
+        cmake -B build \
+            -DGGML_HIP=ON \
+            -DGGML_VULKAN=ON \
+            -DAMDGPU_TARGETS=gfx1151 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_HIP_COMPILER=/opt/rocm/bin/amdclang++ \
+            >> "$LOG_FILE" 2>&1
+
+        cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1
+
+        sudo cp build/bin/llama-server /usr/local/bin/
+        sudo cp build/bin/llama-cli /usr/local/bin/
+
+        # Systemd service
+        sudo tee /usr/lib/systemd/system/llama-server.service > /dev/null << 'LLAMA_SVC'
+[Unit]
+Description=llama.cpp Inference Server
+After=network.target
+
+[Service]
+Type=simple
+User=bcloud
+Environment=PATH=/usr/local/bin:/opt/rocm/bin:/usr/bin
+Environment=ROCBLAS_USE_HIPBLASLT=1
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+ExecStart=/usr/local/bin/llama-server --host 0.0.0.0 --port 8080 --n-gpu-layers 999
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+LLAMA_SVC
+
+        # Caddy route
+        sudo tee /etc/caddy/conf.d/llama.caddy > /dev/null << 'LLAMA_CADDY'
+:8081 {
+    reverse_proxy localhost:8080
+}
+LLAMA_CADDY
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable llama-server >> "$LOG_FILE" 2>&1
+        sudo systemctl reload caddy >> "$LOG_FILE" 2>&1
+
+        log "llama.cpp built and installed — $(/usr/local/bin/llama-server --version 2>&1 | grep version | head -1)"
+    fi
+else
+    warn "Skipping llama.cpp"
+fi
+
+# ============================================================
+# 6. LEMONADE SDK
+# ============================================================
+if ! $SKIP_LEMONADE; then
+    log "Installing Lemonade SDK..."
+
+    if $DRY_RUN; then
+        info "Would install lemonade-sdk in ~/lemonade-env"
+    else
+        if [ ! -d "$HOME/lemonade-env" ]; then
+            "$PYTHON_BIN" -m venv "$HOME/lemonade-env"
+        fi
+
+        "$HOME/lemonade-env/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
+        "$HOME/lemonade-env/bin/pip" install lemonade-sdk >> "$LOG_FILE" 2>&1
+
+        # Systemd service
+        sudo tee /usr/lib/systemd/system/lemonade.service > /dev/null << 'LEM_SVC'
+[Unit]
+Description=Lemonade SDK Server
+After=network.target
+
+[Service]
+Type=simple
+User=bcloud
+Environment=PATH=/home/bcloud/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
+Environment=ROCBLAS_USE_HIPBLASLT=1
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+WorkingDirectory=/home/bcloud
+ExecStart=/home/bcloud/lemonade-env/bin/lemonade --tools llama-server --port 13305
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+LEM_SVC
+
+        # Caddy route
+        sudo tee /etc/caddy/conf.d/lemonade.caddy > /dev/null << 'LEM_CADDY'
+:13306 {
+    reverse_proxy localhost:13305
+}
+LEM_CADDY
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable lemonade >> "$LOG_FILE" 2>&1
+        sudo systemctl reload caddy >> "$LOG_FILE" 2>&1
+
+        VER=$("$HOME/lemonade-env/bin/pip" show lemonade-sdk 2>/dev/null | grep Version | cut -d' ' -f2)
+        log "Lemonade SDK v$VER installed"
+    fi
+else
+    warn "Skipping Lemonade SDK"
+fi
+
+# ============================================================
+# 7. GAIA SDK
+# ============================================================
+if ! $SKIP_GAIA; then
+    log "Installing Gaia SDK..."
+
+    if $DRY_RUN; then
+        info "Would install amd-gaia in ~/gaia-env"
+    else
+        if [ ! -d "$HOME/gaia" ]; then
+            git clone https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1 || \
+            git clone https://github.com/bong-water-water-bong/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
+        fi
+
+        if [ ! -d "$HOME/gaia-env" ]; then
+            "$PYTHON_BIN" -m venv "$HOME/gaia-env"
+        fi
+
+        "$HOME/gaia-env/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
+        cd "$HOME/gaia"
+        "$HOME/gaia-env/bin/pip" install -e . >> "$LOG_FILE" 2>&1
+
+        # Systemd service
+        sudo tee /usr/lib/systemd/system/gaia.service > /dev/null << 'GAIA_SVC'
+[Unit]
+Description=Gaia AI Agent Framework
+After=network.target llama-server.service
+
+[Service]
+Type=simple
+User=bcloud
+Environment=PATH=/home/bcloud/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
+Environment=ROCBLAS_USE_HIPBLASLT=1
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+WorkingDirectory=/home/bcloud/gaia
+ExecStart=/home/bcloud/gaia-env/bin/gaia serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+GAIA_SVC
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable gaia >> "$LOG_FILE" 2>&1
+
+        VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null)
+        log "Gaia SDK v$VER installed"
+    fi
+else
+    warn "Skipping Gaia SDK"
+fi
+
+# ============================================================
+# DONE
+# ============================================================
+echo ""
+echo "╔══════════════════════════════════════╗"
+echo "║     Halo AI Core — Install Done      ║"
+echo "╚══════════════════════════════════════╝"
+echo ""
+echo "  \"There is no spoon.\" — The Matrix"
+echo ""
+log "Installation complete. Run './install.sh --status' to verify."
+log "Full log: $LOG_FILE"
+echo ""
