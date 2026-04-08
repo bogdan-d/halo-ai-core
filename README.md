@@ -55,19 +55,23 @@ cd halo-ai-core
 | **backend** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
 | **agents** | gaia sdk 0.17.x — build ai agents that run 100% local |
 | **gateway** | caddy 2.x — reverse proxy, drop-in config, auto-routing |
+| **llm ui** | lemonade web ui — chat with your models instantly (:13305) |
+| **agent ui** | gaia agent ui — deploy and manage agents (:4200) |
 
 ```
 ┌─────────────────────────────────────────────┐
 │                   Caddy (:80)                │
 ├──────────┬──────────┬───────────┬───────────┤
-│ llama.cpp│ Lemonade │   Gaia    │  Your     │
-│  :8080   │  :13305  │  agents   │  blocks   │
+│ Lemonade │ Gaia     │ llama.cpp │  Your     │
+│ UI :13305│ UI :4200 │   :8080   │  blocks   │
 ├──────────┴──────────┴───────────┴───────────┤
 │              ROCm 7.2.1 (gfx1151)           │
 ├─────────────────────────────────────────────┤
 │         Arch Linux / systemd / btrfs        │
 └─────────────────────────────────────────────┘
 ```
+
+> 🎬 **[watch the full install](halo-ai-core-install.cast)** — clean install recorded on strix halo. clone the repo and run `asciinema play halo-ai-core-install.cast` to watch it in real time.
 
 ## philosophy
 
@@ -94,6 +98,15 @@ core is the foundation. snap on what you need:
 | **discord bots** | ai agents in discord | planned |
 
 [how to build your own block →](docs/wiki/Adding-a-Service.md)
+
+## core UIs — ready out of the box
+
+| ui | port | what it does |
+|----|------|-------------|
+| **lemonade** | [localhost:13305](http://localhost:13305) | chat with your llms, load models, switch backends |
+| **gaia** | [localhost:4200](http://localhost:4200) | deploy agents, manage conversations, agent web ui |
+
+no cli required. install core, open the browser, start talking to your ai.
 
 ## recommended: core agents
 
