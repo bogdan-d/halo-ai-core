@@ -248,7 +248,7 @@ fi
 # ============================================================
 if ! $SKIP_ROCM; then
     step "ROCm GPU Stack"
-    ROCM_PKGS="rocm-hip-sdk rocm-opencl-sdk hip-runtime-amd rocminfo vulkan-headers vulkan-icd-loader vulkan-radeon shaderc glslang"
+    ROCM_PKGS="rocm-hip-sdk rocm-opencl-sdk hip-runtime-amd rocminfo rocwmma vulkan-headers vulkan-icd-loader vulkan-radeon shaderc glslang"
 
     if $DRY_RUN; then
         info "Would install: $ROCM_PKGS"
