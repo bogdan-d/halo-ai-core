@@ -240,6 +240,7 @@ if ! $SKIP_CADDY; then
         info "Would install: caddy"
     else
         sudo pacman -S --needed --noconfirm caddy >> "$LOG_FILE" 2>&1
+        sudo mkdir -p /etc/caddy
 
         sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYFILE'
 # Halo AI Core — Caddy Reverse Proxy
