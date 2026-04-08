@@ -289,14 +289,34 @@ if ! $SKIP_CADDY; then
         info "Would install: caddy"
     else
         sudo pacman -S --needed --noconfirm caddy >> "$LOG_FILE" 2>&1
-        sudo mkdir -p /etc/caddy
+        sudo mkdir -p /etc/caddy/conf.d
+        # Clean stale configs from previous installs to prevent duplicates
+        sudo rm -f /etc/caddy/conf.d/*.caddy 2>/dev/null
 
         sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYFILE'
 # Halo AI Core — Caddy Reverse Proxy
 # Drop configs in /etc/caddy/conf.d/*.caddy
 
 :80 {
-    respond "halo-ai core — {hostname}"
+    header Content-Type "text/html; charset=utf-8"
+    respond `<!DOCTYPE html>
+<html><head><title>halo-ai core</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#e0e0e0;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh}
+.box{text-align:center}
+h1{font-size:2em;margin-bottom:0.5em;color:#00d4ff}
+p{margin-bottom:2em;color:#888}
+.btn{display:inline-block;margin:0.5em;padding:1em 2em;background:#111;border:1px solid #333;border-radius:8px;color:#00d4ff;text-decoration:none;font-size:1.2em;font-family:monospace;transition:all 0.2s}
+.btn:hover{background:#1a1a1a;border-color:#00d4ff}
+small{display:block;margin-top:2em;color:#444}
+</style></head><body><div class="box">
+<h1>halo-ai core</h1>
+<p>choose your ui</p>
+<a class="btn" href="http://{http.request.host}:13305">lemonade — chat with llms</a>
+<a class="btn" href="http://{http.request.host}:4200">gaia — manage agents</a>
+<small>designed and built by the architect</small>
+</div></body></html>`
 }
 
 import /etc/caddy/conf.d/*.caddy
