@@ -166,13 +166,21 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 if ! command -v pacman &>/dev/null; then
-    err "This script requires Arch Linux (pacman not found)"
-    exit 1
+    if $DRY_RUN; then
+        warn "pacman not found — dry-run will show planned actions only"
+    else
+        err "This script requires Arch Linux (pacman not found)"
+        exit 1
+    fi
 fi
 
 if ! sudo -n true 2>/dev/null; then
-    err "Passwordless sudo required. Run: echo '$USER ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$USER"
-    exit 1
+    if $DRY_RUN; then
+        warn "sudo not available — dry-run will show planned actions only"
+    else
+        err "Passwordless sudo required. Run: echo '$USER ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$USER"
+        exit 1
+    fi
 fi
 
 # Confirm
