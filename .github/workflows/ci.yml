@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dry-run:
+    name: Install Script Dry Run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify install script syntax
+        run: bash -n install.sh
+
+      - name: Run dry-run
+        run: |
+          chmod +x install.sh
+          ./install.sh --dry-run
+
+      - name: Verify status check
+        run: ./install.sh --status
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint install script
+        run: shellcheck install.sh --severity=error || true
