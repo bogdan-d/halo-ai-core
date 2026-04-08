@@ -22,6 +22,17 @@ Halo AI Core is the foundation layer for running local AI on AMD Ryzen AI hardwa
 
 Everything runs as **systemd services**. Everything auto-restarts. Everything routes through Caddy.
 
+## Demo
+
+Watch the full clean install on an AMD Strix Halo (128GB):
+
+```bash
+# Play the recording locally
+asciinema play halo-ai-core-install.cast
+```
+
+The cast file is included in this repo. Clone and play it to see the full install in real time.
+
 ## Quick Start
 
 ```bash
@@ -76,6 +87,25 @@ cd halo-ai-core
 | Lemonade | 13305 | 13306 | lemonade.service |
 | Gaia | — | — | gaia.service |
 | Caddy | 80 | — | caddy.service |
+
+## Security
+
+**SSH keys only. No exceptions.**
+
+Halo AI Core binds all services to `localhost`. Nothing is exposed to the network. You access everything through SSH.
+
+Read the full security guide: [docs/SECURITY.md](docs/SECURITY.md)
+
+```bash
+# Generate a key
+ssh-keygen -t ed25519
+
+# Copy to server
+ssh-copy-id bcloud@10.0.0.10
+
+# You're in
+ssh bcloud@10.0.0.10
+```
 
 ## License
 
