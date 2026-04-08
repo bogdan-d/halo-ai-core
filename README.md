@@ -1,5 +1,18 @@
 # Halo AI Core
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?logo=archlinux&logoColor=white)](https://archlinux.org/)
+[![AMD ROCm](https://img.shields.io/badge/ROCm-7.2.1-ED1C24?logo=amd&logoColor=white)](https://rocm.docs.amd.com/)
+[![AMD Strix Halo](https://img.shields.io/badge/Strix_Halo-gfx1151-ED1C24?logo=amd&logoColor=white)](https://www.amd.com/en/products/processors/laptop/ryzen-ai-max.html)
+[![llama.cpp](https://img.shields.io/badge/llama.cpp-latest-blue)](https://github.com/ggerganov/llama.cpp)
+[![Lemonade SDK](https://img.shields.io/badge/Lemonade_SDK-9.x-orange)](https://github.com/lemonade-sdk/lemonade)
+[![Gaia](https://img.shields.io/badge/Gaia-0.17.x-green)](https://github.com/amd/gaia)
+[![Caddy](https://img.shields.io/badge/Caddy-2.x-22D3EE)](https://caddyserver.com/)
+[![systemd](https://img.shields.io/badge/systemd-managed-brightgreen)](https://systemd.io/)
+[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red)](docs/SECURITY.md)
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple)](https://github.com/stampby/halo-ai-core)
+
 > Bare-metal AI platform for AMD Strix Halo. One script. Everything works.
 >
 > *"I know kung fu." — Neo*
