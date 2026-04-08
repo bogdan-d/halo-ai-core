@@ -1,4 +1,8 @@
-# Halo AI Core
+<p align="center">
+  <img src="assets/logo-ring.svg" alt="Halo AI Core" width="150">
+</p>
+
+<h1 align="center">Halo AI Core</h1>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?logo=archlinux&logoColor=white)](https://archlinux.org/)
