@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-ring.svg" alt="Halo AI Core" width="150">
+  <img src="assets/halo-ai.svg" alt="Halo AI Core" width="200">
 </p>
 
 <h1 align="center">Halo AI Core</h1>
