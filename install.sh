@@ -6,11 +6,11 @@
 # "I know kung fu." — Neo, The Matrix
 #
 # Core services for AMD Strix Halo bare-metal AI platform
-# Components: ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
+# Components: ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK, Claude Code
 # ============================================================
 set -e
 
-VERSION="0.9.1"
+VERSION="0.9.2"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="/tmp/halo-ai-core-install.log"
 DRY_RUN=false
@@ -19,6 +19,7 @@ SKIP_CADDY=false
 SKIP_LLAMA=false
 SKIP_LEMONADE=false
 SKIP_GAIA=false
+SKIP_CLAUDE=false
 PYTHON_VERSION="3.13.4"
 
 # Colors
@@ -41,13 +42,23 @@ usage() {
     echo "  --skip-llama    Skip llama.cpp build"
     echo "  --skip-lemonade Skip Lemonade SDK"
     echo "  --skip-gaia     Skip Gaia SDK"
+    echo "  --skip-claude   Skip Claude Code"
     echo "  --status        Show current install status"
     echo "  -h, --help      Show this help"
     exit 0
 }
 
-TOTAL_STEPS=8
+# Step count calculated dynamically based on skip flags
 CURRENT_STEP=0
+calculate_steps() {
+    TOTAL_STEPS=3  # base + python + web UIs (always run)
+    $SKIP_ROCM     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    $SKIP_CADDY    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    $SKIP_LLAMA    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    $SKIP_LEMONADE || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    $SKIP_GAIA     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    $SKIP_CLAUDE   || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+}
 
 progress_bar() {
     local pct=$((CURRENT_STEP * 100 / TOTAL_STEPS))
@@ -134,25 +145,32 @@ check_status() {
     fi
 
     # Lemonade
-    if [ -f "$HOME/lemonade-env/bin/lemonade" ]; then
-        VER=$($HOME/lemonade-env/bin/pip show lemonade-sdk 2>/dev/null | grep Version | cut -d' ' -f2)
-        echo -e "  Lemonade: ${GREEN}installed${NC} — v$VER"
+    if command -v lemonade &>/dev/null; then
+        VER=$(lemonade --version 2>/dev/null || echo "installed")
+        echo -e "  Lemonade: ${GREEN}installed${NC} — $VER"
     else
         echo -e "  Lemonade: ${RED}not installed${NC}"
     fi
 
     # Gaia
-    if [ -f "$HOME/gaia-env/bin/gaia" ]; then
-        VER=$($HOME/gaia-env/bin/gaia --version 2>/dev/null)
+    if command -v gaia &>/dev/null || [ -f "$HOME/gaia-env/bin/gaia" ]; then
+        VER=$(gaia --version 2>/dev/null || $HOME/gaia-env/bin/gaia --version 2>/dev/null || echo "installed")
         echo -e "  Gaia:     ${GREEN}installed${NC} — v$VER"
     else
         echo -e "  Gaia:     ${RED}not installed${NC}"
     fi
 
+    # Claude Code
+    if command -v claude &>/dev/null; then
+        echo -e "  Claude:   ${GREEN}installed${NC}"
+    else
+        echo -e "  Claude:   ${RED}not installed${NC}"
+    fi
+
     # Services
     echo ""
     echo "  Services:"
-    for svc in caddy sshd llama-server lemonade-ui gaia-ui gaia; do
+    for svc in caddy sshd llama-server lemond gaia-ui gaia; do
         STATUS=$(systemctl is-enabled $svc 2>/dev/null || echo "missing")
         ACTIVE=$(systemctl is-active $svc 2>/dev/null || true); ACTIVE=${ACTIVE:-inactive}
         if [ "$STATUS" = "enabled" ]; then
@@ -176,6 +194,7 @@ while [[ $# -gt 0 ]]; do
         --skip-llama)  SKIP_LLAMA=true; shift ;;
         --skip-lemonade) SKIP_LEMONADE=true; shift ;;
         --skip-gaia)   SKIP_GAIA=true; shift ;;
+        --skip-claude) SKIP_CLAUDE=true; shift ;;
         --status)      check_status ;;
         -h|--help)     usage ;;
         *)             err "Unknown option: $1"; usage ;;
@@ -183,6 +202,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ============================================================
+calculate_steps
 echo ""
 echo "╔══════════════════════════════════════╗"
 echo "║   Halo AI Core v${VERSION} — Installer    ║"
@@ -237,7 +257,7 @@ if $DRY_RUN; then
     info "Would install: $BASE_PKGS"
 else
     # shellcheck disable=SC2086
-    sudo pacman -Sy --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1 &
+    sudo pacman -S --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1 &
     spinner $! "Installing base packages..."
     sudo systemctl enable --now NetworkManager sshd >> "$LOG_FILE" 2>&1
     log "Base packages installed"
@@ -461,51 +481,49 @@ else
 fi
 
 # ============================================================
-# 6. LEMONADE SDK
+# 6. LEMONADE SERVER (native AUR package)
 # ============================================================
 if ! $SKIP_LEMONADE; then
-    step "Lemonade SDK"
+    step "Lemonade Server"
 
     if $DRY_RUN; then
-        info "Would install lemonade-sdk in ~/lemonade-env"
+        info "Would install lemonade-server from AUR"
     else
-        if [ ! -d "$HOME/lemonade-env" ]; then
-            "$PYTHON_BIN" -m venv "$HOME/lemonade-env"
+        if command -v lemonade &>/dev/null; then
+            log "Lemonade already installed — $(lemonade --version 2>/dev/null || echo 'installed')"
+        else
+            # Need an AUR helper (paru > yay > install yay)
+            AUR_HELPER=""
+            if command -v paru &>/dev/null; then
+                AUR_HELPER="paru"
+            elif command -v yay &>/dev/null; then
+                AUR_HELPER="yay"
+            else
+                info "Installing yay (AUR helper)..."
+                cd /tmp
+                git clone https://aur.archlinux.org/yay.git >> "$LOG_FILE" 2>&1
+                cd yay && makepkg -si --noconfirm >> "$LOG_FILE" 2>&1
+                cd "$HOME"
+                AUR_HELPER="yay"
+            fi
+
+            $AUR_HELPER -S --needed --noconfirm lemonade-server >> "$LOG_FILE" 2>&1 &
+            spinner $! "Building lemonade-server from AUR (C++ native — this takes a minute)..."
         fi
 
-        "$HOME/lemonade-env/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
-        "$HOME/lemonade-env/bin/pip" install lemonade-sdk >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing Lemonade SDK..."
-
-        # Systemd service
-        sudo tee /usr/lib/systemd/system/lemonade.service > /dev/null << LEM_SVC
-[Unit]
-Description=Lemonade SDK Server
-After=network.target
-
-[Service]
-Type=simple
-User=${USER}
-Environment=PATH=${HOME}/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
-Environment=ROCBLAS_USE_HIPBLASLT=1
-Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-WorkingDirectory=${HOME}
-ExecStart=${HOME}/lemonade-env/bin/lemonade --tools llama-server --port 13305
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-LEM_SVC
-
+        # Enable the daemon
         sudo systemctl daemon-reload
-        sudo systemctl enable lemonade >> "$LOG_FILE" 2>&1
+        sudo systemctl enable lemond >> "$LOG_FILE" 2>&1 || \
+            sudo systemctl enable lemonade-server >> "$LOG_FILE" 2>&1 || true
 
-        VER=$("$HOME/lemonade-env/bin/pip" show lemonade-sdk 2>/dev/null | grep Version | cut -d' ' -f2)
-        log "Lemonade SDK v$VER installed"
+        VER=$(lemonade --version 2>/dev/null || echo "installed")
+        log "Lemonade Server $VER — binaries: lemonade (CLI), lemond (daemon)"
+        log "Anthropic API: http://localhost:13305/v1/messages"
+        log "OpenAI API:    http://localhost:13305/api/v1/chat/completions"
+        log "Ollama API:    http://localhost:13305/api/chat"
     fi
 else
-    warn "Skipping Lemonade SDK"
+    warn "Skipping Lemonade Server"
 fi
 
 # ============================================================
@@ -570,41 +588,29 @@ step "Web UIs"
 if $DRY_RUN; then
     info "Would configure Lemonade UI (port 13305) and Gaia Agent UI (port 4200)"
 else
-    # Lemonade Server UI (replaces headless lemonade service)
-    sudo tee /usr/lib/systemd/system/lemonade-ui.service > /dev/null << LEM_UI_SVC
-[Unit]
-Description=Lemonade Server Web UI
-After=network.target
-
-[Service]
-Type=simple
-User=${USER}
-Environment=PATH=${HOME}/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
-Environment=ROCBLAS_USE_HIPBLASLT=1
-Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-WorkingDirectory=${HOME}
-ExecStart=${HOME}/lemonade-env/bin/lemonade-server-dev serve --port 13305 --host 127.0.0.1 --llamacpp rocm
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-LEM_UI_SVC
+    # Lemonade UI is handled by lemond (native AUR package)
+    # Clean up old venv-based services from previous installs
+    sudo systemctl disable lemonade lemonade-ui >> "$LOG_FILE" 2>&1 || true
+    sudo rm -f /usr/lib/systemd/system/lemonade.service 2>/dev/null
+    sudo rm -f /usr/lib/systemd/system/lemonade-ui.service 2>/dev/null
 
     # Gaia Agent UI
     sudo npm install -g @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
 
+    # Find gaia-ui binary — npm global bin location varies
+    GAIA_UI_BIN=$(which gaia-ui 2>/dev/null || npm root -g 2>/dev/null | sed 's|/lib/node_modules|/bin/gaia-ui|' || echo "/usr/local/bin/gaia-ui")
+
     sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << GAIA_UI_SVC
 [Unit]
 Description=Gaia Agent Web UI
-After=network.target lemonade-ui.service
+After=network.target lemond.service
 
 [Service]
 Type=simple
 User=${USER}
 Environment=PATH=/usr/local/bin:/usr/bin
 WorkingDirectory=${HOME}
-ExecStart=/usr/bin/gaia-ui --serve
+ExecStart=${GAIA_UI_BIN} --serve
 Restart=on-failure
 RestartSec=5
 
@@ -612,28 +618,46 @@ RestartSec=5
 WantedBy=multi-user.target
 GAIA_UI_SVC
 
-    # Caddy routes for UIs
-    sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_UI_CADDY'
-:13306 {
-    reverse_proxy localhost:13305
-}
-LEM_UI_CADDY
-
-    sudo tee /etc/caddy/conf.d/gaia-ui.caddy > /dev/null << 'GAIA_UI_CADDY'
-:4201 {
-    reverse_proxy localhost:4200
-}
-GAIA_UI_CADDY
-
-    # Disable headless lemonade service in favor of UI version
-    sudo systemctl disable lemonade >> "$LOG_FILE" 2>&1 || true
-
     sudo systemctl daemon-reload
-    sudo systemctl enable lemonade-ui gaia-ui >> "$LOG_FILE" 2>&1
+    sudo systemctl enable gaia-ui >> "$LOG_FILE" 2>&1
     sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || warn "Caddy reload failed — check /etc/caddy/conf.d/ for duplicates"
 
-    log "Lemonade UI on :13305 (Caddy :13306) — LLM interaction"
-    log "Gaia Agent UI on :4200 (Caddy :4201) — Agent management"
+    log "Lemonade UI on :13305 — managed by lemond (native service)"
+    log "Gaia Agent UI on :4200 — Agent management"
+fi
+
+# ============================================================
+# 9. CLAUDE CODE
+# ============================================================
+if ! $SKIP_CLAUDE; then
+    step "Claude Code (via Lemonade)"
+
+    if $DRY_RUN; then
+        info "Would install Claude Code CLI and configure for Lemonade"
+    else
+        # Install Claude Code
+        if command -v claude &>/dev/null; then
+            log "Claude Code already installed — $(claude --version 2>/dev/null || echo 'installed')"
+        else
+            if command -v npm &>/dev/null; then
+                sudo npm install -g @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
+                spinner $! "Installing Claude Code..."
+                log "Claude Code installed via npm"
+            else
+                err "npm not found — cannot install Claude Code"
+            fi
+        fi
+
+        # Verify lemonade launch claude is available
+        if command -v lemonade &>/dev/null; then
+            log "Claude Code can be launched via: lemonade launch claude"
+            log "Or with a model: lemonade launch claude -m <model-name>"
+        else
+            warn "Lemonade CLI not found — install Lemonade Server first for local model routing"
+        fi
+    fi
+else
+    warn "Skipping Claude Code"
 fi
 
 # ============================================================
@@ -659,6 +683,9 @@ echo "    Local:  http://localhost:4200"
 echo "    SSH:    ssh -L 4200:localhost:4200 $HOSTNAME"
 echo "            then open http://localhost:4200"
 echo ""
+echo "  Claude Code (local AI coding agent):"
+echo "    lemonade launch claude -m <model-name>"
+echo ""
 echo "  ── IMPORTANT ─────────────────────────────────"
 echo ""
 echo "  Reboot your machine to start all services:"
@@ -672,7 +699,9 @@ echo "  ── NEXT STEPS (after reboot) ─────────────
 echo ""
 echo "  1. Load a model in Lemonade UI"
 echo "  2. Start chatting"
-echo "  3. Deploy core agents (optional):"
+echo "  3. Launch Claude Code with local models:"
+echo "     lemonade launch claude -m <model-name>"
+echo "  4. Deploy core agents (optional):"
 echo "     https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Core-Agents.md"
 echo ""
 echo "  ── VERIFY ────────────────────────────────────"
@@ -698,7 +727,14 @@ if ! $DRY_RUN; then
         CLIENT_PRIV=$(wg genkey)
         CLIENT_PUB=$(echo "$CLIENT_PRIV" | wg pubkey)
         SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
-        SERVER_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
+        # Try public IP first (for remote VPN access), fall back to LAN IP
+        SERVER_IP=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null || \
+                    ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
+        LAN_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
+        if [ "$SERVER_IP" = "$LAN_IP" ]; then
+            warn "Could not detect public IP — WireGuard Endpoint set to LAN IP ($LAN_IP)"
+            warn "For remote access, update Endpoint in /etc/wireguard/client1.conf with your public IP or DDNS"
+        fi
 
         sudo tee "$WG_CONF" > /dev/null << WG_SRV
 [Interface]
