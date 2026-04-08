@@ -20,6 +20,8 @@ Welcome to the Halo AI Core knowledge base. Everything you need to run a local A
 ## Core Agents (Recommended)
 
 - [Core Agents](Core-Agents.md) — 5 caretaker agents that watch your stack
+- [Agent Deployment](Agent-Deployment.md) — How each agent introduces itself and deploys
+- [Landing Page](Landing-Page.md) — The dashboard spec — hardware, services, agents, blocks
 
 ## Building On Core
 
