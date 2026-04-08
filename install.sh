@@ -8,11 +8,13 @@
 # Core services for AMD Strix Halo bare-metal AI platform
 # Components: ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK, Claude Code
 # ============================================================
-set -e
+set -euo pipefail
 
-VERSION="0.9.2"
+VERSION="0.9.1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_FILE="/tmp/halo-ai-core-install.log"
+LOG_DIR="${HOME}/.local/log"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/halo-ai-core-install.log"
 DRY_RUN=false
 SKIP_ROCM=false
 SKIP_CADDY=false
@@ -90,7 +92,13 @@ spinner() {
         printf "\r  ${BLUE}${spin:i++%${#spin}:1}${NC} %s" "$msg"
         sleep 0.1
     done
-    printf "\r  ${GREEN}✓${NC} %s\n" "$msg"
+    if wait "$pid"; then
+        printf "\r  ${GREEN}✓${NC} %s\n" "$msg"
+    else
+        printf "\r  ${RED}✗${NC} %s\n" "$msg"
+        err "$msg — failed (check $LOG_FILE)"
+        exit 1
+    fi
 }
 
 log() {
@@ -170,9 +178,9 @@ check_status() {
     # Services
     echo ""
     echo "  Services:"
-    for svc in caddy sshd llama-server lemond gaia-ui gaia; do
-        STATUS=$(systemctl is-enabled $svc 2>/dev/null || echo "missing")
-        ACTIVE=$(systemctl is-active $svc 2>/dev/null || true); ACTIVE=${ACTIVE:-inactive}
+    for svc in caddy sshd llama-server lemonade-server gaia-ui gaia; do
+        STATUS=$(systemctl is-enabled "$svc" 2>/dev/null || echo "missing")
+        ACTIVE=$(systemctl is-active "$svc" 2>/dev/null || true); ACTIVE=${ACTIVE:-inactive}
         if [ "$STATUS" = "enabled" ]; then
             echo -e "    $svc: ${GREEN}$STATUS${NC} ($ACTIVE)"
         else
@@ -315,6 +323,7 @@ if ! $SKIP_CADDY; then
 
         sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYFILE'
 # Halo AI Core — Caddy Reverse Proxy
+# "There is no spoon." — Neo
 # Drop configs in /etc/caddy/conf.d/*.caddy
 
 :80 {
@@ -323,18 +332,25 @@ if ! $SKIP_CADDY; then
 <html><head><title>halo-ai core</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:#e0e0e0;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh}
-.box{text-align:center}
-h1{font-size:2em;margin-bottom:0.5em;color:#00d4ff}
-p{margin-bottom:2em;color:#888}
-.btn{display:inline-block;margin:0.5em;padding:1em 2em;background:#111;border:1px solid #333;border-radius:8px;color:#00d4ff;text-decoration:none;font-size:1.2em;font-family:monospace;transition:all 0.2s}
+body{background:#0a0a0a;color:#e0e0e0;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.box{text-align:center;max-width:600px;padding:2em}
+h1{font-size:2em;margin-bottom:0.3em;color:#00d4ff}
+.sub{margin-bottom:2em;color:#555;font-size:0.9em}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0.8em;margin-bottom:1.5em}
+.btn{display:block;padding:1em 1.5em;background:#111;border:1px solid #333;border-radius:8px;color:#00d4ff;text-decoration:none;font-size:1.1em;font-family:monospace;transition:all 0.2s}
 .btn:hover{background:#1a1a1a;border-color:#00d4ff}
-small{display:block;margin-top:2em;color:#444}
+.btn small{display:block;color:#555;font-size:0.75em;margin-top:0.3em}
+.full{grid-column:1/-1}
+small{display:block;margin-top:1.5em;color:#333}
 </style></head><body><div class="box">
 <h1>halo-ai core</h1>
-<p>choose your ui</p>
-<a class="btn" href="http://{http.request.host}:13305">lemonade — chat with llms</a>
-<a class="btn" href="http://{http.request.host}:4200">gaia — manage agents</a>
+<p class="sub">lemonade + gaia + llama.cpp — fully integrated</p>
+<div class="grid">
+<a class="btn" href="http://{http.request.host}:13306">lemonade<small>chat with llms — :13306</small></a>
+<a class="btn" href="http://{http.request.host}:4201">gaia agents<small>manage ai agents — :4201</small></a>
+<a class="btn" href="http://{http.request.host}:8081/v1/models">llama api<small>openai-compatible — :8081</small></a>
+<a class="btn" href="http://{http.request.host}:5001/docs">gaia api<small>agent api — :5001</small></a>
+</div>
 <small>designed and built by the architect</small>
 </div></body></html>`
 }
@@ -469,12 +485,30 @@ RestartSec=5
 WantedBy=multi-user.target
 LLAMA_SVC
 
-        # Caddy route
+        # Caddy routes — external-facing ports proxy to localhost-only services
         sudo tee /etc/caddy/conf.d/llama.caddy > /dev/null << 'LLAMA_CADDY'
 :8081 {
     reverse_proxy localhost:8080
 }
 LLAMA_CADDY
+
+        sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_CADDY'
+:13306 {
+    reverse_proxy localhost:13305
+}
+LEM_CADDY
+
+        sudo tee /etc/caddy/conf.d/gaia-ui.caddy > /dev/null << 'GAIA_UI_CADDY'
+:4201 {
+    reverse_proxy localhost:4200
+}
+GAIA_UI_CADDY
+
+        sudo tee /etc/caddy/conf.d/gaia-api.caddy > /dev/null << 'GAIA_API_CADDY'
+:5001 {
+    reverse_proxy localhost:5000
+}
+GAIA_API_CADDY
 
         sudo systemctl daemon-reload
         sudo systemctl enable llama-server >> "$LOG_FILE" 2>&1
@@ -506,10 +540,11 @@ if ! $SKIP_LEMONADE; then
                 AUR_HELPER="yay"
             else
                 info "Installing yay (AUR helper)..."
-                cd /tmp
-                git clone https://aur.archlinux.org/yay.git >> "$LOG_FILE" 2>&1
-                cd yay && makepkg -si --noconfirm >> "$LOG_FILE" 2>&1
+                YAY_TMPDIR=$(mktemp -d)
+                git clone https://aur.archlinux.org/yay.git "$YAY_TMPDIR/yay" >> "$LOG_FILE" 2>&1
+                cd "$YAY_TMPDIR/yay" && makepkg -si --noconfirm >> "$LOG_FILE" 2>&1
                 cd "$HOME"
+                rm -rf "$YAY_TMPDIR"
                 AUR_HELPER="yay"
             fi
 
@@ -542,8 +577,7 @@ if ! $SKIP_GAIA; then
         info "Would install amd-gaia in ~/gaia-env"
     else
         if [ ! -d "$HOME/gaia" ]; then
-            git clone https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1 || \
-            git clone https://github.com/bong-water-water-bong/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
+            git clone https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
         fi
 
         if [ ! -d "$HOME/gaia-env" ]; then
@@ -761,15 +795,20 @@ if ! $DRY_RUN; then
         CLIENT_PUB=$(echo "$CLIENT_PRIV" | wg pubkey)
         SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
         # Try public IP first (for remote VPN access), fall back to LAN IP
-        SERVER_IP=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null || \
-                    ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
         LAN_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
+        SERVER_IP=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
+        # Validate IPv4 format — fall back to LAN if garbage
+        if ! [[ "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            SERVER_IP="$LAN_IP"
+        fi
         if [ "$SERVER_IP" = "$LAN_IP" ]; then
             warn "Could not detect public IP — WireGuard Endpoint set to LAN IP ($LAN_IP)"
             warn "For remote access, update Endpoint in /etc/wireguard/client1.conf with your public IP or DDNS"
         fi
 
-        sudo tee "$WG_CONF" > /dev/null << WG_SRV
+        WG_TMP=$(mktemp)
+        chmod 600 "$WG_TMP"
+        cat > "$WG_TMP" << WG_SRV
 [Interface]
 Address = 10.100.0.1/24
 ListenPort = 51820
@@ -781,7 +820,8 @@ PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING 
 PublicKey = $CLIENT_PUB
 AllowedIPs = 10.100.0.2/32
 WG_SRV
-        sudo chmod 600 "$WG_CONF"
+        sudo install -m 600 "$WG_TMP" "$WG_CONF"
+        rm -f "$WG_TMP"
 
         CLIENT_CONF=$(mktemp)
         cat > "$CLIENT_CONF" << WG_CLIENT
@@ -815,8 +855,7 @@ WG_CLIENT
         echo "  Lemonade:     http://10.100.0.1:13305"
         echo "  Gaia:         http://10.100.0.1:4200"
         echo ""
-        sudo cp "$CLIENT_CONF" /etc/wireguard/client1.conf
-        sudo chmod 600 /etc/wireguard/client1.conf
+        sudo install -m 600 "$CLIENT_CONF" /etc/wireguard/client1.conf
         rm -f "$CLIENT_CONF"
         log "WireGuard VPN configured — QR code displayed"
     else

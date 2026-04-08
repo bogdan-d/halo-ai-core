@@ -30,9 +30,9 @@
   </provides>
 
   <releases>
-    <release version="0.9.0" date="2026-04-08">
+    <release version="0.9.1" date="2026-04-08">
       <description>
-        <p>Initial Flatpak release. Packages the halo-ai-core installer for easy distribution.</p>
+        <p>Stable release. Full Lemonade v10.2.0 + Gaia integration, security hardened install script, verified benchmarks on Strix Halo.</p>
       </description>
     </release>
   </releases>

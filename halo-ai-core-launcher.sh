@@ -12,7 +12,7 @@
 
 set -e
 
-VERSION="0.9.0"
+VERSION="0.9.1"
 INSTALL_DIR="${HOME}/halo-ai-core"
 SOURCE_DIR="/app/share/halo-ai-core"
 

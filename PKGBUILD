@@ -2,7 +2,7 @@
 # "I know kung fu." — Neo, The Matrix
 
 pkgname=halo-ai-core
-pkgver=0.9.0
+pkgver=0.9.1
 pkgrel=1
 pkgdesc="Bare-metal AI stack installer for AMD Strix Halo (gfx1151) — ROCm, llama.cpp, Lemonade SDK, Gaia SDK, Caddy"
 arch=('x86_64')

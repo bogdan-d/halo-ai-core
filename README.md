@@ -57,7 +57,7 @@ cd halo-ai-core
 |---|---|
 | **gpu** | rocm 7.2.1 — full 128gb unified memory on gfx1151 |
 | **inference** | llama.cpp — compiled from source, hip + vulkan |
-| **backend** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
+| **backend** | lemonade sdk 10.2.0 — llm, whisper, kokoro, stable diffusion |
 | **agents** | gaia sdk 0.17.x — build ai agents that run 100% local |
 | **gateway** | caddy 2.x — reverse proxy, drop-in config, auto-routing |
 | **llm ui** | lemonade web ui — chat with your models instantly (:13305) |
@@ -81,11 +81,16 @@ cd halo-ai-core
 
 ## benchmarks — out of the box
 
-these numbers come from a clean `install.sh --yes-all` on strix halo hardware. no manual tuning. no tricks. the install script applies all optimizations automatically.
+these numbers come from a clean `install.sh --yes-all` on strix halo hardware. no manual tuning. no tricks. the install script applies all optimizations automatically. benchmarks run through lemonade sdk api by claude code.
 
-| model | quant | prompt (pp512) | generation (tg128) |
-|-------|-------|----------------|-------------------|
-| qwen3-30B-A3B | Q4_K_M | **1,114 t/s** | **66.6 t/s** |
+| model | quant | test | prompt tok/s | gen tok/s | TTFT |
+|-------|-------|------|-------------|----------|------|
+| qwen3-30B-A3B | Q4_K_M | short (13→256) | **251.7** | **73.0** | 52ms |
+| qwen3-30B-A3B | Q4_K_M | medium (75→512) | **494.3** | **72.5** | 152ms |
+| qwen3-30B-A3B | Q4_K_M | long (39→1024) | **385.9** | **71.9** | 101ms |
+| qwen3-30B-A3B | Q4_K_M | sustained (54→2048) | **437.0** | **70.5** | 124ms |
+
+*rock solid 70-73 tok/s generation with zero degradation over 2048 tokens. 18gb of 64gb vram used. sub-200ms ttft. tested 2026-04-08.*
 
 ### what makes it fast
 

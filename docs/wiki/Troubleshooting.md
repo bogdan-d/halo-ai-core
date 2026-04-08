@@ -83,4 +83,4 @@ Admin users on Windows need keys in a different file:
 C:\ProgramData\ssh\administrators_authorized_keys
 ```
 
-NOT `~/.ssh/authorized_keys`. See [Security](Security) for details.
+NOT `~/.ssh/authorized_keys`. See [Security](Security.md) for details.

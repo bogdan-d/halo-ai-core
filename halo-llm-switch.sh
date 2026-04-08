@@ -6,7 +6,7 @@ set -euo pipefail
 
 LEMONADE_URL="http://localhost:13305/api/v1"
 LLAMA_URL="http://localhost:8080/v1"
-GAIA_ENV="/home/bcloud/gaia/.env"
+GAIA_ENV="${HOME}/gaia/.env"
 
 usage() {
     echo "usage: halo-llm-switch [lemonade|llama|status]"
