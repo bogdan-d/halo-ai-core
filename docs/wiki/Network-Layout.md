@@ -40,6 +40,34 @@
 
 Set on the router by MAC address. Machines get the same IP every time without static config on the machine itself (except Pi, which uses NetworkManager static).
 
+## Network Isolation: SSH Mesh vs VLANs
+
+Halo-ai supports two network isolation strategies. **SSH mesh is the default** — it works on any network with zero special hardware.
+
+| Feature | SSH Mesh (default) | VLAN Tagging (optional) |
+|---------|-------------------|------------------------|
+| **Requires** | Nothing — works anywhere | Managed switch |
+| **Isolation** | Encrypted tunnels between machines | Layer 2 network segmentation |
+| **Setup** | Automatic via installer | Installer + switch config |
+| **Best for** | Most users, home networks | Users with managed switches who want hardware-level isolation |
+
+### VLAN Scheme (if enabled)
+
+| VLAN ID | Subnet | Purpose |
+|---------|--------|---------|
+| 10 | 10.10.0.0/24 | AI workloads (inference, training, models) |
+| 20 | 10.20.0.0/24 | Management (SSH, monitoring, dashboards) |
+| 50 | 10.50.0.0/24 | IoT isolation (cameras, smart home) |
+| untagged | 10.0.0.0/24 | Main network (default, no tag needed) |
+
+**Important:** VLANs are configured on the machine by the installer, but you must also configure your managed switch:
+1. Set the halo machine's port to **trunk** (tagged) mode
+2. Allow VLANs 10, 20, 50 on the trunk
+3. Assign other device ports to access VLANs as needed
+4. Set native/untagged VLAN to your main network
+
+VLANs and SSH mesh can run together — VLANs handle segmentation, SSH handles encryption.
+
 ## Security
 
 - Main and IoT networks are isolated
