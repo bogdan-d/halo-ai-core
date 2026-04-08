@@ -12,12 +12,12 @@
 | `#announcements` | Releases, updates, important news |
 
 ### BENCHMARKS
-| Channel | Purpose |
-|---------|---------|
-| `#echo` | Echo agent's public feed |
-| `#digest` | Daily digest — what happened, what changed |
-| `#security` | Security advisories, audits, incidents |
-| `#changelog` | Version history, what's new in each release |
+| Channel | Purpose | Owner | Rules |
+|---------|---------|-------|-------|
+| `#echo` | Echo agent's public feed | Echo | Code blocks only |
+| `#digest` | Daily digest — pinned, replaced every 24hrs | Echo | One post, pinned, old deleted |
+| `#security` | 24hr security briefing — Meek only | Meek | Meek posts only, pinned, replaced daily |
+| `#changelog` | Latest release notes — pinned, link to full history | — | Latest pinned, GitHub link for archive |
 
 ### SUPPORT
 | Channel | Purpose |
@@ -86,21 +86,66 @@ When an agent helps fix a bug, it DMs the user: "Your issue in #bug-reports is r
 ### 7. Auto-Thread for Support
 Bug reports and support issues auto-create threads. Keeps the main channels clean.
 
-## Digest Format
+## Channel Rules
 
-Daily digest in `#digest` uses code blocks with timestamps:
+### #digest — Echo's Daily Briefing
+- One post per 24 hours
+- Pinned immediately
+- Old digest deleted when new one posts
+- Code block with timestamps, headings, short paragraphs
+- Links outside code blocks
 
 ```
 📅 2026-04-08 Daily Digest
 
-06:12 — ROCm 7.2.1 kernel cache compiled (first-run complete)
-09:30 — Qwen3-8B benchmark: 88.2 tok/s decode
-14:15 — Wiki updated: 28 pages
-18:00 — v0.9.0 install script tested clean
+Stack Updates
+  ROCm 7.2.1 kernel cache compiled — first-run complete
+  Wiki expanded to 29 pages
 
-Previous digest → thread
-30-day retention
+Benchmarks
+  Qwen3-8B: 88.2 tok/s decode on gfx1151
+
+Community
+  3 new members, 2 bug reports resolved
 ```
+Full changelog: https://github.com/stampby/halo-ai-core/blob/main/CHANGELOG.md
+
+### #security — Meek's Daily Briefing
+- **Meek posts only.** No one else.
+- One post per 24 hours
+- Pinned immediately
+- Old briefing deleted when new one posts
+- What happened in the last 24hrs, how we're protected, what's out there
+
+```
+🔒 2026-04-08 Security Briefing
+
+Stack Audit
+  17/17 checks passed
+  No binary hash changes detected
+  All services on 127.0.0.1 — no exposed ports
+
+Threat Watch
+  CVE-2026-XXXX: affects vLLM — we don't use vLLM in core ✓
+  npm advisory: no affected packages in our stack ✓
+
+Status: ALL CLEAR
+```
+
+### #changelog — Latest Release Only
+- Latest release notes pinned
+- Old pins removed when new release drops
+- Link to full changelog on GitHub for history
+- Clean, simple, one post
+
+```
+📦 v0.9.0 — Halo AI Core
+
+  ROCm 7.2.1, Caddy 2.11, llama.cpp 8702
+  Lemonade SDK 9.1.4, Gaia SDK 0.17.1
+  Lemonade UI + Gaia Agent UI included
+```
+Full history: https://github.com/stampby/halo-ai-core/blob/main/CHANGELOG.md
 
 ## Join
 
