@@ -142,7 +142,11 @@ ssh-copy-id bcloud@10.0.0.10
 
 ## credits
 
-built on [llama.cpp](https://github.com/ggml-org/llama.cpp), [Lemonade SDK](https://github.com/lemonade-sdk/lemonade), [AMD Gaia](https://github.com/amd/gaia), [Caddy](https://caddyserver.com), [ROCm](https://github.com/ROCm/TheRock).
+this project exists because of the people who built the tools we stand on.
+
+special thanks to [Light-Heart-Labs](https://github.com/Light-Heart-Labs) and [DreamServer](https://github.com/Light-Heart-Labs/DreamServer) — the lighthouse that showed the way. if it wasn't for that project, none of this would exist.
+
+built on [llama.cpp](https://github.com/ggml-org/llama.cpp), [Lemonade SDK](https://github.com/lemonade-sdk/lemonade), [AMD Gaia](https://github.com/amd/gaia), [Caddy](https://caddyserver.com), [ROCm](https://github.com/ROCm/TheRock), [whisper.cpp](https://github.com/ggerganov/whisper.cpp), [Kokoro](https://github.com/remsky/Kokoro-FastAPI), [ComfyUI](https://github.com/comfyanonymous/ComfyUI), [Open WebUI](https://github.com/open-webui/open-webui), [SearXNG](https://github.com/searxng/searxng), [Vane](https://github.com/ItzCrazyKns/Vane), [pyenv](https://github.com/pyenv/pyenv).
 
 ---
 
