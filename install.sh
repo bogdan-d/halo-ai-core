@@ -221,7 +221,7 @@ fi
 
 # Confirm
 if ! $YES_ALL && ! $DRY_RUN; then
-    info "This will install Halo AI Core services on $(hostname)"
+    info "This will install Halo AI Core services on $(cat /proc/sys/kernel/hostname)"
     read -p "Continue? [y/N] " -n 1 -r
     echo
     [[ $REPLY =~ ^[Yy]$ ]] || exit 0
@@ -639,7 +639,7 @@ fi
 # ============================================================
 # DONE
 # ============================================================
-HOSTNAME=$(hostname)
+HOSTNAME=$(cat /proc/sys/kernel/hostname)
 echo ""
 echo "╔══════════════════════════════════════╗"
 echo "║     Halo AI Core — Install Done      ║"
