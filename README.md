@@ -139,7 +139,8 @@ core is the foundation. snap on what you need:
 
 | block | what it does | status |
 |-------|-------------|--------|
-| **ssh mesh** | multi-machine networking | [guide →](docs/wiki/SSH-Mesh.md) |
+| **ssh mesh** | multi-machine networking (default, works anywhere) | [guide →](docs/wiki/SSH-Mesh.md) |
+| **vlan tagging** | 802.1Q network isolation (requires managed switch) | [guide →](docs/wiki/Network-Layout.md) |
 | **voice pipeline** | whisper + kokoro tts | [guide →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | chat frontend | planned |
 | **comfyui** | image/video generation | planned |
