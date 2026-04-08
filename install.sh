@@ -46,23 +46,59 @@ usage() {
     exit 0
 }
 
+TOTAL_STEPS=8
+CURRENT_STEP=0
+
+progress_bar() {
+    local pct=$((CURRENT_STEP * 100 / TOTAL_STEPS))
+    local filled=$((pct / 5))
+    local empty=$((20 - filled))
+    local bar=""
+    for ((i=0; i<filled; i++)); do bar+="█"; done
+    for ((i=0; i<empty; i++)); do bar+="░"; done
+    echo -e "${BLUE}  [${bar}] ${pct}% — Step ${CURRENT_STEP}/${TOTAL_STEPS}${NC}"
+}
+
+step() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}  ▸ Step ${CURRENT_STEP}/${TOTAL_STEPS}: $1${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    progress_bar
+    echo ""
+    echo "[$(date '+%H:%M:%S')] Step ${CURRENT_STEP}/${TOTAL_STEPS}: $1" >> "$LOG_FILE"
+}
+
+spinner() {
+    local pid=$1
+    local msg=$2
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  ${BLUE}${spin:i++%${#spin}:1}${NC} %s" "$msg"
+        sleep 0.1
+    done
+    printf "\r  ${GREEN}✓${NC} %s\n" "$msg"
+}
+
 log() {
-    echo -e "${GREEN}[+]${NC} $1"
+    echo -e "  ${GREEN}✓${NC} $1"
     echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 warn() {
-    echo -e "${YELLOW}[!]${NC} $1"
+    echo -e "  ${YELLOW}⚠${NC} $1"
     echo "[$(date '+%H:%M:%S')] WARN: $1" >> "$LOG_FILE"
 }
 
 err() {
-    echo -e "${RED}[x]${NC} $1"
+    echo -e "  ${RED}✗${NC} $1"
     echo "[$(date '+%H:%M:%S')] ERROR: $1" >> "$LOG_FILE"
 }
 
 info() {
-    echo -e "${BLUE}[i]${NC} $1"
+    echo -e "  ${BLUE}→${NC} $1"
 }
 
 check_status() {
@@ -194,14 +230,15 @@ fi
 # ============================================================
 # 1. BASE PACKAGES
 # ============================================================
-log "Installing base packages..."
+step "Base Packages"
 BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano cmake make nodejs npm"
 
 if $DRY_RUN; then
     info "Would install: $BASE_PKGS"
 else
     # shellcheck disable=SC2086
-    sudo pacman -Sy --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1
+    sudo pacman -Sy --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1 &
+    spinner $! "Installing base packages..."
     sudo systemctl enable --now NetworkManager sshd >> "$LOG_FILE" 2>&1
     log "Base packages installed"
 fi
@@ -210,14 +247,15 @@ fi
 # 2. ROCm
 # ============================================================
 if ! $SKIP_ROCM; then
-    log "Installing ROCm GPU stack..."
+    step "ROCm GPU Stack"
     ROCM_PKGS="rocm-hip-sdk rocm-opencl-sdk hip-runtime-amd rocminfo vulkan-headers vulkan-icd-loader vulkan-radeon shaderc glslang"
 
     if $DRY_RUN; then
         info "Would install: $ROCM_PKGS"
     else
         # shellcheck disable=SC2086
-        sudo pacman -S --needed --noconfirm ${ROCM_PKGS} >> "$LOG_FILE" 2>&1
+        sudo pacman -S --needed --noconfirm ${ROCM_PKGS} >> "$LOG_FILE" 2>&1 &
+        spinner $! "Installing ROCm packages (this takes a few minutes)..."
 
         # ROCm PATH and env
         sudo tee /etc/profile.d/rocm.sh > /dev/null << 'ROCM_ENV'
@@ -244,7 +282,7 @@ fi
 # 3. CADDY
 # ============================================================
 if ! $SKIP_CADDY; then
-    log "Installing Caddy reverse proxy..."
+    step "Caddy Reverse Proxy"
 
     if $DRY_RUN; then
         info "Would install: caddy"
@@ -274,7 +312,7 @@ fi
 # ============================================================
 # 4. PYTHON (via pyenv for 3.13 compatibility)
 # ============================================================
-log "Setting up Python ${PYTHON_VERSION}..."
+step "Python ${PYTHON_VERSION}"
 
 if $DRY_RUN; then
     info "Would install Python ${PYTHON_VERSION} via pyenv"
@@ -306,7 +344,7 @@ PYTHON_BIN="$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3"
 # 5. LLAMA.CPP
 # ============================================================
 if ! $SKIP_LLAMA; then
-    log "Building llama.cpp from source (ROCm + Vulkan)..."
+    step "llama.cpp (ROCm + Vulkan)"
 
     if $DRY_RUN; then
         info "Would clone and build llama.cpp with HIP + Vulkan"
@@ -331,7 +369,8 @@ if ! $SKIP_LLAMA; then
             -DCMAKE_HIP_COMPILER=/opt/rocm/bin/amdclang++ \
             >> "$LOG_FILE" 2>&1
 
-        cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1
+        cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1 &
+        spinner $! "Compiling llama.cpp (this is the big one — be patient)..."
 
         sudo cp build/bin/llama-server /usr/local/bin/
         sudo cp build/bin/llama-cli /usr/local/bin/
@@ -377,7 +416,7 @@ fi
 # 6. LEMONADE SDK
 # ============================================================
 if ! $SKIP_LEMONADE; then
-    log "Installing Lemonade SDK..."
+    step "Lemonade SDK"
 
     if $DRY_RUN; then
         info "Would install lemonade-sdk in ~/lemonade-env"
@@ -387,7 +426,8 @@ if ! $SKIP_LEMONADE; then
         fi
 
         "$HOME/lemonade-env/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
-        "$HOME/lemonade-env/bin/pip" install lemonade-sdk >> "$LOG_FILE" 2>&1
+        "$HOME/lemonade-env/bin/pip" install lemonade-sdk >> "$LOG_FILE" 2>&1 &
+        spinner $! "Installing Lemonade SDK..."
 
         # Systemd service
         sudo tee /usr/lib/systemd/system/lemonade.service > /dev/null << LEM_SVC
@@ -432,7 +472,7 @@ fi
 # 7. GAIA SDK
 # ============================================================
 if ! $SKIP_GAIA; then
-    log "Installing Gaia SDK..."
+    step "Gaia SDK"
 
     if $DRY_RUN; then
         info "Would install amd-gaia in ~/gaia-env"
@@ -448,7 +488,8 @@ if ! $SKIP_GAIA; then
 
         "$HOME/gaia-env/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
         cd "$HOME/gaia"
-        "$HOME/gaia-env/bin/pip" install -e . >> "$LOG_FILE" 2>&1
+        "$HOME/gaia-env/bin/pip" install -e . >> "$LOG_FILE" 2>&1 &
+        spinner $! "Installing Gaia SDK (includes PyTorch — grab a coffee)..."
 
         # Systemd service
         sudo tee /usr/lib/systemd/system/gaia.service > /dev/null << GAIA_SVC
@@ -484,7 +525,7 @@ fi
 # ============================================================
 # 8. WEB UIs
 # ============================================================
-log "Setting up Web UIs..."
+step "Web UIs"
 
 if $DRY_RUN; then
     info "Would configure Lemonade UI (port 13305) and Gaia Agent UI (port 4200)"
