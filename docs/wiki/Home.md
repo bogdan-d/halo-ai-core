@@ -23,6 +23,7 @@ Welcome to the Halo AI Core knowledge base. Everything you need to run a local A
 - [Agent Deployment](Agent-Deployment.md) — How each agent introduces itself and deploys
 - [Echo Deployment](Echo-Deployment.md) — The voice of Halo AI, personality sliders, platform config
 - [Landing Page](Landing-Page.md) — The dashboard spec — hardware, services, agents, blocks
+- [Discord](Discord.md) — Channel structure, agent rules, digest format
 
 ## Building On Core
 
