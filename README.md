@@ -95,6 +95,20 @@ core is the foundation. snap on what you need:
 
 [how to build your own block →](docs/wiki/Adding-a-Service.md)
 
+## recommended: core agents
+
+core runs without agents. but these five will watch your stack when you're not around.
+
+| agent | job |
+|-------|-----|
+| **sentinel** | security — scans, monitors, trusts nothing |
+| **meek** | auditor — 17-check daily audit, supply chain |
+| **shadow** | integrity — ssh keys, file hashes, mesh health |
+| **pulse** | monitor — gpu temps, ram, disk, service health |
+| **bounty** | bugs — catches errors, auto-creates fix threads |
+
+they're a recommendation, not a requirement. [core agents guide →](docs/wiki/Core-Agents.md)
+
 ## security
 
 ssh keys only. no passwords. no open ports. no exceptions. all services on 127.0.0.1. *"you shall not pass."*

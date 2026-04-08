@@ -17,6 +17,10 @@ Welcome to the Halo AI Core knowledge base. Everything you need to run a local A
 - [Caddy Routing](Caddy-Routing.md) — Adding and managing reverse proxy routes
 - [ROCm Tuning](ROCm-Tuning.md) — GPU optimization for gfx1151
 
+## Core Agents (Recommended)
+
+- [Core Agents](Core-Agents.md) — 5 caretaker agents that watch your stack
+
 ## Building On Core
 
 - [Lego Blocks](Lego-Blocks.md) — Philosophy and how to add services
