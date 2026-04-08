@@ -8,6 +8,22 @@
 
 ---
 
+## Philosophy
+
+Your hardware. Your data. Your rules.
+
+Halo AI Core is built on one principle: **lego blocks**. Every piece snaps in and snaps out. No hard dependencies. No vendor lock-in. No cloud tethers. The core gives you a foundation — what you build on top of it is your business.
+
+Want a game server? Snap it on. Want GlusterFS for distributed storage? Snap it on. Want an SSH mesh across five machines? Snap it on. Want to rip it all out and start over? Pull the block and nothing else breaks.
+
+The AI industry wants you renting someone else's computer. We think you should own the whole stack — the hardware, the models, the data, the pipeline. When you control your own software, you control your own destiny. No API keys expiring at 2 AM. No terms of service changing under your feet. No monthly bill that goes up every quarter.
+
+This is core. Everything else is a lego block you choose to add.
+
+> *"They get the kingdom. They forge their own keys."*
+
+---
+
 ## What Is This
 
 Halo AI Core is the foundation layer for running local AI on AMD Ryzen AI hardware. It installs and configures:
