@@ -372,6 +372,8 @@ if ! $SKIP_LLAMA; then
         cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1 &
         spinner $! "Compiling llama.cpp (this is the big one — be patient)..."
 
+        # Stop running instances before overwriting binaries
+        sudo systemctl stop llama-server.service 2>/dev/null || true
         sudo cp build/bin/llama-server /usr/local/bin/
         sudo cp build/bin/llama-cli /usr/local/bin/
 
