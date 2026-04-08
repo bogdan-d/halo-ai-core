@@ -441,11 +441,12 @@ if ! $SKIP_LLAMA; then
         sudo cp build/bin/llama-cli /usr/local/bin/
         sudo cp build/bin/llama-bench /usr/local/bin/
 
-        # Systemd service
+        # Systemd service (fallback — Lemonade is primary)
         sudo tee /usr/lib/systemd/system/llama-server.service > /dev/null << LLAMA_SVC
 [Unit]
-Description=llama.cpp Inference Server
+Description=llama.cpp Inference Server (fallback)
 After=network.target
+Conflicts=lemonade-server.service
 
 [Service]
 Type=simple
@@ -455,7 +456,12 @@ Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
 Environment=TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-ExecStart=/usr/local/bin/llama-server --host 127.0.0.1 --port 8080 --n-gpu-layers 999
+ExecStart=/usr/local/bin/llama-server \\
+    --host 127.0.0.1 \\
+    --port 8080 \\
+    --model ${HOME}/models/default.gguf \\
+    --n-gpu-layers 999 \\
+    --ctx-size 32768
 Restart=on-failure
 RestartSec=5
 
@@ -549,11 +555,26 @@ if ! $SKIP_GAIA; then
         "$HOME/gaia-env/bin/pip" install -e . >> "$LOG_FILE" 2>&1 &
         spinner $! "Installing Gaia SDK (includes PyTorch — grab a coffee)..."
 
-        # Systemd service
+        # Gaia .env — wire to Lemonade as primary backend
+        cat > "$HOME/gaia/.env" << GAIA_ENV
+# Halo AI Core — Gaia Integration
+# Primary: Lemonade server (manages models, llamacpp backend)
+LEMONADE_BASE_URL=http://localhost:13305/api/v1
+
+# MCP Server
+GAIA_MCP_HOST=localhost
+GAIA_MCP_PORT=8765
+
+# Agent routing model (loaded via Lemonade)
+AGENT_ROUTING_MODEL=Qwen3-Coder-30B-A3B-Instruct-GGUF
+GAIA_ENV
+
+        # Systemd service — Gaia API (OpenAI-compatible endpoint)
         sudo tee /usr/lib/systemd/system/gaia.service > /dev/null << GAIA_SVC
 [Unit]
 Description=Gaia AI Agent Framework
-After=network.target llama-server.service
+After=network.target lemonade-server.service
+Wants=lemonade-server.service
 
 [Service]
 Type=simple
@@ -561,10 +582,11 @@ User=${USER}
 Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Environment=LEMONADE_BASE_URL=http://localhost:13305/api/v1
 WorkingDirectory=${HOME}/gaia
-ExecStart=${HOME}/gaia-env/bin/gaia serve
+ExecStart=${HOME}/gaia-env/bin/gaia api start --host 127.0.0.1 --port 5000 --no-lemonade-check
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -575,6 +597,7 @@ GAIA_SVC
 
         VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null)
         log "Gaia SDK v$VER installed"
+        log "Gaia .env created — LEMONADE_BASE_URL=http://localhost:13305/api/v1"
     fi
 else
     warn "Skipping Gaia SDK"
@@ -603,16 +626,21 @@ else
     sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << GAIA_UI_SVC
 [Unit]
 Description=Gaia Agent Web UI
-After=network.target lemond.service
+After=network.target lemonade-server.service
+Wants=lemonade-server.service
 
 [Service]
 Type=simple
 User=${USER}
-Environment=PATH=/usr/local/bin:/usr/bin
-WorkingDirectory=${HOME}
-ExecStart=${GAIA_UI_BIN} --serve
+Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin:/usr/lib/node_modules/.bin
+Environment=NODE_PATH=/usr/lib/node_modules
+Environment=ROCBLAS_USE_HIPBLASLT=1
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Environment=LEMONADE_BASE_URL=http://localhost:13305/api/v1
+WorkingDirectory=${HOME}/gaia
+ExecStart=${GAIA_UI_BIN} --port 4200
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -622,8 +650,13 @@ GAIA_UI_SVC
     sudo systemctl enable gaia-ui >> "$LOG_FILE" 2>&1
     sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || warn "Caddy reload failed — check /etc/caddy/conf.d/ for duplicates"
 
+    # Install the LLM backend switch script
+    sudo cp "$SCRIPT_DIR/halo-llm-switch.sh" /usr/local/bin/halo-llm-switch
+    sudo chmod +x /usr/local/bin/halo-llm-switch
+
     log "Lemonade UI on :13305 — managed by lemond (native service)"
     log "Gaia Agent UI on :4200 — Agent management"
+    log "Switch backends: halo-llm-switch [lemonade|llama|status]"
 fi
 
 # ============================================================
