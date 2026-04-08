@@ -1,0 +1,56 @@
+app-id: studio.halo-ai.core
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: halo-ai-core
+
+finish-args:
+  # Full host access — this is an installer that needs pacman, systemd, ROCm
+  - --share=network
+  - --share=ipc
+  - --filesystem=host
+  - --filesystem=/etc
+  - --filesystem=/var
+  - --filesystem=/opt
+  - --filesystem=/tmp
+  - --talk-name=org.freedesktop.Flatpak
+  - --system-talk-name=org.freedesktop.systemd1
+  - --env=TERM=xterm-256color
+
+modules:
+  - name: halo-ai-core
+    buildsystem: simple
+    build-commands:
+      # Create target directories
+      - install -d /app/share/halo-ai-core
+      - install -d /app/share/halo-ai-core/assets
+      - install -d /app/share/halo-ai-core/docs
+      - install -d /app/bin
+
+      # Install main script
+      - install -Dm755 install.sh /app/share/halo-ai-core/install.sh
+
+      # Install assets
+      - cp -r assets/* /app/share/halo-ai-core/assets/
+
+      # Install docs
+      - cp -r docs/* /app/share/halo-ai-core/docs/
+
+      # Install license and changelog
+      - install -Dm644 LICENSE /app/share/halo-ai-core/LICENSE
+      - install -Dm644 CHANGELOG.md /app/share/halo-ai-core/CHANGELOG.md
+      - install -Dm644 README.md /app/share/halo-ai-core/README.md
+
+      # Install launcher wrapper
+      - install -Dm755 halo-ai-core-launcher.sh /app/bin/halo-ai-core
+
+      # Install desktop entry and icon
+      - install -Dm644 studio.halo-ai.core.desktop /app/share/applications/studio.halo-ai.core.desktop
+      - install -Dm644 assets/icon.png /app/share/icons/hicolor/128x128/apps/studio.halo-ai.core.png
+
+      # Install appdata
+      - install -Dm644 studio.halo-ai.core.metainfo.xml /app/share/metainfo/studio.halo-ai.core.metainfo.xml
+
+    sources:
+      - type: dir
+        path: .

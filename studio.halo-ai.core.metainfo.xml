@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+  <id>studio.halo-ai.core</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Halo AI Core</name>
+  <summary>Bare-metal AI stack installer for AMD Strix Halo</summary>
+
+  <description>
+    <p>
+      Halo AI Core installs and configures a complete local AI stack on AMD
+      Strix Halo hardware. Components include ROCm, Caddy reverse proxy,
+      llama.cpp with Vulkan/ROCm, AMD Lemonade SDK, and Gaia SDK.
+    </p>
+    <p>
+      This Flatpak packages the installer for easy distribution. The actual
+      installation runs on bare metal with full system access.
+    </p>
+  </description>
+
+  <url type="homepage">https://github.com/stampby/halo-ai-core</url>
+  <url type="bugtracker">https://github.com/stampby/halo-ai-core/issues</url>
+
+  <developer id="studio.halo-ai">
+    <name>the architect</name>
+  </developer>
+
+  <provides>
+    <binary>halo-ai-core</binary>
+  </provides>
+
+  <releases>
+    <release version="0.9.0" date="2026-04-08">
+      <description>
+        <p>Initial Flatpak release. Packages the halo-ai-core installer for easy distribution.</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1" />
+</component>

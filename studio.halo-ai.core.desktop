@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Halo AI Core
+GenericName=AI Stack Installer
+Comment=Bare-metal AI stack installer for AMD Strix Halo
+Exec=halo-ai-core
+Icon=studio.halo-ai.core
+Terminal=true
+Categories=System;Utility;
+Keywords=AI;ROCm;AMD;installer;
+StartupNotify=false
