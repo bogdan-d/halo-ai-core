@@ -1,33 +1,60 @@
-<p align="center">
-  <img src="assets/halo-ai.svg" alt="Halo AI Core" width="200">
-</p>
+<div align="center">
 
-<h1 align="center">Halo AI Core</h1>
+🌐 **English** | [Français](#translations) | [Español](#translations) | [Deutsch](#translations) | [Português](#translations) | [日本語](#translations) | [中文](#translations) | [한국어](#translations) | [Русский](#translations) | [हिन्दी](#translations) | [العربية](#translations)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?logo=archlinux&logoColor=white)](https://archlinux.org/)
-[![AMD ROCm](https://img.shields.io/badge/ROCm-7.2.1-ED1C24?logo=amd&logoColor=white)](https://rocm.docs.amd.com/)
-[![Strix Halo](https://img.shields.io/badge/Strix_Halo-gfx1151-ED1C24?logo=amd&logoColor=white)](https://www.amd.com/en/products/processors/laptop/ryzen-ai-max.html)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red)](docs/SECURITY.md)
-[![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple)](https://github.com/stampby/halo-ai-core)
+<picture>
+  <img src="assets/halo-ai.svg" alt="halo ai core" width="200">
+</picture>
 
-> Your hardware. Your data. Your rules.
->
-> *"I know kung fu." — Neo*
+# halo-ai core
 
-Bare-metal AI platform for AMD Strix Halo. One script installs ROCm, Caddy, llama.cpp, Lemonade SDK, and Gaia SDK. Everything runs as systemd services. Everything auto-restarts. SSH only.
+### the bare-metal ai foundation for amd strix halo
 
-**Designed and built by the architect**
+**5 core services · 128gb unified · compiled from source · zero cloud · lego blocks**
 
-## Install
+*stamped by the architect*
+
+[![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?style=flat&logo=archlinux&logoColor=white)](https://archlinux.org)
+[![ROCm](https://img.shields.io/badge/ROCm_7.2.1-ED1C24?style=flat&logo=amd&logoColor=white)](https://rocm.docs.amd.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-halo--ai-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.gg/dSyV646eBs)
+[![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
+[![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
+[![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
+[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
+[![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
+
+</div>
+
+---
+
+> **[wiki](docs/wiki/Home.md)** — 24 pages of docs · **[discord](https://discord.gg/dSyV646eBs)** — community + support · **[tutorials](https://www.youtube.com/@DirtyOldMan-1971)** — video walkthroughs
+
+---
+
+## what is this
+
+the foundation layer for running local ai on your own hardware. one script installs everything. five core services. all systemd. all auto-restart. ssh only. *"i know kung fu."*
+
+## install
 
 ```bash
 git clone https://github.com/stampby/halo-ai-core.git
 cd halo-ai-core
-./install.sh --yes-all
+./install.sh --dry-run    # see what happens first
+./install.sh --yes-all    # install everything
+./install.sh --status     # check what's running
 ```
 
-## What You Get
+## what you get
+
+| | |
+|---|---|
+| **gpu** | rocm 7.2.1 — full 128gb unified memory on gfx1151 |
+| **inference** | llama.cpp — compiled from source, hip + vulkan |
+| **backend** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
+| **agents** | gaia sdk 0.17.x — build ai agents that run 100% local |
+| **gateway** | caddy 2.x — reverse proxy, drop-in config, auto-routing |
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -42,54 +69,95 @@ cd halo-ai-core
 └─────────────────────────────────────────────┘
 ```
 
-## Philosophy
+## philosophy
 
-Every piece snaps in and snaps out. No hard dependencies. No vendor lock-in. No cloud tethers.
+every piece snaps in and snaps out. no hard dependencies. no vendor lock-in. no cloud tethers.
 
-The core gives you a foundation. What you build on top is your business — game servers, voice pipelines, distributed storage, SSH mesh. Pull a block and nothing else breaks.
+the ai industry wants you renting someone else's computer. we think you should own the whole stack — the hardware, the models, the data, the pipeline. when you control your own software, you control your own destiny. no api keys expiring at 2am. no terms of service changing under your feet.
 
-When you control your own software, you control your own destiny.
+this is core. everything else is a lego block you choose to add.
 
-> *"They get the kingdom. They forge their own keys."*
+> *"they get the kingdom. they forge their own keys."*
 
-## Docs
+## lego blocks
 
-Everything lives in the [wiki](docs/wiki/Home.md):
+core is the foundation. snap on what you need:
 
-| Guide | What It Covers |
+| block | what it does | status |
+|-------|-------------|--------|
+| **ssh mesh** | multi-machine networking | [guide →](docs/wiki/SSH-Mesh.md) |
+| **voice pipeline** | whisper + kokoro tts | [guide →](docs/wiki/Voice-Pipeline.md) |
+| **open webui** | chat frontend | planned |
+| **comfyui** | image/video generation | planned |
+| **game servers** | arcade management | planned |
+| **glusterfs** | distributed storage | planned |
+| **discord bots** | ai agents in discord | planned |
+
+[how to build your own block →](docs/wiki/Adding-a-Service.md)
+
+## security
+
+ssh keys only. no passwords. no open ports. no exceptions. all services on 127.0.0.1. *"you shall not pass."*
+
+```bash
+ssh-keygen -t ed25519
+ssh-copy-id bcloud@10.0.0.10
+```
+
+[full security guide →](docs/SECURITY.md)
+
+## privacy
+
+**zero telemetry. zero tracking. zero data collection.** nothing phones home. your data stays on your machine. *"there is no cloud. there is only zuul."*
+
+## docs
+
+| guide | what it covers |
 |-------|---------------|
-| [Getting Started](docs/wiki/Getting-Started.md) | Install, verify, first steps |
-| [Components](docs/wiki/Components.md) | ROCm, Caddy, llama.cpp, Lemonade, Gaia |
-| [Adding a Service](docs/wiki/Adding-a-Service.md) | How to snap in your own lego block |
-| [Security](docs/SECURITY.md) | SSH keys only, no exceptions |
-| [Model Management](docs/wiki/Model-Management.md) | Load, switch, benchmark models |
-| [Agents Overview](docs/wiki/Agents-Overview.md) | The 17 LLM actors |
-| [Full Wiki](docs/wiki/Home.md) | 24 pages covering everything |
+| [getting started](docs/wiki/Getting-Started.md) | install, verify, first steps |
+| [components](docs/wiki/Components.md) | rocm, caddy, llama.cpp, lemonade, gaia |
+| [architecture](docs/wiki/Architecture.md) | how the pieces fit together |
+| [adding a service](docs/wiki/Adding-a-Service.md) | snap in your own lego block |
+| [model management](docs/wiki/Model-Management.md) | load, switch, benchmark models |
+| [agents overview](docs/wiki/Agents-Overview.md) | the 17 llm actors |
+| [benchmarks](docs/wiki/Benchmarks.md) | performance numbers |
+| [troubleshooting](docs/wiki/Troubleshooting.md) | common fixes |
+| [full wiki — 24 pages](docs/wiki/Home.md) | everything |
 
-## Options
+## options
 
 ```
-./install.sh --dry-run        Preview without installing
-./install.sh --yes-all        Install everything
-./install.sh --status         Check what's running
-./install.sh --skip-rocm      Skip any component
-./install.sh --help           All options
+./install.sh --dry-run        preview without installing
+./install.sh --yes-all        install everything
+./install.sh --status         check what's running
+./install.sh --skip-rocm      skip any component
+./install.sh --help           all options
 ```
 
-## Requirements
+## requirements
 
-- Arch Linux (bare metal)
-- AMD Ryzen AI hardware
-- Passwordless sudo
+- arch linux (bare metal)
+- amd ryzen ai hardware (strix halo / strix point)
+- passwordless sudo
 
-## License
+## credits
+
+built on [llama.cpp](https://github.com/ggml-org/llama.cpp), [Lemonade SDK](https://github.com/lemonade-sdk/lemonade), [AMD Gaia](https://github.com/amd/gaia), [Caddy](https://caddyserver.com), [ROCm](https://github.com/ROCm/TheRock).
+
+---
+
+<div align="center">
+
+*"i am inevitable."* — *stamped by the architect*
 
 MIT
+
+</div>
 
 ---
 
 <details>
-<summary>Translations</summary>
+<summary id="translations">🌐 Translations</summary>
 
 **Français** — Plateforme IA bare-metal pour AMD Strix Halo. Un script. `./install.sh --yes-all`
 
