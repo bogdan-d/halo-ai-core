@@ -154,7 +154,7 @@ check_status() {
     echo "  Services:"
     for svc in caddy sshd llama-server lemonade-ui gaia-ui gaia; do
         STATUS=$(systemctl is-enabled $svc 2>/dev/null || echo "missing")
-        ACTIVE=$(systemctl is-active $svc 2>/dev/null); ACTIVE=${ACTIVE:-inactive}
+        ACTIVE=$(systemctl is-active $svc 2>/dev/null || true); ACTIVE=${ACTIVE:-inactive}
         if [ "$STATUS" = "enabled" ]; then
             echo -e "    $svc: ${GREEN}$STATUS${NC} ($ACTIVE)"
         else
