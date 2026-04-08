@@ -1,6 +1,6 @@
 <div align="center">
 
-🌐 **English** | [Français](#translations) | [Español](#translations) | [Deutsch](#translations) | [Português](#translations) | [日本語](#translations) | [中文](#translations) | [한국어](#translations) | [Русский](#translations) | [हिन्दी](#translations) | [العربية](#translations)
+🌐 **English** | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)
 
 <picture>
   <img src="assets/halo-ai.svg" alt="halo ai core" width="200">
@@ -172,29 +172,3 @@ MIT
 
 </div>
 
----
-
-<details>
-<summary id="translations">🌐 Translations</summary>
-
-**Français** — Plateforme IA bare-metal pour AMD Strix Halo. Un script. `./install.sh --yes-all`
-
-**Español** — Plataforma de IA bare-metal para AMD Strix Halo. Un script. `./install.sh --yes-all`
-
-**Deutsch** — Bare-Metal-KI-Plattform für AMD Strix Halo. Ein Skript. `./install.sh --yes-all`
-
-**Português** — Plataforma de IA bare-metal para AMD Strix Halo. Um script. `./install.sh --yes-all`
-
-**日本語** — AMD Strix Halo向けベアメタルAIプラットフォーム。`./install.sh --yes-all`
-
-**中文** — AMD Strix Halo裸机AI平台。`./install.sh --yes-all`
-
-**한국어** — AMD Strix Halo용 베어메탈 AI 플랫폼。`./install.sh --yes-all`
-
-**Русский** — Bare-metal AI платформа для AMD Strix Halo. `./install.sh --yes-all`
-
-**العربية** — منصة ذكاء اصطناعي لمعالج AMD Strix Halo. `./install.sh --yes-all`
-
-**हिन्दी** — AMD Strix Halo बेयर-मेटल AI प्लेटफ़ॉर्म। `./install.sh --yes-all`
-
-</details>
