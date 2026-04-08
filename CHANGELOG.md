@@ -13,6 +13,7 @@ All notable changes to Halo AI Core.
 - Lemonade SDK 9.1.4 with web UI
 - Gaia SDK 0.17.1 with Agent UI
 - Python 3.13.4 via pyenv (Arch ships 3.14, SDKs need 3.13)
+- WireGuard VPN with QR code — install finishes, QR appears, scan with phone, connected. Zero config remote access to your entire stack. *(Feature credit: Zach Barrow)*
 
 ### Web UIs
 - Lemonade Server UI on :13305 — chat with LLMs out of the box

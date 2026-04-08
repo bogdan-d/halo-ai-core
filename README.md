@@ -61,6 +61,7 @@ cd halo-ai-core
 | **gateway** | caddy 2.x — reverse proxy, drop-in config, auto-routing |
 | **llm ui** | lemonade web ui — chat with your models instantly (:13305) |
 | **agent ui** | gaia agent ui — deploy and manage agents (:4200) |
+| **vpn** | wireguard — scan a qr code, access your stack from your phone. zero config. |
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -96,6 +97,30 @@ the install script patches llama.cpp at build time:
 - **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` for 19x attention speedup
 
 you don't have to find these. you don't have to apply them. `install.sh` does it for you. that's the point.
+
+## instant mobile access — scan and go
+
+when the install finishes, a qr code appears in your terminal. open the wireguard app on your phone, scan it, and you're connected to your entire ai stack. no port forwarding. no cloud relay. no configuration. just scan and go.
+
+```
+  ┌──────────────────────────────────────────┐
+  │  SCAN THIS WITH YOUR PHONE               │
+  │  WireGuard app → + → Scan from QR Code   │
+  └──────────────────────────────────────────┘
+
+         ▄▄▄▄▄▄▄  ▄▄▄▄▄  ▄▄▄▄▄▄▄
+         █ ▄▄▄ █ ██▀▄ █  █ ▄▄▄ █
+         █ ███ █ ▄▀▀▄██  █ ███ █
+                  (your qr here)
+
+  Phone VPN IP: 10.100.0.2
+  Lemonade:     http://10.100.0.1:13305
+  Gaia:         http://10.100.0.1:4200
+```
+
+wireguard vpn. encrypted tunnel. your phone talks directly to your stack over your local network. works from anywhere on your wifi — or anywhere in the world if you forward udp 51820.
+
+> *feature suggested by zach barrow. huge win. bravo.*
 
 ## philosophy
 
