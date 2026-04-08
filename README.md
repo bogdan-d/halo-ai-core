@@ -3,104 +3,34 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?logo=archlinux&logoColor=white)](https://archlinux.org/)
 [![AMD ROCm](https://img.shields.io/badge/ROCm-7.2.1-ED1C24?logo=amd&logoColor=white)](https://rocm.docs.amd.com/)
-[![AMD Strix Halo](https://img.shields.io/badge/Strix_Halo-gfx1151-ED1C24?logo=amd&logoColor=white)](https://www.amd.com/en/products/processors/laptop/ryzen-ai-max.html)
-[![llama.cpp](https://img.shields.io/badge/llama.cpp-latest-blue)](https://github.com/ggerganov/llama.cpp)
-[![Lemonade SDK](https://img.shields.io/badge/Lemonade_SDK-9.x-orange)](https://github.com/lemonade-sdk/lemonade)
-[![Gaia](https://img.shields.io/badge/Gaia-0.17.x-green)](https://github.com/amd/gaia)
-[![Caddy](https://img.shields.io/badge/Caddy-2.x-22D3EE)](https://caddyserver.com/)
-[![systemd](https://img.shields.io/badge/systemd-managed-brightgreen)](https://systemd.io/)
+[![Strix Halo](https://img.shields.io/badge/Strix_Halo-gfx1151-ED1C24?logo=amd&logoColor=white)](https://www.amd.com/en/products/processors/laptop/ryzen-ai-max.html)
 [![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red)](docs/SECURITY.md)
-[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple)](https://github.com/stampby/halo-ai-core)
 
-> Bare-metal AI platform for AMD Strix Halo. One script. Everything works.
+> Your hardware. Your data. Your rules.
 >
 > *"I know kung fu." — Neo*
 
+Bare-metal AI platform for AMD Strix Halo. One script installs ROCm, Caddy, llama.cpp, Lemonade SDK, and Gaia SDK. Everything runs as systemd services. Everything auto-restarts. SSH only.
+
 **Designed and built by the architect**
 
----
-
-## Philosophy
-
-Your hardware. Your data. Your rules.
-
-Halo AI Core is built on one principle: **lego blocks**. Every piece snaps in and snaps out. No hard dependencies. No vendor lock-in. No cloud tethers. The core gives you a foundation — what you build on top of it is your business.
-
-Want a game server? Snap it on. Want GlusterFS for distributed storage? Snap it on. Want an SSH mesh across five machines? Snap it on. Want to rip it all out and start over? Pull the block and nothing else breaks.
-
-The AI industry wants you renting someone else's computer. We think you should own the whole stack — the hardware, the models, the data, the pipeline. When you control your own software, you control your own destiny. No API keys expiring at 2 AM. No terms of service changing under your feet. No monthly bill that goes up every quarter.
-
-This is core. Everything else is a lego block you choose to add.
-
-> *"They get the kingdom. They forge their own keys."*
-
----
-
-## What Is This
-
-Halo AI Core is the foundation layer for running local AI on AMD Ryzen AI hardware. It installs and configures:
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **ROCm** | 7.2.1 | AMD GPU compute stack |
-| **Caddy** | 2.x | Reverse proxy, auto-routing |
-| **llama.cpp** | latest | LLM inference (ROCm + Vulkan) |
-| **Lemonade SDK** | 9.x | AMD's unified AI backend |
-| **Gaia SDK** | 0.17.x | Agent framework |
-
-Everything runs as **systemd services**. Everything auto-restarts. Everything routes through Caddy.
-
-## Demo
-
-Watch the full clean install on an AMD Strix Halo (128GB):
-
-```bash
-# Play the recording locally
-asciinema play halo-ai-core-install.cast
-```
-
-The cast file is included in this repo. Clone and play it to see the full install in real time.
-
-## Quick Start
+## Install
 
 ```bash
 git clone https://github.com/stampby/halo-ai-core.git
 cd halo-ai-core
-./install.sh --dry-run     # See what happens first
-./install.sh --yes-all     # Install everything
-./install.sh --status      # Check what's running
+./install.sh --yes-all
 ```
 
-## Requirements
-
-- Arch Linux (bare metal)
-- AMD Ryzen AI hardware (Strix Halo / Strix Point)
-- Passwordless sudo
-- Internet connection
-
-## Options
-
-```
---dry-run         Show what would be installed
---yes-all         Skip confirmations
---skip-rocm       Skip ROCm
---skip-caddy      Skip Caddy
---skip-llama      Skip llama.cpp
---skip-lemonade   Skip Lemonade SDK
---skip-gaia       Skip Gaia SDK
---status          Show install status
-```
-
-## Architecture
+## What You Get
 
 ```
 ┌─────────────────────────────────────────────┐
-│                   Caddy                      │
-│            Reverse Proxy (:80)               │
+│                   Caddy (:80)                │
 ├──────────┬──────────┬───────────┬───────────┤
-│ llama.cpp│ Lemonade │   Gaia    │  Future   │
-│  :8080   │  :13305  │  agents   │ services  │
+│ llama.cpp│ Lemonade │   Gaia    │  Your     │
+│  :8080   │  :13305  │  agents   │  blocks   │
 ├──────────┴──────────┴───────────┴───────────┤
 │              ROCm 7.2.1 (gfx1151)           │
 ├─────────────────────────────────────────────┤
@@ -108,33 +38,45 @@ cd halo-ai-core
 └─────────────────────────────────────────────┘
 ```
 
-## Services
+## Philosophy
 
-| Service | Port | Caddy Port | systemd unit |
-|---------|------|------------|--------------|
-| llama-server | 8080 | 8081 | llama-server.service |
-| Lemonade | 13305 | 13306 | lemonade.service |
-| Gaia | — | — | gaia.service |
-| Caddy | 80 | — | caddy.service |
+Every piece snaps in and snaps out. No hard dependencies. No vendor lock-in. No cloud tethers.
 
-## Security
+The core gives you a foundation. What you build on top is your business — game servers, voice pipelines, distributed storage, SSH mesh. Pull a block and nothing else breaks.
 
-**SSH keys only. No exceptions.**
+When you control your own software, you control your own destiny.
 
-Halo AI Core binds all services to `localhost`. Nothing is exposed to the network. You access everything through SSH.
+> *"They get the kingdom. They forge their own keys."*
 
-Read the full security guide: [docs/SECURITY.md](docs/SECURITY.md)
+## Docs
 
-```bash
-# Generate a key
-ssh-keygen -t ed25519
+Everything lives in the [wiki](docs/wiki/Home.md):
 
-# Copy to server
-ssh-copy-id bcloud@10.0.0.10
+| Guide | What It Covers |
+|-------|---------------|
+| [Getting Started](docs/wiki/Getting-Started.md) | Install, verify, first steps |
+| [Components](docs/wiki/Components.md) | ROCm, Caddy, llama.cpp, Lemonade, Gaia |
+| [Adding a Service](docs/wiki/Adding-a-Service.md) | How to snap in your own lego block |
+| [Security](docs/SECURITY.md) | SSH keys only, no exceptions |
+| [Model Management](docs/wiki/Model-Management.md) | Load, switch, benchmark models |
+| [Agents Overview](docs/wiki/Agents-Overview.md) | The 17 LLM actors |
+| [Full Wiki](docs/wiki/Home.md) | 24 pages covering everything |
 
-# You're in
-ssh bcloud@10.0.0.10
+## Options
+
 ```
+./install.sh --dry-run        Preview without installing
+./install.sh --yes-all        Install everything
+./install.sh --status         Check what's running
+./install.sh --skip-rocm      Skip any component
+./install.sh --help           All options
+```
+
+## Requirements
+
+- Arch Linux (bare metal)
+- AMD Ryzen AI hardware
+- Passwordless sudo
 
 ## License
 
@@ -142,164 +84,27 @@ MIT
 
 ---
 
-## Translations
-
 <details>
-<summary>🇫🇷 Français</summary>
+<summary>Translations</summary>
 
-### Halo AI Core
+**Français** — Plateforme IA bare-metal pour AMD Strix Halo. Un script. `./install.sh --yes-all`
 
-Plateforme IA bare-metal pour AMD Strix Halo. Un seul script. Tout fonctionne.
+**Español** — Plataforma de IA bare-metal para AMD Strix Halo. Un script. `./install.sh --yes-all`
 
-**Composants:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
+**Deutsch** — Bare-Metal-KI-Plattform für AMD Strix Halo. Ein Skript. `./install.sh --yes-all`
 
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
+**Português** — Plataforma de IA bare-metal para AMD Strix Halo. Um script. `./install.sh --yes-all`
 
-<details>
-<summary>🇪🇸 Español</summary>
+**日本語** — AMD Strix Halo向けベアメタルAIプラットフォーム。`./install.sh --yes-all`
 
-### Halo AI Core
+**中文** — AMD Strix Halo裸机AI平台。`./install.sh --yes-all`
 
-Plataforma de IA bare-metal para AMD Strix Halo. Un script. Todo funciona.
+**한국어** — AMD Strix Halo용 베어메탈 AI 플랫폼。`./install.sh --yes-all`
 
-**Componentes:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
+**Русский** — Bare-metal AI платформа для AMD Strix Halo. `./install.sh --yes-all`
 
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
+**العربية** — منصة ذكاء اصطناعي لمعالج AMD Strix Halo. `./install.sh --yes-all`
 
-<details>
-<summary>🇩🇪 Deutsch</summary>
+**हिन्दी** — AMD Strix Halo बेयर-मेटल AI प्लेटफ़ॉर्म। `./install.sh --yes-all`
 
-### Halo AI Core
-
-Bare-Metal-KI-Plattform für AMD Strix Halo. Ein Skript. Alles funktioniert.
-
-**Komponenten:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇵🇹 Português</summary>
-
-### Halo AI Core
-
-Plataforma de IA bare-metal para AMD Strix Halo. Um script. Tudo funciona.
-
-**Componentes:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇯🇵 日本語</summary>
-
-### Halo AI Core
-
-AMD Strix Halo向けベアメタルAIプラットフォーム。スクリプト一つで全て動作。
-
-**コンポーネント:** ROCm、Caddy、llama.cpp、Lemonade SDK、Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇨🇳 中文</summary>
-
-### Halo AI Core
-
-AMD Strix Halo裸机AI平台。一个脚本，一切就绪。
-
-**组件:** ROCm、Caddy、llama.cpp、Lemonade SDK、Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇰🇷 한국어</summary>
-
-### Halo AI Core
-
-AMD Strix Halo용 베어메탈 AI 플랫폼. 스크립트 하나로 모든 것이 작동합니다.
-
-**구성요소:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇷🇺 Русский</summary>
-
-### Halo AI Core
-
-Bare-metal AI платформа для AMD Strix Halo. Один скрипт. Всё работает.
-
-**Компоненты:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇸🇦 العربية</summary>
-
-### Halo AI Core
-
-منصة ذكاء اصطناعي على المعدن مباشرة لمعالج AMD Strix Halo. سكريبت واحد. كل شيء يعمل.
-
-**المكونات:** ROCm، Caddy، llama.cpp، Lemonade SDK، Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
-</details>
-
-<details>
-<summary>🇮🇳 हिन्दी</summary>
-
-### Halo AI Core
-
-AMD Strix Halo के लिए बेयर-मेटल AI प्लेटफ़ॉर्म। एक स्क्रिप्ट। सब कुछ काम करता है।
-
-**घटक:** ROCm, Caddy, llama.cpp, Lemonade SDK, Gaia SDK
-
-```bash
-git clone https://github.com/stampby/halo-ai-core.git
-cd halo-ai-core
-./install.sh --yes-all
-```
 </details>
