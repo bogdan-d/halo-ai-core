@@ -77,6 +77,26 @@ cd halo-ai-core
 
 > 🎬 **[watch the full install](halo-ai-core-install.cast)** — clean install recorded on strix halo. clone the repo and run `asciinema play halo-ai-core-install.cast` to watch it in real time.
 
+## benchmarks — out of the box
+
+these numbers come from a clean `install.sh --yes-all` on strix halo hardware. no manual tuning. no tricks. the install script applies all optimizations automatically.
+
+| model | quant | prompt (pp512) | generation (tg128) |
+|-------|-------|----------------|-------------------|
+| qwen3-30B-A3B | Q4_K_M | **1,114 t/s** | **66.6 t/s** |
+
+### what makes it fast
+
+the install script patches llama.cpp at build time:
+
+- **MMQ kernel fix** ([#21284](https://github.com/ggml-org/llama.cpp/issues/21284)) — corrects register pressure on RDNA 3.5 (mmq_x=48, mmq_y=64, nwarps=4)
+- **rocWMMA flash attention** — `-DGGML_HIP_ROCWMMA_FATTN=ON` for hardware-accelerated matrix multiply
+- **fast math intrinsics** — `__expf()` for MoE routing and SiLU activation
+- **HIPBLASLT** — `ROCBLAS_USE_HIPBLASLT=1` doubles prompt processing throughput
+- **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` for 19x attention speedup
+
+you don't have to find these. you don't have to apply them. `install.sh` does it for you. that's the point.
+
 ## philosophy
 
 every piece snaps in and snaps out. no hard dependencies. no vendor lock-in. no cloud tethers.
