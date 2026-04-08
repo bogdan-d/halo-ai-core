@@ -478,16 +478,8 @@ RestartSec=5
 WantedBy=multi-user.target
 LEM_SVC
 
-        # Caddy route
-        sudo tee /etc/caddy/conf.d/lemonade.caddy > /dev/null << 'LEM_CADDY'
-:13306 {
-    reverse_proxy localhost:13305
-}
-LEM_CADDY
-
         sudo systemctl daemon-reload
         sudo systemctl enable lemonade >> "$LOG_FILE" 2>&1
-        sudo systemctl reload caddy >> "$LOG_FILE" 2>&1
 
         VER=$("$HOME/lemonade-env/bin/pip" show lemonade-sdk 2>/dev/null | grep Version | cut -d' ' -f2)
         log "Lemonade SDK v$VER installed"
