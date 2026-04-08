@@ -116,7 +116,7 @@ check_status() {
     # Services
     echo ""
     echo "  Services:"
-    for svc in caddy sshd llama-server lemonade gaia; do
+    for svc in caddy sshd llama-server lemonade-ui gaia-ui gaia; do
         STATUS=$(systemctl is-enabled $svc 2>/dev/null || echo "missing")
         ACTIVE=$(systemctl is-active $svc 2>/dev/null || echo "inactive")
         if [ "$STATUS" = "enabled" ]; then
@@ -187,7 +187,7 @@ fi
 # 1. BASE PACKAGES
 # ============================================================
 log "Installing base packages..."
-BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano cmake make"
+BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano cmake make nodejs npm"
 
 if $DRY_RUN; then
     info "Would install: $BASE_PKGS"
@@ -466,6 +466,80 @@ GAIA_SVC
     fi
 else
     warn "Skipping Gaia SDK"
+fi
+
+# ============================================================
+# 8. WEB UIs
+# ============================================================
+log "Setting up Web UIs..."
+
+if $DRY_RUN; then
+    info "Would configure Lemonade UI (port 13305) and Gaia Agent UI (port 4200)"
+else
+    # Lemonade Server UI (replaces headless lemonade service)
+    sudo tee /usr/lib/systemd/system/lemonade-ui.service > /dev/null << 'LEM_UI_SVC'
+[Unit]
+Description=Lemonade Server Web UI
+After=network.target
+
+[Service]
+Type=simple
+User=bcloud
+Environment=PATH=/home/bcloud/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
+Environment=ROCBLAS_USE_HIPBLASLT=1
+Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+WorkingDirectory=/home/bcloud
+ExecStart=/home/bcloud/lemonade-env/bin/lemonade-server-dev serve --port 13305 --host 0.0.0.0 --llamacpp rocm
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+LEM_UI_SVC
+
+    # Gaia Agent UI
+    sudo npm install -g @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
+
+    sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << 'GAIA_UI_SVC'
+[Unit]
+Description=Gaia Agent Web UI
+After=network.target lemonade-ui.service
+
+[Service]
+Type=simple
+User=bcloud
+Environment=PATH=/usr/local/bin:/usr/bin
+WorkingDirectory=/home/bcloud
+ExecStart=/usr/bin/gaia-ui --serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+GAIA_UI_SVC
+
+    # Caddy routes for UIs
+    sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_UI_CADDY'
+:13306 {
+    reverse_proxy localhost:13305
+}
+LEM_UI_CADDY
+
+    sudo tee /etc/caddy/conf.d/gaia-ui.caddy > /dev/null << 'GAIA_UI_CADDY'
+:4201 {
+    reverse_proxy localhost:4200
+}
+GAIA_UI_CADDY
+
+    # Disable headless lemonade service in favor of UI version
+    sudo systemctl disable lemonade >> "$LOG_FILE" 2>&1 || true
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable lemonade-ui gaia-ui >> "$LOG_FILE" 2>&1
+    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1
+
+    log "Lemonade UI on :13305 (Caddy :13306) — LLM interaction"
+    log "Gaia Agent UI on :4200 (Caddy :4201) — Agent management"
 fi
 
 # ============================================================
