@@ -1,4 +1,4 @@
-app-id: studio.halo-ai.core
+app-id: studio.haloai.core
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
@@ -45,11 +45,11 @@ modules:
       - install -Dm755 halo-ai-core-launcher.sh /app/bin/halo-ai-core
 
       # Install desktop entry and icon
-      - install -Dm644 studio.halo-ai.core.desktop /app/share/applications/studio.halo-ai.core.desktop
-      - install -Dm644 assets/icon.png /app/share/icons/hicolor/128x128/apps/studio.halo-ai.core.png
+      - install -Dm644 studio.haloai.core.desktop /app/share/applications/studio.haloai.core.desktop
+      - install -Dm644 assets/icon.png /app/share/icons/hicolor/128x128/apps/studio.haloai.core.png
 
       # Install appdata
-      - install -Dm644 studio.halo-ai.core.metainfo.xml /app/share/metainfo/studio.halo-ai.core.metainfo.xml
+      - install -Dm644 studio.haloai.core.metainfo.xml /app/share/metainfo/studio.haloai.core.metainfo.xml
 
     sources:
       - type: dir
