@@ -1,0 +1,43 @@
+name: Bug Report
+description: Something broke? Tell us what happened.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The more detail you give, the faster we fix it.
+  - type: input
+    id: version
+    attributes:
+      label: Halo AI Core Version
+      description: Run `./install.sh --status` and paste the version
+      placeholder: "0.9.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect vs what actually happened?
+      placeholder: "I ran ./install.sh --yes-all and ROCm failed to install..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste from `/tmp/halo-ai-core-install.log` or `journalctl`
+      render: shell
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: CPU model and GPU
+      placeholder: "Ryzen AI MAX+ 395, gfx1151, 128GB"
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      description: Run `uname -r`
+      placeholder: "6.19.11-arch1-1"

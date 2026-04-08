@@ -1,0 +1,33 @@
+name: Feature Request
+description: Got an idea for a lego block or improvement?
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Core stays lean. Features go on top as lego blocks.
+        Tell us what you want to snap on.
+  - type: textarea
+    id: description
+    attributes:
+      label: What do you want?
+      description: Describe the feature or lego block
+      placeholder: "I want a ComfyUI block that installs with one click..."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why do you need it?
+      description: What problem does this solve?
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - New lego block
+        - Core improvement
+        - Documentation
+        - Agent
+        - Other
