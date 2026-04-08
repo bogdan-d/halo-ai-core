@@ -263,6 +263,7 @@ export PATH=$PATH:/opt/rocm/bin
 export ROCBLAS_USE_HIPBLASLT=1
 export PYTORCH_ROCM_ARCH=gfx1151
 export HSA_OVERRIDE_GFX_VERSION=11.5.1
+export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
 export IOMMU=pt
 ROCM_ENV
 
@@ -360,10 +361,32 @@ if ! $SKIP_LLAMA; then
         fi
 
         cd "$HOME/llama.cpp"
+
+        # ── gfx1151 MMQ kernel fix (issue #21284) ──
+        # Stock llama.cpp has suboptimal MMQ parameters that exceed
+        # the 256 VGPR register limit on RDNA 3.5, costing ~20% perf.
+        # Patch: mmq_x=48, mmq_y=64, nwarps=4
+        log "Applying gfx1151 performance patches..."
+        if grep -q 'mmq_x = 64' ggml/src/ggml-cuda/mmq.cu 2>/dev/null; then
+            sed -i 's/mmq_x = 64/mmq_x = 48/g' ggml/src/ggml-cuda/mmq.cu
+            sed -i 's/mmq_y = 128/mmq_y = 64/g' ggml/src/ggml-cuda/mmq.cu
+            sed -i 's/nwarps = 8/nwarps = 4/g' ggml/src/ggml-cuda/mmq.cu
+            log "MMQ kernel parameters patched for gfx1151"
+        else
+            info "MMQ patch already applied or file structure changed — skipping"
+        fi
+
+        # Fast math intrinsics for MoE routing and SiLU
+        if grep -q 'expf(' ggml/src/ggml-cuda/common.cuh 2>/dev/null; then
+            sed -i 's/expf(\([^)]*\))/__expf(\1)/g' ggml/src/ggml-cuda/fattn-common.cuh 2>/dev/null || true
+            log "Fast math intrinsics applied"
+        fi
+
         rm -rf build
         cmake -B build \
             -DGGML_HIP=ON \
             -DGGML_VULKAN=ON \
+            -DGGML_HIP_ROCWMMA_FATTN=ON \
             -DAMDGPU_TARGETS=gfx1151 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_HIP_COMPILER=/opt/rocm/bin/amdclang++ \
@@ -376,6 +399,7 @@ if ! $SKIP_LLAMA; then
         sudo systemctl stop llama-server.service 2>/dev/null || true
         sudo cp build/bin/llama-server /usr/local/bin/
         sudo cp build/bin/llama-cli /usr/local/bin/
+        sudo cp build/bin/llama-bench /usr/local/bin/
 
         # Systemd service
         sudo tee /usr/lib/systemd/system/llama-server.service > /dev/null << LLAMA_SVC
@@ -389,6 +413,8 @@ User=${USER}
 Environment=PATH=/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
+Environment=TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 ExecStart=/usr/local/bin/llama-server --host 127.0.0.1 --port 8080 --n-gpu-layers 999
 Restart=on-failure
 RestartSec=5
