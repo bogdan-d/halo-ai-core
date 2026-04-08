@@ -452,7 +452,7 @@ LLAMA_CADDY
 
         sudo systemctl daemon-reload
         sudo systemctl enable llama-server >> "$LOG_FILE" 2>&1
-        sudo systemctl reload caddy >> "$LOG_FILE" 2>&1
+        sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || warn "Caddy reload failed — check /etc/caddy/conf.d/ for duplicates"
 
         log "llama.cpp built and installed — $(/usr/local/bin/llama-server --version 2>&1 | grep version | head -1)"
     fi
@@ -630,7 +630,7 @@ GAIA_UI_CADDY
 
     sudo systemctl daemon-reload
     sudo systemctl enable lemonade-ui gaia-ui >> "$LOG_FILE" 2>&1
-    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1
+    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || warn "Caddy reload failed — check /etc/caddy/conf.d/ for duplicates"
 
     log "Lemonade UI on :13305 (Caddy :13306) — LLM interaction"
     log "Gaia Agent UI on :4200 (Caddy :4201) — Agent management"
