@@ -10,7 +10,7 @@
 # ============================================================
 set -e
 
-VERSION="1.0.0"
+VERSION="0.9.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="/tmp/halo-ai-core-install.log"
 DRY_RUN=false
