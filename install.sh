@@ -650,6 +650,84 @@ echo "  ── VERIFY ───────────────────�
 echo ""
 echo "  ./install.sh --status"
 echo ""
+
+# ============================================================
+# WIREGUARD — Remote Access via QR Code
+# ============================================================
+if ! $DRY_RUN; then
+    echo "  ── REMOTE ACCESS (WireGuard VPN) ───────────────"
+    echo ""
+
+    sudo pacman -S --needed --noconfirm wireguard-tools qrencode >> "$LOG_FILE" 2>&1
+
+    WG_DIR="/etc/wireguard"
+    WG_CONF="$WG_DIR/wg0.conf"
+
+    if [ ! -f "$WG_CONF" ]; then
+        SERVER_PRIV=$(wg genkey)
+        SERVER_PUB=$(echo "$SERVER_PRIV" | wg pubkey)
+        CLIENT_PRIV=$(wg genkey)
+        CLIENT_PUB=$(echo "$CLIENT_PRIV" | wg pubkey)
+        SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
+        SERVER_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
+
+        sudo tee "$WG_CONF" > /dev/null << WG_SRV
+[Interface]
+Address = 10.100.0.1/24
+ListenPort = 51820
+PrivateKey = $SERVER_PRIV
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o $SERVER_IFACE -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o $SERVER_IFACE -j MASQUERADE
+
+[Peer]
+PublicKey = $CLIENT_PUB
+AllowedIPs = 10.100.0.2/32
+WG_SRV
+        sudo chmod 600 "$WG_CONF"
+
+        CLIENT_CONF=$(mktemp)
+        cat > "$CLIENT_CONF" << WG_CLIENT
+[Interface]
+PrivateKey = $CLIENT_PRIV
+Address = 10.100.0.2/24
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = $SERVER_PUB
+Endpoint = $SERVER_IP:51820
+AllowedIPs = 10.100.0.0/24
+PersistentKeepalive = 25
+WG_CLIENT
+
+        sudo sysctl -w net.ipv4.ip_forward=1 >> "$LOG_FILE" 2>&1
+        echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-wireguard.conf >> "$LOG_FILE" 2>&1
+        sudo systemctl enable --now wg-quick@wg0 >> "$LOG_FILE" 2>&1
+
+        echo ""
+        echo "  WireGuard VPN running on 10.100.0.1:51820"
+        echo ""
+        echo "  ┌──────────────────────────────────────────┐"
+        echo "  │  SCAN THIS WITH YOUR PHONE               │"
+        echo "  │  WireGuard app → + → Scan from QR Code   │"
+        echo "  └──────────────────────────────────────────┘"
+        echo ""
+        qrencode -t ansiutf8 < "$CLIENT_CONF"
+        echo ""
+        echo "  Phone VPN IP: 10.100.0.2"
+        echo "  Lemonade:     http://10.100.0.1:13305"
+        echo "  Gaia:         http://10.100.0.1:4200"
+        echo ""
+        sudo cp "$CLIENT_CONF" /etc/wireguard/client1.conf
+        sudo chmod 600 /etc/wireguard/client1.conf
+        rm -f "$CLIENT_CONF"
+        log "WireGuard VPN configured — QR code displayed"
+    else
+        echo "  WireGuard already configured at $WG_CONF"
+        echo "  Show QR again: qrencode -t ansiutf8 < /etc/wireguard/client1.conf"
+        echo ""
+    fi
+fi
+
 log "Installation complete."
 log "Full log: $LOG_FILE"
 echo ""
