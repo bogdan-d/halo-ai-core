@@ -200,7 +200,8 @@ BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano cmake make 
 if $DRY_RUN; then
     info "Would install: $BASE_PKGS"
 else
-    sudo pacman -Sy --needed --noconfirm $BASE_PKGS >> "$LOG_FILE" 2>&1
+    # shellcheck disable=SC2086
+    sudo pacman -Sy --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1
     sudo systemctl enable --now NetworkManager sshd >> "$LOG_FILE" 2>&1
     log "Base packages installed"
 fi
@@ -215,7 +216,8 @@ if ! $SKIP_ROCM; then
     if $DRY_RUN; then
         info "Would install: $ROCM_PKGS"
     else
-        sudo pacman -S --needed --noconfirm $ROCM_PKGS >> "$LOG_FILE" 2>&1
+        # shellcheck disable=SC2086
+        sudo pacman -S --needed --noconfirm ${ROCM_PKGS} >> "$LOG_FILE" 2>&1
 
         # ROCm PATH and env
         sudo tee /etc/profile.d/rocm.sh > /dev/null << 'ROCM_ENV'
@@ -281,12 +283,15 @@ else
         sudo pacman -S --needed --noconfirm tk sqlite openssl zlib xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
 
         if [ ! -d "$HOME/.pyenv" ]; then
-            curl -s https://pyenv.run | bash >> "$LOG_FILE" 2>&1
+            # Install pyenv via git (safer than curl|bash)
+            git clone https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
+            git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
         fi
 
         export PYENV_ROOT="$HOME/.pyenv"
         export PATH="$PYENV_ROOT/bin:$PATH"
-        eval "$(pyenv init -)"
+        # shellcheck disable=SC1090
+        source <("$PYENV_ROOT/bin/pyenv" init -)
 
         pyenv install -s "${PYTHON_VERSION}" >> "$LOG_FILE" 2>&1
         log "Python ${PYTHON_VERSION} installed via pyenv"
@@ -332,18 +337,18 @@ if ! $SKIP_LLAMA; then
         sudo cp build/bin/llama-cli /usr/local/bin/
 
         # Systemd service
-        sudo tee /usr/lib/systemd/system/llama-server.service > /dev/null << 'LLAMA_SVC'
+        sudo tee /usr/lib/systemd/system/llama-server.service > /dev/null << LLAMA_SVC
 [Unit]
 Description=llama.cpp Inference Server
 After=network.target
 
 [Service]
 Type=simple
-User=bcloud
+User=${USER}
 Environment=PATH=/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-ExecStart=/usr/local/bin/llama-server --host 0.0.0.0 --port 8080 --n-gpu-layers 999
+ExecStart=/usr/local/bin/llama-server --host 127.0.0.1 --port 8080 --n-gpu-layers 999
 Restart=on-failure
 RestartSec=5
 
@@ -385,19 +390,19 @@ if ! $SKIP_LEMONADE; then
         "$HOME/lemonade-env/bin/pip" install lemonade-sdk >> "$LOG_FILE" 2>&1
 
         # Systemd service
-        sudo tee /usr/lib/systemd/system/lemonade.service > /dev/null << 'LEM_SVC'
+        sudo tee /usr/lib/systemd/system/lemonade.service > /dev/null << LEM_SVC
 [Unit]
 Description=Lemonade SDK Server
 After=network.target
 
 [Service]
 Type=simple
-User=bcloud
-Environment=PATH=/home/bcloud/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
+User=${USER}
+Environment=PATH=${HOME}/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-WorkingDirectory=/home/bcloud
-ExecStart=/home/bcloud/lemonade-env/bin/lemonade --tools llama-server --port 13305
+WorkingDirectory=${HOME}
+ExecStart=${HOME}/lemonade-env/bin/lemonade --tools llama-server --port 13305
 Restart=on-failure
 RestartSec=5
 
@@ -446,19 +451,19 @@ if ! $SKIP_GAIA; then
         "$HOME/gaia-env/bin/pip" install -e . >> "$LOG_FILE" 2>&1
 
         # Systemd service
-        sudo tee /usr/lib/systemd/system/gaia.service > /dev/null << 'GAIA_SVC'
+        sudo tee /usr/lib/systemd/system/gaia.service > /dev/null << GAIA_SVC
 [Unit]
 Description=Gaia AI Agent Framework
 After=network.target llama-server.service
 
 [Service]
 Type=simple
-User=bcloud
-Environment=PATH=/home/bcloud/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
+User=${USER}
+Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-WorkingDirectory=/home/bcloud/gaia
-ExecStart=/home/bcloud/gaia-env/bin/gaia serve
+WorkingDirectory=${HOME}/gaia
+ExecStart=${HOME}/gaia-env/bin/gaia serve
 Restart=on-failure
 RestartSec=5
 
@@ -485,19 +490,19 @@ if $DRY_RUN; then
     info "Would configure Lemonade UI (port 13305) and Gaia Agent UI (port 4200)"
 else
     # Lemonade Server UI (replaces headless lemonade service)
-    sudo tee /usr/lib/systemd/system/lemonade-ui.service > /dev/null << 'LEM_UI_SVC'
+    sudo tee /usr/lib/systemd/system/lemonade-ui.service > /dev/null << LEM_UI_SVC
 [Unit]
 Description=Lemonade Server Web UI
 After=network.target
 
 [Service]
 Type=simple
-User=bcloud
-Environment=PATH=/home/bcloud/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
+User=${USER}
+Environment=PATH=${HOME}/lemonade-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-WorkingDirectory=/home/bcloud
-ExecStart=/home/bcloud/lemonade-env/bin/lemonade-server-dev serve --port 13305 --host 0.0.0.0 --llamacpp rocm
+WorkingDirectory=${HOME}
+ExecStart=${HOME}/lemonade-env/bin/lemonade-server-dev serve --port 13305 --host 127.0.0.1 --llamacpp rocm
 Restart=on-failure
 RestartSec=5
 
@@ -508,16 +513,16 @@ LEM_UI_SVC
     # Gaia Agent UI
     sudo npm install -g @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
 
-    sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << 'GAIA_UI_SVC'
+    sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << GAIA_UI_SVC
 [Unit]
 Description=Gaia Agent Web UI
 After=network.target lemonade-ui.service
 
 [Service]
 Type=simple
-User=bcloud
+User=${USER}
 Environment=PATH=/usr/local/bin:/usr/bin
-WorkingDirectory=/home/bcloud
+WorkingDirectory=${HOME}
 ExecStart=/usr/bin/gaia-ui --serve
 Restart=on-failure
 RestartSec=5
