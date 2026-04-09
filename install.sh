@@ -864,6 +864,127 @@ WG_CLIENT
 fi
 
 # ============================================================
+# 11. VOICE BACKENDS + DASHBOARD + AUTO-LOAD
+# ============================================================
+if ! $DRY_RUN; then
+    step "Voice, Dashboard & Auto-load"
+
+    # Install voice backends
+    log "Installing voice backends..."
+    lemonade backends install kokoro:cpu >> "$LOG_FILE" 2>&1 &
+    spinner $! "Installing Kokoro TTS..."
+    lemonade backends install whispercpp:vulkan >> "$LOG_FILE" 2>&1 &
+    spinner $! "Installing Whisper STT (Vulkan)..."
+
+    # Pull voice models
+    log "Downloading voice models..."
+    lemonade pull kokoro-v1 >> "$LOG_FILE" 2>&1 &
+    spinner $! "Downloading Kokoro TTS model..."
+    lemonade pull Whisper-Large-v3-Turbo >> "$LOG_FILE" 2>&1 &
+    spinner $! "Downloading Whisper Large v3 Turbo (1.5 GB)..."
+
+    # Pull default NPU model for agents
+    lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 &
+    spinner $! "Downloading Gemma3 4B for NPU..."
+
+    log "Voice backends installed: Kokoro TTS + Whisper STT"
+
+    # Install dashboard
+    log "Installing dashboard..."
+    sudo mkdir -p /srv/halo-dashboard
+    if [ -f "$SCRIPT_DIR/dashboard/index.html" ]; then
+        sudo cp "$SCRIPT_DIR/dashboard/index.html" /srv/halo-dashboard/index.html
+    fi
+
+    # Configure Caddy with reverse proxies
+    sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDY'
+{
+	admin "unix//run/caddy/admin.socket"
+}
+
+:80 {
+	root * /srv/halo-dashboard
+	file_server
+}
+
+:13306 {
+	reverse_proxy 127.0.0.1:13305
+}
+
+:4201 {
+	reverse_proxy 127.0.0.1:4200
+}
+CADDY
+    sudo systemctl restart caddy >> "$LOG_FILE" 2>&1
+    log "Dashboard deployed on :80 — Lemonade :13306 — Gaia :4201"
+
+    # Create auto-load script
+    sudo tee /usr/local/bin/halo-autoload.sh > /dev/null << 'AUTOLOAD'
+#!/bin/bash
+# halo-ai core — auto-load default models on boot
+# "i'll be back." — the terminator
+
+LOG="$HOME/.local/log/halo-autoload.log"
+mkdir -p "$(dirname "$LOG")"
+
+log() { echo "[$(date '+%H:%M:%S')] $1" >> "$LOG"; }
+
+log "Auto-loading default models..."
+
+# Wait for lemonade to be ready
+for i in $(seq 1 30); do
+    if lemonade status --json 2>/dev/null | grep -q '"version"'; then
+        break
+    fi
+    sleep 2
+done
+
+# Load whisper (STT)
+log "Loading Whisper Large v3 Turbo..."
+lemonade load Whisper-Large-v3-Turbo --whispercpp vulkan >> "$LOG" 2>&1 || \
+    log "Whisper load failed (non-critical)"
+
+# Load kokoro (TTS)
+log "Loading Kokoro v1..."
+lemonade load kokoro-v1 >> "$LOG" 2>&1 || \
+    log "Kokoro load failed (non-critical)"
+
+# Load default LLM on NPU (agents)
+log "Loading Gemma3 4B on NPU..."
+lemonade load gemma3-4b-FLM --ctx-size 4096 >> "$LOG" 2>&1 || \
+    log "NPU model load failed (non-critical)"
+
+log "Auto-load complete."
+AUTOLOAD
+    sudo chmod +x /usr/local/bin/halo-autoload.sh
+
+    # Create auto-load systemd service
+    sudo tee /usr/lib/systemd/system/halo-autoload.service > /dev/null << 'SVCUNIT'
+[Unit]
+Description=Halo AI Core — Auto-load default models
+After=lemonade-server.service
+Wants=lemonade-server.service
+
+[Service]
+Type=oneshot
+User=bcloud
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/local/bin/halo-autoload.sh
+
+[Install]
+WantedBy=multi-user.target
+SVCUNIT
+    sudo systemctl daemon-reload
+    sudo systemctl enable halo-autoload >> "$LOG_FILE" 2>&1
+    log "Auto-load service enabled — voice + NPU models load on every boot"
+else
+    info "Would install voice backends (Kokoro TTS + Whisper STT)"
+    info "Would deploy dashboard on :80 with Caddy reverse proxies"
+    info "Would create auto-load service for default models on boot"
+fi
+
+# ============================================================
 # DONE
 # ============================================================
 HOSTNAME=$(cat /proc/sys/kernel/hostname)
