@@ -438,7 +438,7 @@ if ! $SKIP_LLAMA; then
         export ROCM_PATH=/opt/rocm
 
         if [ ! -d "$HOME/llama.cpp" ]; then
-            git clone --depth 1 --branch b8737 https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 --branch master https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
         else
             cd "$HOME/llama.cpp" && git pull >> "$LOG_FILE" 2>&1
         fi
