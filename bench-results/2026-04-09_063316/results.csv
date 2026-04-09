@@ -1,0 +1,14 @@
+model,test,status,prompt_tok_s_avg,gen_tok_s_avg,prompt_tok_s_std,gen_tok_s_std,prompt_tokens_avg,gen_tokens_avg,ttft_ms_avg,total_ms_avg
+Qwen3.5-35B-A3B-GGUF,Prompt ~16 tokens,OK,269.5,62.5,0.0,0.0,30,10,111,271
+Qwen3.5-35B-A3B-GGUF,Prompt ~256 tokens,OK,941.6,62.7,0.0,0.0,270,10,287,446
+Qwen3.5-35B-A3B-GGUF,Prompt ~1024 tokens,OK,1270.9,62.0,0.0,0.0,1038,10,817,978
+Qwen3.5-35B-A3B-GGUF,Generate 50 tokens,OK,216.3,58.0,0.0,0.0,25,50,116,977
+Qwen3.5-35B-A3B-GGUF,Generate 250 tokens,OK,219.5,57.2,0.0,0.0,26,250,118,4487
+Qwen3.5-35B-A3B-GGUF,Generate 500 tokens,OK,219.6,57.0,0.0,0.0,26,500,118,8886
+Qwen3.5-35B-A3B-GGUF,Context ~1024 tokens,OK,1006.1,57.0,0.0,0.0,1042,100,1036,2789
+Qwen3.5-35B-A3B-GGUF,Context ~4096 tokens,OK,1116.7,55.6,0.0,0.0,3585,100,3210,5009
+Qwen3.5-35B-A3B-GGUF,Context ~8192 tokens,OK,1050.1,54.2,0.0,0.0,4611,100,4391,6236
+Qwen3.5-35B-A3B-GGUF,Reasoning: Math,OK,348.4,57.0,0.0,0.0,62,500,178,8948
+Qwen3.5-35B-A3B-GGUF,Reasoning: Code reasoning,OK,405.1,57.0,0.0,0.0,96,500,237,9013
+Qwen3.5-35B-A3B-GGUF,Code: Python async,OK,257.2,56.8,0.0,0.0,37,800,144,14222
+Qwen3.5-35B-A3B-GGUF,Code: Bash scripting,OK,288.9,56.9,0.0,0.0,46,800,159,14220

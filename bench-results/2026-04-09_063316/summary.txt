@@ -1,0 +1,40 @@
+═══════════════════════════════════════════════════════════════
+  Halo AI Core — LLM Benchmark Results
+  Generated: 2026-04-09 06:35:01
+  halo-bench v1.0.0
+═══════════════════════════════════════════════════════════════
+
+Hardware:
+  CPU: AMD RYZEN AI MAX+ 395 w/ Radeon 8060S
+  Cores: 32
+  Memory: 124Gi
+  GPU: AMD RYZEN AI MAX+ 395 w/ Radeon 8060S
+
+Models benchmarked:
+  - Qwen3.5-35B-A3B-GGUF
+
+Configuration:
+  Runs per test: 1
+  Quick mode: true
+
+Results (see results.csv for full data):
+
+  Test                                     Model              Gen tok/s Prompt tok/s
+  ──────────────────────────────────────── ─────────────── ──────────── ────────────
+  Prompt ~16 tokens                        Qwen3.5-35B-A3B         62.5        269.5
+  Prompt ~256 tokens                       Qwen3.5-35B-A3B         62.7        941.6
+  Prompt ~1024 tokens                      Qwen3.5-35B-A3B         62.0       1270.9
+  Generate 50 tokens                       Qwen3.5-35B-A3B         58.0        216.3
+  Generate 250 tokens                      Qwen3.5-35B-A3B         57.2        219.5
+  Generate 500 tokens                      Qwen3.5-35B-A3B         57.0        219.6
+  Context ~1024 tokens                     Qwen3.5-35B-A3B         57.0       1006.1
+  Context ~4096 tokens                     Qwen3.5-35B-A3B         55.6       1116.7
+  Context ~8192 tokens                     Qwen3.5-35B-A3B         54.2       1050.1
+  Reasoning: Math                          Qwen3.5-35B-A3B         57.0        348.4
+  Reasoning: Code reasoning                Qwen3.5-35B-A3B         57.0        405.1
+  Code: Python async                       Qwen3.5-35B-A3B         56.8        257.2
+  Code: Bash scripting                     Qwen3.5-35B-A3B         56.9        288.9
+
+═══════════════════════════════════════════════════════════════
+  Designed and built by the architect
+═══════════════════════════════════════════════════════════════
