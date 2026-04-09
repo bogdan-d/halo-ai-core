@@ -489,7 +489,7 @@ ExecStart=/usr/local/bin/llama-server \\
     --model ${HOME}/models/default.gguf \\
     --n-gpu-layers 999 \\
     --ctx-size 32768 \\
-    --flash-attn \\
+    --flash-attn on \\
     --mlock \\
     --threads 16 \\
     --threads-batch 32 \\
@@ -504,7 +504,7 @@ LLAMA_SVC
         # Caddy routes — external-facing ports proxy to localhost-only services
         sudo tee /etc/caddy/conf.d/llama.caddy > /dev/null << 'LLAMA_CADDY'
 :8081 {
-    @local remote_ip 127.0.0.1 10.100.0.0/24
+    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
         reverse_proxy localhost:8080
     }
@@ -514,7 +514,7 @@ LLAMA_CADDY
 
         sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_CADDY'
 :13306 {
-    @local remote_ip 127.0.0.1 10.100.0.0/24
+    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
         reverse_proxy localhost:13305
     }
@@ -524,7 +524,7 @@ LEM_CADDY
 
         sudo tee /etc/caddy/conf.d/gaia-ui.caddy > /dev/null << 'GAIA_UI_CADDY'
 :4201 {
-    @local remote_ip 127.0.0.1 10.100.0.0/24
+    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
         reverse_proxy localhost:4200
     }
@@ -534,7 +534,7 @@ GAIA_UI_CADDY
 
         sudo tee /etc/caddy/conf.d/gaia-api.caddy > /dev/null << 'GAIA_API_CADDY'
 :5001 {
-    @local remote_ip 127.0.0.1 10.100.0.0/24
+    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
         reverse_proxy localhost:5000
     }
