@@ -15,6 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="${HOME}/.local/log"
 mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/halo-ai-core-install.log"
+touch "$LOG_FILE" && chmod 600 "$LOG_FILE"
+trap 'rm -f "${WG_TMP:-}" "${CLIENT_CONF:-}" 2>/dev/null' EXIT INT TERM
 DRY_RUN=false
 SKIP_ROCM=false
 SKIP_CADDY=false
@@ -298,6 +300,15 @@ ROCM_ENV
         # Add user to video/render
         sudo usermod -aG video,render "$USER"
 
+        # Set CPU governor to performance for max throughput
+        if command -v cpupower &>/dev/null; then
+            sudo cpupower frequency-set -g performance >> "$LOG_FILE" 2>&1 || true
+            # Persist across reboots
+            echo "governor='performance'" | sudo tee /etc/default/cpupower > /dev/null
+            sudo systemctl enable cpupower >> "$LOG_FILE" 2>&1 || true
+            log "CPU governor set to performance"
+        fi
+
         # Source it now
         export PATH=$PATH:/opt/rocm/bin
 
@@ -477,7 +488,12 @@ ExecStart=/usr/local/bin/llama-server \\
     --port 8080 \\
     --model ${HOME}/models/default.gguf \\
     --n-gpu-layers 999 \\
-    --ctx-size 32768
+    --ctx-size 32768 \\
+    --flash-attn \\
+    --mlock \\
+    --threads 16 \\
+    --threads-batch 32 \\
+    --cont-batching
 Restart=on-failure
 RestartSec=5
 
@@ -488,25 +504,41 @@ LLAMA_SVC
         # Caddy routes — external-facing ports proxy to localhost-only services
         sudo tee /etc/caddy/conf.d/llama.caddy > /dev/null << 'LLAMA_CADDY'
 :8081 {
-    reverse_proxy localhost:8080
+    @local remote_ip 127.0.0.1 10.100.0.0/24
+    handle @local {
+        reverse_proxy localhost:8080
+    }
+    respond 403
 }
 LLAMA_CADDY
 
         sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_CADDY'
 :13306 {
-    reverse_proxy localhost:13305
+    @local remote_ip 127.0.0.1 10.100.0.0/24
+    handle @local {
+        reverse_proxy localhost:13305
+    }
+    respond 403
 }
 LEM_CADDY
 
         sudo tee /etc/caddy/conf.d/gaia-ui.caddy > /dev/null << 'GAIA_UI_CADDY'
 :4201 {
-    reverse_proxy localhost:4200
+    @local remote_ip 127.0.0.1 10.100.0.0/24
+    handle @local {
+        reverse_proxy localhost:4200
+    }
+    respond 403
 }
 GAIA_UI_CADDY
 
         sudo tee /etc/caddy/conf.d/gaia-api.caddy > /dev/null << 'GAIA_API_CADDY'
 :5001 {
-    reverse_proxy localhost:5000
+    @local remote_ip 127.0.0.1 10.100.0.0/24
+    handle @local {
+        reverse_proxy localhost:5000
+    }
+    respond 403
 }
 GAIA_API_CADDY
 
@@ -590,6 +622,7 @@ if ! $SKIP_GAIA; then
         spinner $! "Installing Gaia SDK (includes PyTorch — grab a coffee)..."
 
         # Gaia .env — wire to Lemonade as primary backend
+        install -m 600 /dev/null "$HOME/gaia/.env"
         cat > "$HOME/gaia/.env" << GAIA_ENV
 # Halo AI Core — Gaia Integration
 # Primary: Lemonade server (manages models, llamacpp backend)
@@ -629,7 +662,7 @@ GAIA_SVC
         sudo systemctl daemon-reload
         sudo systemctl enable gaia >> "$LOG_FILE" 2>&1
 
-        VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null)
+        VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "unknown")
         log "Gaia SDK v$VER installed"
         log "Gaia .env created — LEMONADE_BASE_URL=http://localhost:13305/api/v1"
     fi
@@ -652,10 +685,10 @@ else
     sudo rm -f /usr/lib/systemd/system/lemonade-ui.service 2>/dev/null
 
     # Gaia Agent UI
-    sudo npm install -g @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
+    sudo npm install -g --ignore-scripts @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
 
     # Find gaia-ui binary — npm global bin location varies
-    GAIA_UI_BIN=$(which gaia-ui 2>/dev/null || npm root -g 2>/dev/null | sed 's|/lib/node_modules|/bin/gaia-ui|' || echo "/usr/local/bin/gaia-ui")
+    GAIA_UI_BIN=$(command -v gaia-ui 2>/dev/null || npm root -g 2>/dev/null | sed 's|/lib/node_modules|/bin/gaia-ui|' || echo "/usr/local/bin/gaia-ui")
 
     sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << GAIA_UI_SVC
 [Unit]
@@ -707,7 +740,7 @@ if ! $SKIP_CLAUDE; then
             log "Claude Code already installed — $(claude --version 2>/dev/null || echo 'installed')"
         else
             if command -v npm &>/dev/null; then
-                sudo npm install -g @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
+                sudo npm install -g --ignore-scripts @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
                 spinner $! "Installing Claude Code..."
                 log "Claude Code installed via npm"
             else
@@ -794,6 +827,10 @@ if ! $DRY_RUN; then
         CLIENT_PRIV=$(wg genkey)
         CLIENT_PUB=$(echo "$CLIENT_PRIV" | wg pubkey)
         SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
+        if [[ -z "$SERVER_IFACE" || ! "$SERVER_IFACE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            warn "Could not detect default network interface — skipping WireGuard"
+            warn "Set up WireGuard manually: https://wiki.archlinux.org/title/WireGuard"
+        else
         # Try public IP first (for remote VPN access), fall back to LAN IP
         LAN_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
         SERVER_IP=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
@@ -824,6 +861,7 @@ WG_SRV
         rm -f "$WG_TMP"
 
         CLIENT_CONF=$(mktemp)
+        chmod 600 "$CLIENT_CONF"
         cat > "$CLIENT_CONF" << WG_CLIENT
 [Interface]
 PrivateKey = $CLIENT_PRIV
@@ -858,6 +896,7 @@ WG_CLIENT
         sudo install -m 600 "$CLIENT_CONF" /etc/wireguard/client1.conf
         rm -f "$CLIENT_CONF"
         log "WireGuard VPN configured — QR code displayed"
+        fi  # SERVER_IFACE validation
     else
         echo "  WireGuard already configured at $WG_CONF"
         echo "  Show QR again: qrencode -t ansiutf8 < /etc/wireguard/client1.conf"
