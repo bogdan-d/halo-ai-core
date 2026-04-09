@@ -55,7 +55,7 @@ usage() {
 # Step count calculated dynamically based on skip flags
 CURRENT_STEP=0
 calculate_steps() {
-    TOTAL_STEPS=3  # base + python + web UIs (always run)
+    TOTAL_STEPS=4  # base + python + web UIs + wireguard (always run)
     $SKIP_ROCM     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
     $SKIP_CADDY    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
     $SKIP_LLAMA    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
@@ -360,7 +360,7 @@ small{display:block;margin-top:1.5em;color:#333}
 <a class="btn" target="_blank" href="http://{http.request.host}:13306">lemonade<small>chat with llms — :13306</small></a>
 <a class="btn" target="_blank" href="http://{http.request.host}:4201">gaia agents<small>manage ai agents — :4201</small></a>
 <a class="btn" target="_blank" href="http://{http.request.host}:8081/v1/models">llama api<small>openai-compatible — :8081</small></a>
-<a class="btn" target="_blank" href="http://{http.request.host}:5001/docs">gaia api<small>agent api — :5001</small></a>
+<a class="btn" target="_blank" href="http://{http.request.host}:5001/docs">gaia api<small>agent api — :5001 → :5050</small></a>
 </div>
 <small>designed and built by the architect</small>
 </div></body></html>`
@@ -469,9 +469,16 @@ if ! $SKIP_LLAMA; then
         sudo cp build/bin/llama-bench /usr/local/bin/
 
         # Systemd service (fallback — Lemonade is primary)
+        # Create model symlink dir if it doesn't exist
+        mkdir -p "${HOME}/models"
+        if [ ! -e "${HOME}/models/default.gguf" ]; then
+            warn "No model at ~/models/default.gguf — llama-server won't start until you symlink one"
+            warn "Example: ln -s ~/.cache/huggingface/hub/.../model.gguf ~/models/default.gguf"
+        fi
+
         sudo tee /usr/lib/systemd/system/llama-server.service > /dev/null << LLAMA_SVC
 [Unit]
-Description=llama.cpp Inference Server (fallback)
+Description=llama.cpp Inference Server (fallback — Lemonade is primary)
 After=network.target
 Conflicts=lemonade-server.service
 
@@ -501,8 +508,8 @@ RestartSec=5
 WantedBy=multi-user.target
 LLAMA_SVC
 
-        # Caddy routes — external-facing ports proxy to localhost-only services
-        sudo tee /etc/caddy/conf.d/llama.caddy > /dev/null << 'LLAMA_CADDY'
+        # Caddy routes — external-facing ports proxy to Lemonade (primary LLM backend)
+        sudo tee /etc/caddy/conf.d/llm-api.caddy > /dev/null << 'LLM_API_CADDY'
 :8081 {
     @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
@@ -510,7 +517,9 @@ LLAMA_SVC
     }
     respond 403
 }
-LLAMA_CADDY
+LLM_API_CADDY
+        # Clean up old misnamed config
+        sudo rm -f /etc/caddy/conf.d/llama.caddy 2>/dev/null
 
         sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_CADDY'
 :13306 {
@@ -536,7 +545,7 @@ GAIA_UI_CADDY
 :5001 {
     @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
-        reverse_proxy localhost:5000
+        reverse_proxy localhost:5050
     }
     respond 403
 }
@@ -651,7 +660,7 @@ Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
 Environment=LEMONADE_BASE_URL=http://localhost:13305/api/v1
 WorkingDirectory=${HOME}/gaia
-ExecStart=${HOME}/gaia-env/bin/gaia api start --host 127.0.0.1 --port 5000 --no-lemonade-check
+ExecStart=${HOME}/gaia-env/bin/gaia api start --host 127.0.0.1 --port 5050 --no-lemonade-check
 Restart=on-failure
 RestartSec=10
 
@@ -761,62 +770,14 @@ else
 fi
 
 # ============================================================
-# DONE
-# ============================================================
-HOSTNAME=$(cat /proc/sys/kernel/hostname)
-echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║     Halo AI Core — Install Done      ║"
-echo "╚══════════════════════════════════════╝"
-echo ""
-echo "  \"There is no spoon.\" — The Matrix"
-echo ""
-echo "  ── YOUR UIs ──────────────────────────────────"
-echo ""
-echo "  Lemonade (chat with LLMs):"
-echo "    Local:  http://localhost:13305"
-echo "    SSH:    ssh -L 13305:localhost:13305 $HOSTNAME"
-echo "            then open http://localhost:13305"
-echo ""
-echo "  Gaia (manage agents):"
-echo "    Local:  http://localhost:4200"
-echo "    SSH:    ssh -L 4200:localhost:4200 $HOSTNAME"
-echo "            then open http://localhost:4200"
-echo ""
-echo "  Claude Code (local AI coding agent):"
-echo "    lemonade launch claude -m <model-name>"
-echo ""
-echo "  ── IMPORTANT ─────────────────────────────────"
-echo ""
-echo "  Reboot your machine to start all services:"
-echo ""
-echo "    sudo reboot"
-echo ""
-echo "  Services are enabled and will start automatically on boot."
-echo "  They will NOT run until you reboot."
-echo ""
-echo "  ── NEXT STEPS (after reboot) ──────────────────"
-echo ""
-echo "  1. Load a model in Lemonade UI"
-echo "  2. Start chatting"
-echo "  3. Launch Claude Code with local models:"
-echo "     lemonade launch claude -m <model-name>"
-echo "  4. Deploy core agents (optional):"
-echo "     https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Core-Agents.md"
-echo ""
-echo "  ── VERIFY ────────────────────────────────────"
-echo ""
-echo "  ./install.sh --status"
-echo ""
-
-# ============================================================
 # WIREGUARD — Remote Access via QR Code
 # ============================================================
-if ! $DRY_RUN; then
-    echo "  ── REMOTE ACCESS (WireGuard VPN) ───────────────"
-    echo ""
+step "WireGuard VPN"
 
-    sudo pacman -S --needed --noconfirm wireguard-tools qrencode >> "$LOG_FILE" 2>&1
+if $DRY_RUN; then
+    info "Would install wireguard-tools, qrencode, nftables and generate VPN config"
+else
+    sudo pacman -S --needed --noconfirm wireguard-tools qrencode nftables >> "$LOG_FILE" 2>&1
 
     WG_DIR="/etc/wireguard"
     WG_CONF="$WG_DIR/wg0.conf"
@@ -850,8 +811,8 @@ if ! $DRY_RUN; then
 Address = 10.100.0.1/24
 ListenPort = 51820
 PrivateKey = $SERVER_PRIV
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o $SERVER_IFACE -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o $SERVER_IFACE -j MASQUERADE
+PostUp = nft add table inet wg-nat; nft add chain inet wg-nat forward '{type filter hook forward priority 0; policy accept;}'; nft add rule inet wg-nat forward iifname wg0 accept; nft add chain inet wg-nat postrouting '{type nat hook postrouting priority 100;}'; nft add rule inet wg-nat postrouting oifname $SERVER_IFACE masquerade
+PostDown = nft delete table inet wg-nat
 
 [Peer]
 PublicKey = $CLIENT_PUB
@@ -879,30 +840,74 @@ WG_CLIENT
         echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-wireguard.conf >> "$LOG_FILE" 2>&1
         sudo systemctl enable --now wg-quick@wg0 >> "$LOG_FILE" 2>&1
 
-        echo ""
-        echo "  WireGuard VPN running on 10.100.0.1:51820"
-        echo ""
-        echo "  ┌──────────────────────────────────────────┐"
-        echo "  │  SCAN THIS WITH YOUR PHONE               │"
-        echo "  │  WireGuard app → + → Scan from QR Code   │"
-        echo "  └──────────────────────────────────────────┘"
-        echo ""
-        qrencode -t ansiutf8 < "$CLIENT_CONF"
-        echo ""
-        echo "  Phone VPN IP: 10.100.0.2"
-        echo "  Lemonade:     http://10.100.0.1:13305"
-        echo "  Gaia:         http://10.100.0.1:4200"
-        echo ""
         sudo install -m 600 "$CLIENT_CONF" /etc/wireguard/client1.conf
         rm -f "$CLIENT_CONF"
-        log "WireGuard VPN configured — QR code displayed"
+        log "WireGuard VPN configured on 10.100.0.1:51820"
         fi  # SERVER_IFACE validation
     else
-        echo "  WireGuard already configured at $WG_CONF"
-        echo "  Show QR again: qrencode -t ansiutf8 < /etc/wireguard/client1.conf"
-        echo ""
+        log "WireGuard already configured at $WG_CONF"
     fi
 fi
+
+# ============================================================
+# DONE
+# ============================================================
+HOSTNAME=$(cat /proc/sys/kernel/hostname)
+echo ""
+echo "╔══════════════════════════════════════╗"
+echo "║     Halo AI Core — Install Done      ║"
+echo "╚══════════════════════════════════════╝"
+echo ""
+echo "  \"There is no spoon.\" — The Matrix"
+echo ""
+echo "  ── YOUR UIs ──────────────────────────────────"
+echo ""
+echo "  Lemonade (chat with LLMs):"
+echo "    Local:  http://localhost:13305"
+echo "    SSH:    ssh -L 13305:localhost:13305 $HOSTNAME"
+echo "            then open http://localhost:13305"
+echo ""
+echo "  Gaia (manage agents):"
+echo "    Local:  http://localhost:4200"
+echo "    SSH:    ssh -L 4200:localhost:4200 $HOSTNAME"
+echo "            then open http://localhost:4200"
+echo ""
+echo "  Claude Code (local AI coding agent):"
+echo "    lemonade launch claude -m <model-name>"
+echo ""
+
+if [ -f /etc/wireguard/wg0.conf ]; then
+echo "  ── REMOTE ACCESS (WireGuard VPN) ───────────────"
+echo ""
+echo "  Phone VPN IP: 10.100.0.2"
+echo "  Lemonade:     http://10.100.0.1:13305"
+echo "  Gaia:         http://10.100.0.1:4200"
+echo "  Show QR:      qrencode -t ansiutf8 < /etc/wireguard/client1.conf"
+echo ""
+fi
+
+echo "  ── IMPORTANT ─────────────────────────────────"
+echo ""
+echo "  Reboot your machine to start all services:"
+echo ""
+echo "    sudo reboot"
+echo ""
+echo "  Services are enabled and will start automatically on boot."
+echo "  They will NOT run until you reboot."
+echo ""
+echo "  ── NEXT STEPS (after reboot) ──────────────────"
+echo ""
+echo "  1. Load a model in Lemonade UI"
+echo "  2. Start chatting"
+echo "  3. Launch Claude Code with local models:"
+echo "     lemonade launch claude -m <model-name>"
+echo "  4. Deploy core agents (optional):"
+echo "     https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Core-Agents.md"
+echo ""
+echo "  ── VERIFY ────────────────────────────────────"
+echo ""
+echo "  ./install.sh --status"
+echo ""
 
 log "Installation complete."
 log "Full log: $LOG_FILE"
