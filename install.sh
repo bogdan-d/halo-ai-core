@@ -10,6 +10,12 @@
 # ============================================================
 set -euo pipefail
 
+# Validate HOME has no spaces (systemd units embed it)
+if [[ "$HOME" =~ [[:space:]] ]]; then
+    echo "ERROR: HOME path contains spaces ($HOME) — not supported"
+    exit 1
+fi
+
 VERSION="0.9.1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="${HOME}/.local/log"
@@ -163,8 +169,8 @@ check_status() {
     fi
 
     # Gaia
-    if command -v gaia &>/dev/null || [ -f "$HOME/gaia-env/bin/gaia" ]; then
-        VER=$(gaia --version 2>/dev/null || $HOME/gaia-env/bin/gaia --version 2>/dev/null || echo "installed")
+    if command -v gaia &>/dev/null || [ -f ""$HOME/gaia-env/bin/gaia"" ]; then
+        VER=$(gaia --version 2>/dev/null || "$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "installed")
         echo -e "  Gaia:     ${GREEN}installed${NC} — v$VER"
     else
         echo -e "  Gaia:     ${RED}not installed${NC}"
@@ -369,7 +375,6 @@ small{display:block;margin-top:1.5em;color:#333}
 import /etc/caddy/conf.d/*.caddy
 CADDYFILE
 
-        sudo mkdir -p /etc/caddy/conf.d
         sudo systemctl enable --now caddy >> "$LOG_FILE" 2>&1
         log "Caddy installed and running"
     fi
@@ -390,8 +395,8 @@ else
 
         if [ ! -d "$HOME/.pyenv" ]; then
             # Install pyenv via git (safer than curl|bash)
-            git clone https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
-            git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 --branch v2.5.7 https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 --branch v1.2.6 https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
         fi
 
         export PYENV_ROOT="$HOME/.pyenv"
@@ -422,7 +427,7 @@ if ! $SKIP_LLAMA; then
         export ROCM_PATH=/opt/rocm
 
         if [ ! -d "$HOME/llama.cpp" ]; then
-            git clone https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 --branch b8736 https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
         else
             cd "$HOME/llama.cpp" && git pull >> "$LOG_FILE" 2>&1
         fi
@@ -621,7 +626,7 @@ if ! $SKIP_GAIA; then
         info "Would install amd-gaia in ~/gaia-env"
     else
         if [ ! -d "$HOME/gaia" ]; then
-            git clone https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 --branch v0.17.0 https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
         fi
 
         if [ ! -d "$HOME/gaia-env" ]; then
@@ -674,7 +679,7 @@ GAIA_SVC
         sudo systemctl daemon-reload
         sudo systemctl enable gaia >> "$LOG_FILE" 2>&1
 
-        VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "unknown")
+        VER=$(""$HOME/gaia-env/bin/gaia"" --version 2>/dev/null || echo "unknown")
         log "Gaia SDK v$VER installed"
         log "Gaia .env created — LEMONADE_BASE_URL=http://localhost:13305/api/v1"
     fi
@@ -697,7 +702,7 @@ else
     sudo rm -f /usr/lib/systemd/system/lemonade-ui.service 2>/dev/null
 
     # Gaia Agent UI
-    sudo npm install -g --ignore-scripts @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
+    npm install -g --ignore-scripts --prefix "$HOME/.local" @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
 
     # Find gaia-ui binary — npm global bin location varies
     GAIA_UI_BIN=$(command -v gaia-ui 2>/dev/null || npm root -g 2>/dev/null | sed 's|/lib/node_modules|/bin/gaia-ui|' || echo "/usr/local/bin/gaia-ui")
@@ -752,7 +757,7 @@ if ! $SKIP_CLAUDE; then
             log "Claude Code already installed — $(claude --version 2>/dev/null || echo 'installed')"
         else
             if command -v npm &>/dev/null; then
-                sudo npm install -g --ignore-scripts @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
+                npm install -g --ignore-scripts --prefix "$HOME/.local" @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
                 spinner $! "Installing Claude Code..."
                 log "Claude Code installed via npm"
             else
@@ -786,10 +791,15 @@ else
     WG_CONF="$WG_DIR/wg0.conf"
 
     if [ ! -f "$WG_CONF" ]; then
-        SERVER_PRIV=$(wg genkey)
-        SERVER_PUB=$(echo "$SERVER_PRIV" | wg pubkey)
-        CLIENT_PRIV=$(wg genkey)
-        CLIENT_PUB=$(echo "$CLIENT_PRIV" | wg pubkey)
+        WG_KEY_DIR=$(mktemp -d)
+        chmod 700 "$WG_KEY_DIR"
+        wg genkey | tee "$WG_KEY_DIR/server.key" | wg pubkey > "$WG_KEY_DIR/server.pub"
+        wg genkey | tee "$WG_KEY_DIR/client.key" | wg pubkey > "$WG_KEY_DIR/client.pub"
+        chmod 600 "$WG_KEY_DIR"/*.key
+        SERVER_PRIV=$(cat "$WG_KEY_DIR/server.key")
+        SERVER_PUB=$(cat "$WG_KEY_DIR/server.pub")
+        CLIENT_PRIV=$(cat "$WG_KEY_DIR/client.key")
+        CLIENT_PUB=$(cat "$WG_KEY_DIR/client.pub")
         SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
         if [[ -z "$SERVER_IFACE" || ! "$SERVER_IFACE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
             warn "Could not detect default network interface — skipping WireGuard"
@@ -814,7 +824,7 @@ else
 Address = 10.100.0.1/24
 ListenPort = 51820
 PrivateKey = $SERVER_PRIV
-PostUp = nft add table inet wg-nat; nft add chain inet wg-nat forward '{type filter hook forward priority 0; policy accept;}'; nft add rule inet wg-nat forward iifname wg0 accept; nft add chain inet wg-nat postrouting '{type nat hook postrouting priority 100;}'; nft add rule inet wg-nat postrouting oifname $SERVER_IFACE masquerade
+PostUp = nft add table inet wg-nat; nft add chain inet wg-nat forward '{type filter hook forward priority 0; policy accept;}'; nft add rule inet wg-nat forward iifname wg0 accept; nft add chain inet wg-nat postrouting '{type nat hook postrouting priority 100;}'; nft add rule inet wg-nat postrouting oifname "$SERVER_IFACE" masquerade
 PostDown = nft delete table inet wg-nat
 
 [Peer]
@@ -845,6 +855,7 @@ WG_CLIENT
 
         sudo install -m 600 "$CLIENT_CONF" /etc/wireguard/client1.conf
         rm -f "$CLIENT_CONF"
+        rm -rf "$WG_KEY_DIR"
         log "WireGuard VPN configured on 10.100.0.1:51820"
         fi  # SERVER_IFACE validation
     else
