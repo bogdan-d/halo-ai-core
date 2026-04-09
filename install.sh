@@ -444,9 +444,12 @@ if ! $SKIP_LLAMA; then
         fi
 
         # Fast math intrinsics for MoE routing and SiLU
-        if grep -q 'expf(' ggml/src/ggml-cuda/common.cuh 2>/dev/null; then
-            sed -i 's/expf(\([^)]*\))/__expf(\1)/g' ggml/src/ggml-cuda/fattn-common.cuh 2>/dev/null || true
+        # Only replace bare expf() — skip already-prefixed __expf()
+        if grep -q '[^_]expf(' ggml/src/ggml-cuda/fattn-common.cuh 2>/dev/null; then
+            sed -i 's/\([^_]\)expf(\([^)]*\))/\1__expf(\2)/g' ggml/src/ggml-cuda/fattn-common.cuh 2>/dev/null || true
             log "Fast math intrinsics applied"
+        else
+            info "Fast math patch already applied or not needed — skipping"
         fi
 
         rm -rf build
