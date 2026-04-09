@@ -393,17 +393,22 @@ else
     if [ ! -f "$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3" ]; then
         sudo pacman -S --needed --noconfirm tk sqlite openssl xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
 
+        # Remove old/broken pyenv installs (detached HEAD, shallow clones)
+        if [ -d "$HOME/.pyenv" ]; then
+            if ! cd "$HOME/.pyenv" && git symbolic-ref HEAD > /dev/null 2>&1; then
+                log "Removing broken pyenv (detached HEAD)..."
+                rm -rf "$HOME/.pyenv"
+            fi
+            cd - > /dev/null 2>&1 || true
+        fi
+
         if [ ! -d "$HOME/.pyenv" ]; then
-            # Install pyenv via git (safer than curl|bash)
+            log "Installing pyenv..."
             git clone https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
             git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
         else
-            # Update pyenv so it knows about latest Python versions
             log "Updating pyenv..."
-            cd "$HOME/.pyenv" && git fetch --all >> "$LOG_FILE" 2>&1 && git checkout master >> "$LOG_FILE" 2>&1 && git pull >> "$LOG_FILE" 2>&1 && cd - > /dev/null
-            if [ -d "$HOME/.pyenv/plugins/python-build" ]; then
-                cd "$HOME/.pyenv/plugins/python-build" && git fetch --all >> "$LOG_FILE" 2>&1 && git checkout master >> "$LOG_FILE" 2>&1 && git pull >> "$LOG_FILE" 2>&1 && cd - > /dev/null || true
-            fi
+            cd "$HOME/.pyenv" && git pull >> "$LOG_FILE" 2>&1 && cd - > /dev/null
         fi
 
         export PYENV_ROOT="$HOME/.pyenv"
