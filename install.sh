@@ -612,10 +612,16 @@ if ! $SKIP_LEMONADE; then
             spinner $! "Building lemonade-server from AUR (C++ native — this takes a minute)..."
         fi
 
-        # Enable the daemon
+        # Enable and start the daemon
         sudo systemctl daemon-reload
-        sudo systemctl enable lemond >> "$LOG_FILE" 2>&1 || \
-            sudo systemctl enable lemonade-server >> "$LOG_FILE" 2>&1 || true
+        sudo systemctl enable --now lemond >> "$LOG_FILE" 2>&1 || \
+            sudo systemctl enable --now lemonade-server >> "$LOG_FILE" 2>&1 || true
+        # Wait for server to be ready
+        log "Waiting for Lemonade server to start..."
+        for i in $(seq 1 30); do
+            if lemonade status --json > /dev/null 2>&1; then break; fi
+            sleep 1
+        done
 
         VER=$(lemonade --version 2>/dev/null || echo "installed")
         log "Lemonade Server $VER — binaries: lemonade (CLI), lemond (daemon)"
@@ -880,26 +886,32 @@ fi
 if ! $DRY_RUN; then
     step "Voice, Dashboard & Auto-load"
 
-    # Install voice backends
-    log "Installing voice backends..."
-    lemonade backends install kokoro:cpu >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing Kokoro TTS..."
-    lemonade backends install whispercpp:vulkan >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing Whisper STT (Vulkan)..."
+    # Check if Lemonade server is running
+    if lemonade status --json > /dev/null 2>&1; then
+        # Install voice backends
+        log "Installing voice backends..."
+        lemonade backends install kokoro:cpu >> "$LOG_FILE" 2>&1 &
+        spinner $! "Installing Kokoro TTS..."
+        lemonade backends install whispercpp:vulkan >> "$LOG_FILE" 2>&1 &
+        spinner $! "Installing Whisper STT (Vulkan)..."
 
-    # Pull voice models
-    log "Downloading voice models..."
-    lemonade pull kokoro-v1 >> "$LOG_FILE" 2>&1 &
-    spinner $! "Downloading Kokoro TTS model..."
-    lemonade pull Whisper-Large-v3-Turbo >> "$LOG_FILE" 2>&1 &
-    spinner $! "Downloading Whisper Large v3 Turbo (1.5 GB)..."
+        # Pull voice models
+        log "Downloading voice models..."
+        lemonade pull kokoro-v1 >> "$LOG_FILE" 2>&1 &
+        spinner $! "Downloading Kokoro TTS model..."
+        lemonade pull Whisper-Large-v3-Turbo >> "$LOG_FILE" 2>&1 &
+        spinner $! "Downloading Whisper Large v3 Turbo (1.5 GB)..."
 
-    # Pull default NPU model for agents
-    lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 &
-    spinner $! "Downloading Gemma3 4B for NPU..."
+        # Pull default NPU model for agents
+        lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 &
+        spinner $! "Downloading Gemma3 4B for NPU..."
 
-    # Set default context size to 32768 (Gaia requires it)
-    lemonade config set ctx_size=32768 >> "$LOG_FILE" 2>&1
+        # Set default context size to 32768 (Gaia requires it)
+        lemonade config set ctx_size=32768 >> "$LOG_FILE" 2>&1
+    else
+        warn "Lemonade server not running — skipping voice backends & model downloads"
+        warn "Run these manually after reboot: lemonade backends install kokoro:cpu && lemonade backends install whispercpp:vulkan"
+    fi
     log "Default context size set to 32768"
 
     log "Voice backends installed: Kokoro TTS + Whisper STT"
