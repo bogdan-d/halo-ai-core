@@ -144,24 +144,27 @@
   </div>
 
   <script>
-    const O = window.location.origin
+    const H = window.location.hostname
 
-    // Click → opens service in new tab
-    document.getElementById('panel-lemonade').href = `${O}/v1/models`
-    document.getElementById('panel-gaia').href = `${O}/gaia/`
+    // Click → opens full service UI in new tab
+    document.getElementById('panel-lemonade').href = `http://${H}:13306`
+    document.getElementById('panel-gaia').href = `http://${H}:4201`
 
-    async function check(id, path) {
+    async function check(id, url) {
       try {
-        const r = await fetch(`${O}${path}`, { signal: AbortSignal.timeout(3000) })
-        document.getElementById(id).className = r.ok ? 'panel-dot on' : 'panel-dot off'
+        await fetch(url, { mode: 'no-cors', signal: AbortSignal.timeout(3000) })
+        document.getElementById(id).className = 'panel-dot on'
       } catch {
         document.getElementById(id).className = 'panel-dot off'
       }
     }
 
-    check('dot-lemonade', '/v1/models')
-    check('dot-gaia', '/gaia/')
-    setInterval(() => { check('dot-lemonade', '/v1/models'); check('dot-gaia', '/gaia/') }, 10000)
+    check('dot-lemonade', `http://${H}:13306/`)
+    check('dot-gaia', `http://${H}:4201/`)
+    setInterval(() => {
+      check('dot-lemonade', `http://${H}:13306/`)
+      check('dot-gaia', `http://${H}:4201/`)
+    }, 10000)
   </script>
 </body>
 </html>
