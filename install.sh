@@ -438,7 +438,7 @@ if ! $SKIP_LLAMA; then
         export ROCM_PATH=/opt/rocm
 
         if [ ! -d "$HOME/llama.cpp" ]; then
-            git clone --depth 1 --branch master https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 https://github.com/ggerganov/llama.cpp.git "$HOME/llama.cpp" >> "$LOG_FILE" 2>&1
         else
             cd "$HOME/llama.cpp" && git pull >> "$LOG_FILE" 2>&1
         fi
@@ -637,7 +637,7 @@ if ! $SKIP_GAIA; then
         info "Would install amd-gaia in ~/gaia-env"
     else
         if [ ! -d "$HOME/gaia" ]; then
-            git clone --depth 1 --branch v0.17.0 https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
+            git clone --depth 1 https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
         fi
 
         if [ ! -d "$HOME/gaia-env" ]; then
