@@ -900,13 +900,49 @@ if ! $DRY_RUN; then
         sudo cp "$SCRIPT_DIR/dashboard/index.html" /srv/halo-dashboard/index.html
     fi
 
+    # Install dashboard stats server
+    log "Installing dashboard stats server..."
+    sudo pacman -S --noconfirm --needed python-psutil >> "$LOG_FILE" 2>&1 || true
+    STATS_DIR="$HOME/.local/share/halo-dashboard"
+    mkdir -p "$STATS_DIR"
+    if [ -f "$SCRIPT_DIR/dashboard/stats-server.py" ]; then
+        cp "$SCRIPT_DIR/dashboard/stats-server.py" "$STATS_DIR/stats-server.py"
+    fi
+
+    # Create stats server systemd user service
+    mkdir -p "$HOME/.config/systemd/user"
+    cat > "$HOME/.config/systemd/user/halo-stats.service" << STATSVC
+[Unit]
+Description=halo-ai dashboard stats API
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 ${STATS_DIR}/stats-server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+STATSVC
+    systemctl --user daemon-reload
+    systemctl --user enable --now halo-stats.service >> "$LOG_FILE" 2>&1 || true
+    log "Stats server installed on :5090"
+
     # Configure Caddy with reverse proxies
-    sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDY'
+    if [ -f "$SCRIPT_DIR/dashboard/Caddyfile" ]; then
+        sudo cp "$SCRIPT_DIR/dashboard/Caddyfile" /etc/caddy/Caddyfile
+    else
+        sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDY'
 {
 	admin "unix//run/caddy/admin.socket"
 }
 
 :80 {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:5090
+		uri strip_prefix /api
+	}
 	root * /srv/halo-dashboard
 	file_server
 }
@@ -919,8 +955,9 @@ if ! $DRY_RUN; then
 	reverse_proxy 127.0.0.1:4200
 }
 CADDY
+    fi
     sudo systemctl restart caddy >> "$LOG_FILE" 2>&1
-    log "Dashboard deployed on :80 — Lemonade :13306 — Gaia :4201"
+    log "Dashboard deployed on :80 — Stats :5090 — Lemonade :13306 — Gaia :4201"
 
     # Create auto-load script
     sudo tee /usr/local/bin/halo-autoload.sh > /dev/null << 'AUTOLOAD'
