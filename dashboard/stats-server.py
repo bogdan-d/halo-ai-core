@@ -161,6 +161,36 @@ def get_models():
         return []
 
 
+def get_gaia():
+    """Fetch Gaia health + agent profiles."""
+    result = {'status': 'offline', 'sessions': 0, 'messages': 0, 'agents': []}
+    try:
+        req = urllib.request.Request('http://127.0.0.1:4200/api/health', method='GET')
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+            result['status'] = data.get('status', 'unknown')
+            stats = data.get('stats', {})
+            result['sessions'] = stats.get('sessions', 0)
+            result['messages'] = stats.get('messages', 0)
+    except Exception:
+        pass
+
+    # Static agent profiles (from Gaia source)
+    result['agents'] = [
+        {'name': 'chat', 'display': 'Chat Agent', 'desc': 'RAG + vision', 'ctx': '32K'},
+        {'name': 'code', 'display': 'Code Agent', 'desc': 'Autonomous coding', 'ctx': '32K'},
+        {'name': 'talk', 'display': 'Talk Agent', 'desc': 'Voice-enabled chat', 'ctx': '32K'},
+        {'name': 'rag', 'display': 'RAG System', 'desc': 'Document Q&A', 'ctx': '32K'},
+        {'name': 'blender', 'display': 'Blender Agent', 'desc': '3D content gen', 'ctx': '32K'},
+        {'name': 'jira', 'display': 'Jira Agent', 'desc': 'Issue management', 'ctx': '32K'},
+        {'name': 'docker', 'display': 'Docker Agent', 'desc': 'Container mgmt', 'ctx': '32K'},
+        {'name': 'vlm', 'display': 'Vision Agent', 'desc': 'Image understanding', 'ctx': '8K'},
+        {'name': 'minimal', 'display': 'Minimal', 'desc': 'Fast responses', 'ctx': '4K'},
+        {'name': 'mcp', 'display': 'MCP Bridge', 'desc': 'Tool integration', 'ctx': '32K'},
+    ]
+    return result
+
+
 # Cache hardware info (doesn't change)
 HW_INFO = get_hw_info()
 
@@ -173,6 +203,8 @@ class StatsHandler(BaseHTTPRequestHandler):
             payload = json.dumps(data).encode()
         elif self.path == '/models':
             payload = json.dumps(get_models()).encode()
+        elif self.path == '/gaia':
+            payload = json.dumps(get_gaia()).encode()
         else:
             self.send_response(404)
             self.end_headers()
