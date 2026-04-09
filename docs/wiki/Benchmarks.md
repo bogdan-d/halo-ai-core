@@ -77,18 +77,69 @@ The install script patches llama.cpp at build time:
 - **HIPBLASLT** — `ROCBLAS_USE_HIPBLASLT=1` doubles prompt processing throughput
 - **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` for 19x attention speedup
 
-## How to Benchmark
+## halo-bench — Benchmark Suite
+
+Comprehensive benchmark script included in the repo. Outputs JSON, CSV, and human-readable summary.
 
 ```bash
-# Through Lemonade API (recommended)
+# Full suite — all downloaded models, 3 runs per test
+./halo-bench.sh
+
+# Single model, quick mode
+./halo-bench.sh -m Qwen3.5-35B-A3B-GGUF -q
+
+# 5 runs for statistical stability, with asciinema recording
+./halo-bench.sh -r 5 --record
+
+# Benchmark whatever is currently loaded
+./halo-bench.sh --skip-load -q
+```
+
+**8 benchmark categories:**
+
+| Category | What it measures |
+|----------|-----------------|
+| Prompt Processing Scaling | Input throughput at 16–4096 tokens |
+| Generation Speed | Sustained output at 50–1000 tokens |
+| Context Window Stress | Performance under 1K–16K context |
+| Reasoning & Thinking | Math, logic, code analysis, chain-of-thought |
+| Code Generation | Python, Rust, Bash, SQL across languages |
+| Multi-Turn Conversation | Growing context across 4 turns |
+| Instruction Following | JSON output, constrained format, system prompt |
+| Concurrency | Sequential vs parallel request throughput |
+
+Results are saved to `bench-results/YYYY-MM-DD_HHMMSS/` with `results.json`, `results.csv`, and `summary.txt`.
+
+See [latest benchmark results](../../bench-results/) in the repo.
+
+### Qwen3.5-35B-A3B — halo-bench results (2026-04-09)
+
+| Test | Gen tok/s | Prompt tok/s | Notes |
+|------|----------|-------------|-------|
+| Prompt ~16 tokens | 62.5 | 269.5 | Cold prompt |
+| Prompt ~256 tokens | 62.7 | 941.6 | Scaling up |
+| Prompt ~1024 tokens | 62.0 | **1,270.9** | Peak prompt throughput |
+| Generate 50 tokens | 58.0 | 216.3 | Short burst |
+| Generate 250 tokens | 57.2 | 219.5 | Medium |
+| Generate 500 tokens | **57.0** | 219.6 | Sustained |
+| Context ~1024 tokens | 57.0 | 1,006.1 | |
+| Context ~4096 tokens | 55.6 | 1,116.7 | |
+| Context ~8192 tokens | 54.2 | 1,050.1 | Slight gen slowdown at depth |
+| Reasoning: Math | 57.0 | 348.4 | Chain-of-thought |
+| Reasoning: Code | 57.0 | 405.1 | |
+| Code: Python async | 56.8 | 257.2 | |
+| Code: Bash scripting | 56.9 | 288.9 | |
+
+**Memory:** llama-server RSS 5.7GB, RAM delta 73MB during inference.
+
+### Quick one-liner benchmark
+
+```bash
+# Through Lemonade API
 curl -s http://localhost:13305/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "your-model", "messages": [{"role": "user", "content": "test"}], "max_tokens": 256}' \
   | python3 -c "import json,sys; t=json.load(sys.stdin)['timings']; print(f'Gen: {t[\"predicted_per_second\"]:.1f} tok/s, Prompt: {t[\"prompt_per_second\"]:.1f} tok/s, TTFT: {t[\"prompt_ms\"]:.0f}ms')"
-
-# Quick LLM benchmark (direct)
-llama-cli -m ~/models/model.gguf -p "Write a story about a robot" \
-    -n 256 --n-gpu-layers 999 2>&1 | grep "eval time"
 
 # GPU utilization during inference
 watch -n 1 rocm-smi
