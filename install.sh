@@ -357,10 +357,10 @@ small{display:block;margin-top:1.5em;color:#333}
 <h1>halo-ai core</h1>
 <p class="sub">lemonade + gaia + llama.cpp — fully integrated</p>
 <div class="grid">
-<a class="btn" href="http://{http.request.host}:13306">lemonade<small>chat with llms — :13306</small></a>
-<a class="btn" href="http://{http.request.host}:4201">gaia agents<small>manage ai agents — :4201</small></a>
-<a class="btn" href="http://{http.request.host}:8081/v1/models">llama api<small>openai-compatible — :8081</small></a>
-<a class="btn" href="http://{http.request.host}:5001/docs">gaia api<small>agent api — :5001</small></a>
+<a class="btn" target="_blank" href="http://{http.request.host}:13306">lemonade<small>chat with llms — :13306</small></a>
+<a class="btn" target="_blank" href="http://{http.request.host}:4201">gaia agents<small>manage ai agents — :4201</small></a>
+<a class="btn" target="_blank" href="http://{http.request.host}:8081/v1/models">llama api<small>openai-compatible — :8081</small></a>
+<a class="btn" target="_blank" href="http://{http.request.host}:5001/docs">gaia api<small>agent api — :5001</small></a>
 </div>
 <small>designed and built by the architect</small>
 </div></body></html>`
@@ -506,7 +506,7 @@ LLAMA_SVC
 :8081 {
     @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
     handle @local {
-        reverse_proxy localhost:8080
+        reverse_proxy 127.0.0.1:13305
     }
     respond 403
 }
