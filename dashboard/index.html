@@ -440,6 +440,49 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
     }
 
+    // ── Wallpaper renderer (theme-aware) ──
+    const themeColors = {
+      dark:     { line: '230,237,243', accent: '0,212,255', green: '63,185,80' },
+      light:    { line: '31,35,40',    accent: '0,120,212', green: '26,127,55' },
+      midnight: { line: '200,214,229', accent: '79,172,254', green: '0,245,160' },
+      ember:    { line: '240,208,192', accent: '255,107,53', green: '255,215,0' }
+    }
+
+    function applyWallpaper() {
+      const wp = root.getAttribute('data-wallpaper')
+      const theme = root.getAttribute('data-theme')
+      const colors = themeColors[theme] || themeColors.dark
+      const el = document.body
+
+      if (wp === 'none') {
+        el.style.setProperty('--wp-bg', 'none')
+        el.style.setProperty('--wp-size', 'auto')
+        el.style.setProperty('--wp-pos', '0 0')
+        return
+      }
+
+      let bg, size = 'auto', pos = '0 0'
+      if (wp === 'grid') {
+        const c = colors.line
+        bg = `linear-gradient(rgba(${c},0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(${c},0.03) 1px, transparent 1px)`
+        size = '60px 60px'
+      } else if (wp === 'dots') {
+        bg = `radial-gradient(rgba(${colors.line},0.07) 1px, transparent 1px)`
+        size = '30px 30px'
+      } else if (wp === 'gradient') {
+        bg = `radial-gradient(ellipse at 30% 20%, rgba(${colors.accent},0.1) 0%, transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(${colors.green},0.07) 0%, transparent 50%)`
+      } else if (wp === 'mesh') {
+        const a = `rgba(${colors.accent},0.05)`
+        bg = `linear-gradient(30deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%), linear-gradient(150deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%), linear-gradient(30deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%), linear-gradient(150deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%)`
+        size = '80px 140px'
+        pos = '0 0, 0 0, 40px 70px, 40px 70px'
+      }
+
+      el.style.setProperty('--wp-bg', bg || 'none')
+      el.style.setProperty('--wp-size', size)
+      el.style.setProperty('--wp-pos', pos)
+    }
+
     function applySetting(key, value) {
       root.setAttribute(`data-${key}`, value)
       const prefs = loadPrefs()
@@ -450,6 +493,9 @@
       document.querySelectorAll(`[data-setting="${key}"] .opt-btn`).forEach(btn => {
         btn.classList.toggle('active', btn.dataset.value === value)
       })
+
+      // Theme or wallpaper change → re-render wallpaper with correct colors
+      if (key === 'theme' || key === 'wallpaper') applyWallpaper()
     }
 
     // Load saved prefs on init
@@ -486,69 +532,7 @@
       })
     })
 
-    // ── Wallpaper renderer (theme-aware) ──
-    const wallpapers = {
-      grid(c) {
-        return `linear-gradient(rgba(${c},0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(${c},0.03) 1px, transparent 1px)`
-      },
-      dots(c) {
-        return `radial-gradient(rgba(${c},0.07) 1px, transparent 1px)`
-      },
-      gradient(accent, green) {
-        return `radial-gradient(ellipse at 30% 20%, rgba(${accent},0.1) 0%, transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(${green},0.07) 0%, transparent 50%)`
-      },
-      mesh(accent) {
-        const a = `rgba(${accent},0.05)`
-        return `linear-gradient(30deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%), linear-gradient(150deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%), linear-gradient(30deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%), linear-gradient(150deg, ${a} 12%, transparent 12.5%, transparent 87%, ${a} 87.5%)`
-      }
-    }
-
-    const themeColors = {
-      dark:     { line: '230,237,243', accent: '0,212,255', green: '63,185,80' },
-      light:    { line: '31,35,40',    accent: '0,120,212', green: '26,127,55' },
-      midnight: { line: '200,214,229', accent: '79,172,254', green: '0,245,160' },
-      ember:    { line: '240,208,192', accent: '255,107,53', green: '255,215,0' }
-    }
-
-    function applyWallpaper() {
-      const wp = root.getAttribute('data-wallpaper')
-      const theme = root.getAttribute('data-theme')
-      const colors = themeColors[theme] || themeColors.dark
-      const el = document.querySelector('body')
-
-      if (wp === 'none') {
-        el.style.setProperty('--wp-bg', 'none')
-        el.style.setProperty('--wp-size', 'auto')
-        el.style.setProperty('--wp-pos', '0 0')
-        return
-      }
-
-      let bg, size = 'auto', pos = '0 0'
-      if (wp === 'grid') {
-        bg = wallpapers.grid(colors.line)
-        size = '60px 60px'
-      } else if (wp === 'dots') {
-        bg = wallpapers.dots(colors.line)
-        size = '30px 30px'
-      } else if (wp === 'gradient') {
-        bg = wallpapers.gradient(colors.accent, colors.green)
-      } else if (wp === 'mesh') {
-        bg = wallpapers.mesh(colors.accent)
-        size = '80px 140px'
-        pos = '0 0, 0 0, 40px 70px, 40px 70px'
-      }
-
-      el.style.setProperty('--wp-bg', bg || 'none')
-      el.style.setProperty('--wp-size', size)
-      el.style.setProperty('--wp-pos', pos)
-    }
-
-    // Run wallpaper on init and whenever settings change
-    const origApply = applySetting
-    applySetting = function(key, value) {
-      origApply(key, value)
-      applyWallpaper()
-    }
+    // Apply wallpaper on init
     applyWallpaper()
   </script>
 </body>
