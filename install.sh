@@ -400,8 +400,10 @@ else
         else
             # Update pyenv so it knows about latest Python versions
             log "Updating pyenv..."
-            cd "$HOME/.pyenv" && git pull --ff-only >> "$LOG_FILE" 2>&1 && cd - > /dev/null
-            cd "$HOME/.pyenv/plugins/python-build" && git pull --ff-only >> "$LOG_FILE" 2>&1 && cd - > /dev/null || true
+            cd "$HOME/.pyenv" && git fetch --all >> "$LOG_FILE" 2>&1 && git checkout master >> "$LOG_FILE" 2>&1 && git pull >> "$LOG_FILE" 2>&1 && cd - > /dev/null
+            if [ -d "$HOME/.pyenv/plugins/python-build" ]; then
+                cd "$HOME/.pyenv/plugins/python-build" && git fetch --all >> "$LOG_FILE" 2>&1 && git checkout master >> "$LOG_FILE" 2>&1 && git pull >> "$LOG_FILE" 2>&1 && cd - > /dev/null || true
+            fi
         fi
 
         export PYENV_ROOT="$HOME/.pyenv"
