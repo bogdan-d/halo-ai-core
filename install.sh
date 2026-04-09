@@ -395,8 +395,13 @@ else
 
         if [ ! -d "$HOME/.pyenv" ]; then
             # Install pyenv via git (safer than curl|bash)
-            git clone --depth 1 --branch v2.5.7 https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
-            git clone --depth 1 --branch v1.2.6 https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
+            git clone https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
+            git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
+        else
+            # Update pyenv so it knows about latest Python versions
+            log "Updating pyenv..."
+            cd "$HOME/.pyenv" && git pull --ff-only >> "$LOG_FILE" 2>&1 && cd - > /dev/null
+            cd "$HOME/.pyenv/plugins/python-build" && git pull --ff-only >> "$LOG_FILE" 2>&1 && cd - > /dev/null || true
         fi
 
         export PYENV_ROOT="$HOME/.pyenv"
