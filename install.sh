@@ -395,11 +395,10 @@ else
 
         # Remove old/broken pyenv installs (detached HEAD, shallow clones)
         if [ -d "$HOME/.pyenv" ]; then
-            if ! cd "$HOME/.pyenv" && git symbolic-ref HEAD > /dev/null 2>&1; then
+            if ! (cd "$HOME/.pyenv" && git symbolic-ref HEAD > /dev/null 2>&1); then
                 log "Removing broken pyenv (detached HEAD)..."
                 rm -rf "$HOME/.pyenv"
             fi
-            cd - > /dev/null 2>&1 || true
         fi
 
         if [ ! -d "$HOME/.pyenv" ]; then
@@ -408,7 +407,7 @@ else
             git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
         else
             log "Updating pyenv..."
-            cd "$HOME/.pyenv" && git pull >> "$LOG_FILE" 2>&1 && cd - > /dev/null
+            (cd "$HOME/.pyenv" && git pull >> "$LOG_FILE" 2>&1)
         fi
 
         export PYENV_ROOT="$HOME/.pyenv"
