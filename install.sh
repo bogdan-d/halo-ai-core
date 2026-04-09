@@ -386,7 +386,7 @@ if $DRY_RUN; then
     info "Would install Python ${PYTHON_VERSION} via pyenv"
 else
     if [ ! -f "$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3" ]; then
-        sudo pacman -S --needed --noconfirm tk sqlite openssl zlib xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
+        sudo pacman -S --needed --noconfirm tk sqlite openssl xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
 
         if [ ! -d "$HOME/.pyenv" ]; then
             # Install pyenv via git (safer than curl|bash)
