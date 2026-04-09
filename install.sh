@@ -887,6 +887,10 @@ if ! $DRY_RUN; then
     lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 &
     spinner $! "Downloading Gemma3 4B for NPU..."
 
+    # Set default context size to 32768 (Gaia requires it)
+    lemonade config set ctx_size=32768 >> "$LOG_FILE" 2>&1
+    log "Default context size set to 32768"
+
     log "Voice backends installed: Kokoro TTS + Whisper STT"
 
     # Install dashboard
@@ -951,7 +955,7 @@ lemonade load kokoro-v1 >> "$LOG" 2>&1 || \
 
 # Load default LLM on NPU (agents)
 log "Loading Gemma3 4B on NPU..."
-lemonade load gemma3-4b-FLM --ctx-size 4096 >> "$LOG" 2>&1 || \
+lemonade load gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
     log "NPU model load failed (non-critical)"
 
 log "Auto-load complete."
