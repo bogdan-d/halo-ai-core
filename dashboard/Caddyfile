@@ -10,6 +10,26 @@
 		header Cache-Control "no-cache"
 	}
 
+	# Stats server API (logs, exec, gaia)
+	handle_path /api/logs {
+		rewrite * /logs
+		reverse_proxy 127.0.0.1:5090
+	}
+	handle /api/exec* {
+		uri replace /api/exec /exec
+		reverse_proxy 127.0.0.1:5090
+	}
+	handle_path /api/gaia {
+		rewrite * /gaia
+		reverse_proxy 127.0.0.1:5090
+	}
+
+	# Whisper transcription proxy
+	handle_path /api/transcribe {
+		rewrite * /transcribe
+		reverse_proxy 127.0.0.1:8082
+	}
+
 	# Lemonade API proxy
 	handle /v1/* {
 		reverse_proxy 127.0.0.1:13305
@@ -20,10 +40,4 @@
 	file_server
 }
 
-:13306 {
-	reverse_proxy 127.0.0.1:13305
-}
-
-:4201 {
-	reverse_proxy 127.0.0.1:4200
-}
+import /etc/caddy/conf.d/*.caddy
