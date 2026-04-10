@@ -10,7 +10,7 @@
 
 ### the bare-metal ai foundation for amd strix halo
 
-**5 core services · 128gb unified · compiled from source · zero cloud · lego blocks**
+**6 core services · 128gb unified · portable vllm + voxtral tts · zero cloud · lego blocks**
 
 *stamped by the architect*
 
@@ -55,24 +55,27 @@ cd halo-ai-core
 
 | | |
 |---|---|
-| **gpu** | rocm 7.2.1 — full 128gb unified memory on gfx1151 |
-| **inference** | llama.cpp — compiled from source, hip + vulkan |
-| **backend** | lemonade sdk 10.2.0 — llm, whisper, kokoro, stable diffusion |
-| **agents** | gaia sdk 0.17.x — build ai agents that run 100% local |
-| **gateway** | caddy 2.x — reverse proxy, drop-in config, auto-routing |
-| **vpn** | wireguard — scan a qr code, access your stack from your phone. zero config. |
+| **gpu** | rocm 7.12.0 — full 128gb unified memory on gfx1151 |
+| **inference** | vllm-rocm 0.19.0 — portable, pre-built for gfx1151/1150/110X/120X. no compile. |
+| **backend** | lemonade sdk 10.2.0 — llm, whisper, kokoro, stable diffusion, 6 backends |
+| **voice** | voxtral tts 4B — voice cloning from 3 seconds of audio. 9 languages, 20 voices |
+| **agents** | gaia sdk — 10 agent profiles (chat, code, talk, rag, vision, blender, docker, mcp) |
+| **gateway** | caddy 2.x — reverse proxy, https, auto-routing |
+| **vpn** | wireguard — scan a qr code, access your stack from your phone |
 
 ```
-┌─────────────────────────────────────────────┐
-│                   Caddy                      │
-├─────────────────────┬───────────────────────┤
-│     Lemonade        │        Gaia           │
-│     LLM + media     │     AI agents         │
-├─────────────────────┴───────────────────────┤
-│              ROCm 7.2.1 (gfx1151)           │
-├─────────────────────────────────────────────┤
-│         Arch Linux / systemd / btrfs        │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                     Caddy (HTTPS)                │
+├────────────┬────────────┬────────────────────────┤
+│  Lemonade  │    Gaia    │    Muse / Piper        │
+│  LLM+media │  AI agents │  voice+image+video     │
+├────────────┴────────────┴────────────────────────┤
+│  vLLM ROCm 0.19.0  │  Voxtral TTS 4B (cloning)  │
+├─────────────────────┴────────────────────────────┤
+│              ROCm 7.12.0 (gfx1151)               │
+├──────────────────────────────────────────────────┤
+│          Arch Linux / systemd / btrfs            │
+└──────────────────────────────────────────────────┘
 ```
 
 > 🎬 **[watch the full install](halo-ai-core-install.cast)** — clean install recorded on strix halo. clone the repo and run `asciinema play halo-ai-core-install.cast` to watch it in real time.
@@ -92,15 +95,13 @@ these numbers come from a clean `install.sh --yes-all` on strix halo hardware. n
 
 ### what makes it fast
 
-the install script patches llama.cpp at build time:
+- **vllm-rocm** — portable pre-built vLLM with ROCm 7.12.0, HIP kernels compiled for your exact GPU arch. no compile, no patching. extract and run.
+- **lemonade sdk** — 6 backends: FLM (NPU), llama.cpp (ROCm/Vulkan/CPU), sd-cpp (ROCm), whisper.cpp (Vulkan), kokoro (CPU)
+- **voxtral tts** — 4B param voice synthesis with 3-second voice cloning. pure C inference via voxtral-tts.c
+- **gfx1151 optimized** — every binary targets your exact silicon. no generic builds.
+- **128gb unified memory** — no VRAM wall. load 35B models without blinking.
 
-- **MMQ kernel fix** ([#21284](https://github.com/ggml-org/llama.cpp/issues/21284)) — corrects register pressure on RDNA 3.5 (mmq_x=48, mmq_y=64, nwarps=4)
-- **rocWMMA flash attention** — `-DGGML_HIP_ROCWMMA_FATTN=ON` for hardware-accelerated matrix multiply
-- **fast math intrinsics** — `__expf()` for MoE routing and SiLU activation
-- **HIPBLASLT** — `ROCBLAS_USE_HIPBLASLT=1` doubles prompt processing throughput
-- **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` for 19x attention speedup
-
-you don't have to find these. you don't have to apply them. `install.sh` does it for you. that's the point.
+you don't have to find these. you don't have to configure them. `install.sh` does it for you. that's the point.
 
 ## instant mobile access — scan and go
 
