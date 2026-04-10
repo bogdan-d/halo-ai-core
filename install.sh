@@ -891,8 +891,9 @@ if ! $DRY_RUN; then
         spinner $! "Downloading Whisper Large v3 Turbo (1.5 GB)..."
 
         # Pull default NPU model for agents
-        lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 &
-        spinner $! "Downloading Gemma3 4B for NPU..."
+        (lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 || \
+         lemonade pull user.gemma3-4b-FLM >> "$LOG_FILE" 2>&1 || true) &
+        spinner $! "Downloading Gemma3 4B for NPU (optional)..."
 
         # Set default context size to 32768 (Gaia requires it)
         lemonade config set ctx_size=32768 >> "$LOG_FILE" 2>&1
@@ -1004,6 +1005,7 @@ lemonade load kokoro-v1 >> "$LOG" 2>&1 || \
 # Load default LLM on NPU (agents)
 log "Loading Gemma3 4B on NPU..."
 lemonade load gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
+  lemonade load user.gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
     log "NPU model load failed (non-critical)"
 
 log "Auto-load complete."
