@@ -61,7 +61,7 @@ usage() {
 # Step count calculated dynamically based on skip flags
 CURRENT_STEP=0
 calculate_steps() {
-    TOTAL_STEPS=4  # base + python + web UIs + wireguard (always run)
+    TOTAL_STEPS=5  # base + python + web UIs + wireguard + voice/dashboard (always run)
     $SKIP_ROCM     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
     $SKIP_CADDY    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
     $SKIP_LLAMA    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
@@ -169,7 +169,7 @@ check_status() {
     fi
 
     # Gaia
-    if command -v gaia &>/dev/null || [ -f ""$HOME/gaia-env/bin/gaia"" ]; then
+    if command -v gaia &>/dev/null || [ -f "$HOME/gaia-env/bin/gaia" ]; then
         VER=$(gaia --version 2>/dev/null || "$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "installed")
         echo -e "  Gaia:     ${GREEN}installed${NC} — v$VER"
     else
@@ -267,7 +267,7 @@ fi
 # 1. BASE PACKAGES
 # ============================================================
 step "Base Packages"
-BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano nodejs npm"
+BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano nodejs npm uv"
 
 if $DRY_RUN; then
     info "Would install: $BASE_PKGS"
@@ -441,7 +441,7 @@ if ! $SKIP_LLAMA; then
             # Detect GPU architecture
             GPU_ARCH="gfx1151"  # default: Strix Halo
             if command -v rocminfo > /dev/null 2>&1; then
-                DETECTED=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1)
+                DETECTED=$(rocminfo 2>/dev/null | grep -oP 'gfx\d{4,}' | head -1)
                 if [ -n "$DETECTED" ]; then
                     GPU_ARCH="$DETECTED"
                 fi
@@ -602,8 +602,8 @@ if ! $SKIP_LEMONADE; then
 
         # Enable and start the daemon
         sudo systemctl daemon-reload
-        sudo systemctl enable --now lemond >> "$LOG_FILE" 2>&1 || \
-            sudo systemctl enable --now lemonade-server >> "$LOG_FILE" 2>&1 || true
+        sudo systemctl enable --now lemonade-server >> "$LOG_FILE" 2>&1 || \
+            sudo systemctl enable --now lemond >> "$LOG_FILE" 2>&1 || true
         # Wait for server to be ready
         log "Waiting for Lemonade server to start..."
         for i in $(seq 1 30); do
@@ -684,7 +684,7 @@ GAIA_SVC
         sudo systemctl daemon-reload
         sudo systemctl enable gaia >> "$LOG_FILE" 2>&1
 
-        VER=$(""$HOME/gaia-env/bin/gaia"" --version 2>/dev/null || echo "unknown")
+        VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "unknown")
         log "Gaia SDK v$VER installed"
         log "Gaia .env created — LEMONADE_BASE_URL=http://localhost:13305/api/v1"
     fi
@@ -706,12 +706,7 @@ else
     sudo rm -f /usr/lib/systemd/system/lemonade.service 2>/dev/null
     sudo rm -f /usr/lib/systemd/system/lemonade-ui.service 2>/dev/null
 
-    # Gaia Agent UI
-    npm install -g --ignore-scripts --prefix "$HOME/.local" @amd-gaia/agent-ui@latest >> "$LOG_FILE" 2>&1
-
-    # Find gaia-ui binary — npm global bin location varies
-    GAIA_UI_BIN=$(command -v gaia-ui 2>/dev/null || npm root -g 2>/dev/null | sed 's|/lib/node_modules|/bin/gaia-ui|' || echo "/usr/local/bin/gaia-ui")
-
+    # Gaia Agent UI — built into gaia CLI (no separate npm package needed)
     sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << GAIA_UI_SVC
 [Unit]
 Description=Gaia Agent Web UI
@@ -721,13 +716,12 @@ Wants=lemonade-server.service
 [Service]
 Type=simple
 User=${USER}
-Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin:/usr/lib/node_modules/.bin
-Environment=NODE_PATH=/usr/lib/node_modules
+Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
 Environment=ROCBLAS_USE_HIPBLASLT=1
 Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
 Environment=LEMONADE_BASE_URL=http://localhost:13305/api/v1
 WorkingDirectory=${HOME}/gaia
-ExecStart=${GAIA_UI_BIN} --port 4200
+ExecStart=${HOME}/gaia-env/bin/gaia --ui --ui-port 4200
 Restart=on-failure
 RestartSec=10
 
@@ -871,8 +865,8 @@ fi
 # ============================================================
 # 11. VOICE BACKENDS + DASHBOARD + AUTO-LOAD
 # ============================================================
+step "Voice, Dashboard & Auto-load"
 if ! $DRY_RUN; then
-    step "Voice, Dashboard & Auto-load"
 
     # Check if Lemonade server is running
     if lemonade status --json > /dev/null 2>&1; then
@@ -901,9 +895,6 @@ if ! $DRY_RUN; then
         warn "Lemonade server not running — skipping voice backends & model downloads"
         warn "Run these manually after reboot: lemonade backends install kokoro:cpu && lemonade backends install whispercpp:vulkan"
     fi
-    log "Default context size set to 32768"
-
-    log "Voice backends installed: Kokoro TTS + Whisper STT"
 
     # Install dashboard
     log "Installing dashboard..."
@@ -966,6 +957,8 @@ STATSVC
 :4201 {
 	reverse_proxy 127.0.0.1:4200
 }
+
+import /etc/caddy/conf.d/*.caddy
 CADDY
     fi
     sudo systemctl restart caddy >> "$LOG_FILE" 2>&1
@@ -1013,7 +1006,7 @@ AUTOLOAD
     sudo chmod +x /usr/local/bin/halo-autoload.sh
 
     # Create auto-load systemd service
-    sudo tee /usr/lib/systemd/system/halo-autoload.service > /dev/null << 'SVCUNIT'
+    sudo tee /usr/lib/systemd/system/halo-autoload.service > /dev/null << SVCUNIT
 [Unit]
 Description=Halo AI Core — Auto-load default models
 After=lemonade-server.service
@@ -1021,7 +1014,7 @@ Wants=lemonade-server.service
 
 [Service]
 Type=oneshot
-User=bcloud
+User=${USER}
 RemainAfterExit=yes
 ExecStartPre=/bin/sleep 5
 ExecStart=/usr/local/bin/halo-autoload.sh
