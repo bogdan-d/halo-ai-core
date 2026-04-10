@@ -2,7 +2,18 @@
 	admin "unix//run/caddy/admin.socket"
 }
 
-# Dashboard on :80
+# Dashboard on HTTPS (required for browser mic access)
+https://10.0.0.10 {
+	tls internal
+	handle /api/* {
+		reverse_proxy 127.0.0.1:5090
+		uri strip_prefix /api
+	}
+	root * /srv/halo-dashboard
+	file_server
+}
+
+# Also serve on HTTP for non-mic access
 :80 {
 	handle /api/* {
 		reverse_proxy 127.0.0.1:5090
