@@ -437,6 +437,17 @@ if ! $SKIP_LEMONADE; then
             spinner $! "Building lemonade-server from AUR (C++ native — this takes a minute)..."
         fi
 
+        # Fix libwebsockets soname mismatch (Arch updates .so.20 → .so.21, breaks lemond)
+        for SO_NEW in /usr/lib/libwebsockets.so.*; do
+            [ -f "$SO_NEW" ] || continue
+            SO_VER=$(basename "$SO_NEW" | grep -oP '\.\d+$' | tr -d '.')
+            if [ -n "$SO_VER" ] && [ ! -f /usr/lib/libwebsockets.so.20 ]; then
+                sudo ln -sf "$SO_NEW" /usr/lib/libwebsockets.so.20
+                log "Fixed libwebsockets soname: $(basename "$SO_NEW") → libwebsockets.so.20"
+                break
+            fi
+        done
+
         # Enable and start the daemon
         sudo systemctl daemon-reload
         sudo systemctl enable --now lemonade-server >> "$LOG_FILE" 2>&1 || true
