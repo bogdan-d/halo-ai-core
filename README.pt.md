@@ -1,6 +1,6 @@
 <div align="center">
 
-🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | **[Português](README.pt.md)** | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)
+🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | **Português** | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)
 
 <picture>
   <img src="assets/halo-ai.svg" alt="halo ai core" width="200">
@@ -10,19 +10,24 @@
 
 ### a fundação bare-metal de ia para amd strix halo
 
-**5 serviços principais · 128gb de memória unificada · compilado a partir do código-fonte · zero nuvem · blocos de lego**
+**8 serviços principais · 128gb de memória unificada · lemonade + llama.cpp + kokoro tts · zero nuvem · blocos de lego**
 
 *carimbado pelo arquiteto*
 
+[![CI](https://github.com/stampby/halo-ai-core/actions/workflows/ci.yml/badge.svg)](https://github.com/stampby/halo-ai-core/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/stampby/halo-ai-core/actions/workflows/codeql.yml/badge.svg)](https://github.com/stampby/halo-ai-core/actions/workflows/codeql.yml)
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?style=flat&logo=archlinux&logoColor=white)](https://archlinux.org)
-[![ROCm](https://img.shields.io/badge/ROCm_7.2.1-ED1C24?style=flat&logo=amd&logoColor=white)](https://rocm.docs.amd.com)
+[![ROCm](https://img.shields.io/badge/ROCm_7.12.0-ED1C24?style=flat&logo=amd&logoColor=white)](https://rocm.docs.amd.com)
+[![Lemonade](https://img.shields.io/badge/Lemonade_10.2.0-00d4ff?style=flat&logo=amd&logoColor=white)](https://github.com/lemonade-sdk/lemonade)
+[![Kokoro TTS](https://img.shields.io/badge/Kokoro_TTS-ff6b35?style=flat)](https://github.com/remsky/Kokoro-FastAPI)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-halo--ai-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.gg/dSyV646eBs)
-[![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
-[![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
-[![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
-[![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
+[![Wiki](https://img.shields.io/badge/Wiki-24_páginas-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
+[![Medium](https://img.shields.io/badge/Medium-artigos-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
+[![YouTube](https://img.shields.io/badge/YouTube-tutoriais-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
+[![SSH Only](https://img.shields.io/badge/Segurança-apenas_SSH-red?style=flat)](docs/SECURITY.md)
+[![Self Hosted](https://img.shields.io/badge/Auto_hospedado-100%25_local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
+[![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
 </div>
 
@@ -34,7 +39,7 @@
 
 ## o que é isto
 
-a camada base para executar ia local no seu próprio hardware. um script instala tudo. cinco serviços principais. tudo systemd. tudo com reinício automático. apenas ssh. *"i know kung fu."* *(eu sei kung fu.)*
+a camada base para executar ia local no seu próprio hardware. um script instala tudo. oito passos, tudo systemd, tudo reinício automático, tudo passa pelo lemonade server em :13305. apenas ssh. *"i know kung fu."* *(eu sei kung fu.)*
 
 ## instalação
 
@@ -46,28 +51,88 @@ cd halo-ai-core
 ./install.sh --status     # verificar o que está a correr
 ```
 
+[![Install Demo](https://img.shields.io/badge/asciinema-ver_demo_de_instalação-d40000?style=flat&logo=asciinema&logoColor=white)](halo-ai-core-install.cast) *~3 min em hardware strix halo*
+
 ## o que recebe
 
 | | |
 |---|---|
-| **gpu** | rocm 7.2.1 — memória unificada completa de 128gb em gfx1151 |
-| **inferência** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
-| **backend** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
-| **agentes** | gaia sdk 0.17.x — construa agentes de ia que funcionam 100% localmente |
-| **gateway** | caddy 2.x — proxy reverso, configuração drop-in, roteamento automático |
+| **gpu** | rocm 7.12.0 — memória unificada completa de 128gb em gfx1151 |
+| **inferência** | llama.cpp (Vulkan) — via backend llamacpp do lemonade. sem compilar. *(obrigado u/Look_0ver_There)* |
+| **backend** | lemonade server 10.2.0 — router unificado em :13305. compatível com openai + anthropic + ollama |
+| **voz** | kokoro tts (cpu) + whisper.cpp (vulkan) — fala-para-texto e texto-para-fala |
+| **código** | claude code — agente de programação ia local, lançado via lemonade |
+| **gateway** | caddy 2.x — painel de controlo em :80 |
+| **vpn** | wireguard — leia um código qr, aceda à sua pilha a partir do telemóvel |
+| **painel** | servidor de estatísticas em :5090 — gpu, ram, serviços, carregamento automático no arranque |
 
 ```
-┌─────────────────────────────────────────────┐
-│                   Caddy (:80)                │
-├──────────┬──────────┬───────────┬───────────┤
-│ llama.cpp│ Lemonade │   Gaia    │  Os seus  │
-│  :8080   │  :13305  │  agentes  │  blocos   │
-├──────────┴──────────┴───────────┴───────────┤
-│              ROCm 7.2.1 (gfx1151)           │
-├─────────────────────────────────────────────┤
-│         Arch Linux / systemd / btrfs        │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                   Caddy (:80)                    │
+├──────────────────────────────────────────────────┤
+│           Lemonade Server (:13305)               │
+│     router unificado — todas as apis, todos os backends      │
+├────────────┬─────────────┬───────────────────────┤
+│ llama.cpp  │  whisper.cpp │  kokoro tts          │
+│  (Vulkan)  │  (Vulkan)    │  (CPU)               │
+├────────────┴─────────────┴───────────────────────┤
+│  Claude Code  │  Painel (:5090)  │ WireGuard     │
+├───────────────┴──────────────────┴───────────────┤
+│              ROCm 7.12.0 (gfx1151)               │
+├──────────────────────────────────────────────────┤
+│          Arch Linux / systemd / btrfs            │
+└──────────────────────────────────────────────────┘
 ```
+
+> **[ver a instalação completa](halo-ai-core-install.cast)** — instalação limpa gravada em strix halo. clone o repositório e execute `asciinema play halo-ai-core-install.cast` para ver em tempo real.
+
+## benchmarks — pronto a usar
+
+estes números vêm de um `install.sh --yes-all` limpo em hardware strix halo. sem ajustes manuais. sem truques. o script de instalação aplica todas as otimizações automaticamente. benchmarks executados via api do lemonade sdk pelo claude code.
+
+| modelo | quant | teste | prompt tok/s | gen tok/s | TTFT |
+|--------|-------|-------|-------------|----------|------|
+| qwen3-30B-A3B | Q4_K_M | curto (13→256) | **251.7** | **73.0** | 52ms |
+| qwen3-30B-A3B | Q4_K_M | médio (75→512) | **494.3** | **72.5** | 152ms |
+| qwen3-30B-A3B | Q4_K_M | longo (39→1024) | **385.9** | **71.9** | 101ms |
+| qwen3-30B-A3B | Q4_K_M | sustentado (54→2048) | **437.0** | **70.5** | 124ms |
+
+*geração sólida a 70-73 tok/s sem degradação ao longo de 2048 tokens. 18gb de 64gb de vram usados. ttft abaixo de 200ms. testado em 2026-04-08.*
+
+### o que o torna rápido
+
+- **lemonade server** — router unificado em :13305. compatível com openai, anthropic e ollama. um endpoint para tudo.
+- **llama.cpp (Vulkan)** — backend Vulkan pré-compilado via Lemonade. sem compilar, sem patches. funciona em qualquer GPU Vulkan. *(h/t u/Look_0ver_There)*
+- **kokoro tts** — síntese de voz rápida em cpu. 9 idiomas.
+- **whisper.cpp (Vulkan)** — fala-para-texto com aceleração gpu.
+- **otimizado para gfx1151** — cada binário visa o seu silício exato. sem builds genéricos.
+- **128gb de memória unificada** — sem barreira de VRAM. carregue modelos 35B sem pestanejar.
+
+não precisa de os procurar. não precisa de os configurar. `install.sh` faz isso por si. esse é o ponto.
+
+## acesso móvel instantâneo — leia e pronto
+
+quando a instalação termina, um código qr aparece no seu terminal. abra a app wireguard no telemóvel, leia-o, e está ligado a toda a sua pilha ia. sem redirecionamento de portas. sem relay na nuvem. sem configuração. leia e pronto.
+
+```
+  ┌──────────────────────────────────────────┐
+  │  LEIA COM O SEU TELEMÓVEL                │
+  │  App WireGuard → + → Ler Código QR       │
+  └──────────────────────────────────────────┘
+
+         ▄▄▄▄▄▄▄  ▄▄▄▄▄  ▄▄▄▄▄▄▄
+         █ ▄▄▄ █ ██▀▄ █  █ ▄▄▄ █
+         █ ███ █ ▄▀▀▄██  █ ███ █
+                  (o seu qr aqui)
+
+  IP VPN do telemóvel: 10.100.0.2
+  Lemonade:     http://10.100.0.1:13305
+  Gaia:         http://10.100.0.1:4200
+```
+
+vpn wireguard. túnel encriptado. o seu telemóvel comunica diretamente com a sua pilha pela rede local. funciona em qualquer lugar do seu wifi — ou em qualquer lugar do mundo se redirecionar udp 51820.
+
+> *funcionalidade sugerida por zach barrow. grande vitória. bravo.*
 
 ## filosofia
 
@@ -79,13 +144,39 @@ isto é o core. tudo o resto é um bloco de lego que você escolhe adicionar.
 
 > *"they get the kingdom. they forge their own keys."* *(eles recebem o reino. forjam as suas próprias chaves.)*
 
+## integração com serviços pagos
+
+local primeiro. nuvem quando quiser. um link, todos os grandes fornecedores de ia.
+
+<div align="center">
+
+[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Anthropic](https://img.shields.io/badge/Anthropic-191919?style=flat-square&logo=anthropic&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Gemini](https://img.shields.io/badge/Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Azure](https://img.shields.io/badge/Azure_AI-0078D4?style=flat-square&logo=microsoftazure&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Mistral](https://img.shields.io/badge/Mistral-FF7000?style=flat-square&logo=mistral&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Groq](https://img.shields.io/badge/Groq-F55036?style=flat-square&logo=groq&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![OpenRouter](https://img.shields.io/badge/OpenRouter-6467F2?style=flat-square&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Perplexity](https://img.shields.io/badge/Perplexity-20808D?style=flat-square&logo=perplexity&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![ElevenLabs](https://img.shields.io/badge/ElevenLabs-000000?style=flat-square&logo=elevenlabs&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Replicate](https://img.shields.io/badge/Replicate-000000?style=flat-square&logo=replicate&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Cohere](https://img.shields.io/badge/Cohere-39594D?style=flat-square&logo=cohere&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Stability](https://img.shields.io/badge/Stability_AI-9B59B6?style=flat-square&logoColor=white)](https://github.com/stampby/halo-ai.services)
+
+**[halo-ai.services →](https://github.com/stampby/halo-ai.services)** — guias de integração, padrões de routing, gestão de chaves api
+
+</div>
+
+> *"sometimes you gotta run before you can walk."* *(às vezes é preciso correr antes de saber andar.)* — halo-ai corre local. serviços pagos são a saída de emergência, não a fundação.
+
 ## blocos de lego
 
 o core é a fundação. encaixe o que precisar:
 
 | bloco | o que faz | estado |
 |-------|-----------|--------|
-| **ssh mesh** | rede multi-máquinas | [guia →](docs/wiki/SSH-Mesh.md) |
+| **ssh mesh** | rede multi-máquinas (padrão, funciona em qualquer lugar) | [guia →](docs/wiki/SSH-Mesh.md) |
+| **vlan tagging** | isolamento de rede 802.1Q (requer switch gerido) | [guia →](docs/wiki/Network-Layout.md) |
 | **pipeline de voz** | whisper + kokoro tts | [guia →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | frontend de chat | planeado |
 | **comfyui** | geração de imagem/vídeo | planeado |
@@ -94,6 +185,10 @@ o core é a fundação. encaixe o que precisar:
 | **bots discord** | agentes ia no discord | planeado |
 
 [como construir o seu próprio bloco →](docs/wiki/Adding-a-Service.md)
+
+## pronto a usar
+
+instale o core, abra o navegador, comece a falar com a sua ia. sem cli necessário.
 
 ## recomendado: agentes principais
 

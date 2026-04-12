@@ -26,11 +26,11 @@ cd halo-ai-core
 ## What Gets Installed
 
 1. **Base packages** — build tools, git, SSH, NetworkManager
-2. **ROCm 7.13** — GPU compute stack (vLLM, whisper.cpp)
+2. **ROCm 7.2.1** — GPU compute stack (vLLM, whisper.cpp)
 3. **Caddy** — reverse proxy with auto-routing
-4. **Python 3.12 + 3.13** — compiled from source with PGO
+4. **Python 3.13.12 via pyenv**
 5. **llama.cpp** — Vulkan only (h/t u/Look_0ver_There — 13-21% faster than ROCm)
-6. **Lemonade SDK** — AMD's unified AI backend
+6. **Lemonade Server** — AMD's unified AI backend
 7. **Gaia SDK** — agent framework
 
 All components run as systemd services. All auto-restart on failure.

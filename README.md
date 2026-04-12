@@ -102,7 +102,7 @@ these numbers come from a clean `install.sh --yes-all` on strix halo hardware. n
 ### what makes it fast
 
 - **lemonade server** — unified router on :13305. openai, anthropic, and ollama compatible. one endpoint for everything.
-- **llama.cpp (Vulkan)** ��� pre-built Vulkan backend via Lemonade. no compile, no patching. runs on any Vulkan GPU. *(h/t u/Look_0ver_There)*
+- **llama.cpp (Vulkan)** — pre-built Vulkan backend via Lemonade. no compile, no patching. runs on any Vulkan GPU. *(h/t u/Look_0ver_There)*
 - **kokoro tts** — fast cpu-based text-to-speech. 9 languages.
 - **whisper.cpp (Vulkan)** — speech-to-text with gpu acceleration.
 - **gfx1151 optimized** — every binary targets your exact silicon. no generic builds.

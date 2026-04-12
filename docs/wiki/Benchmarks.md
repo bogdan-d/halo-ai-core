@@ -8,7 +8,7 @@ Performance numbers on AMD Strix Halo (Ryzen AI MAX+ 395, 128GB unified, gfx1151
 
 Benchmarks run through Lemonade SDK API by Claude Code. No manual tuning — `install.sh --yes-all` applies all optimizations automatically.
 
-**Stack:** Lemonade v10.2.0 → llama.cpp (ROCm) → gfx1151
+**Stack:** Lemonade v10.2.0 → llama.cpp (Vulkan — h/t u/Look_0ver_There) → gfx1151
 **VRAM used:** 18.1GB / 64GB
 
 ### Qwen3-Coder-30B-A3B (Q4_K_M) — MoE, 3B active params

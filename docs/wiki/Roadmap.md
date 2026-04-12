@@ -2,7 +2,7 @@
 
 ## Current — v1.0.0 (Core)
 
-- [x] ROCm 7.13 with gfx1151 support (vLLM, whisper)
+- [x] ROCm 7.2.1 with gfx1151 support (whisper)
 - [x] Caddy reverse proxy with import pattern
 - [x] llama.cpp Vulkan only (h/t u/Look_0ver_There — 13-21% faster than ROCm)
 - [x] Lemonade SDK 10.2.0

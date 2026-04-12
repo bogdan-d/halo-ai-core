@@ -10,12 +10,16 @@
 
 ### الأساس المعدني للذكاء الاصطناعي لمعالج amd strix halo
 
-**5 خدمات أساسية · 128 جيجابايت ذاكرة موحدة · مُجمَّع من المصدر · بدون سحابة · قطع ليغو**
+**8 خدمات أساسية · 128 جيجابايت ذاكرة موحدة · lemonade + llama.cpp + kokoro tts · بدون سحابة · قطع ليغو**
 
 *ختم المعماري*
 
+[![CI](https://github.com/stampby/halo-ai-core/actions/workflows/ci.yml/badge.svg)](https://github.com/stampby/halo-ai-core/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/stampby/halo-ai-core/actions/workflows/codeql.yml/badge.svg)](https://github.com/stampby/halo-ai-core/actions/workflows/codeql.yml)
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?style=flat&logo=archlinux&logoColor=white)](https://archlinux.org)
-[![ROCm](https://img.shields.io/badge/ROCm_7.2.1-ED1C24?style=flat&logo=amd&logoColor=white)](https://rocm.docs.amd.com)
+[![ROCm](https://img.shields.io/badge/ROCm_7.12.0-ED1C24?style=flat&logo=amd&logoColor=white)](https://rocm.docs.amd.com)
+[![Lemonade](https://img.shields.io/badge/Lemonade_10.2.0-00d4ff?style=flat&logo=amd&logoColor=white)](https://github.com/lemonade-sdk/lemonade)
+[![Kokoro TTS](https://img.shields.io/badge/Kokoro_TTS-ff6b35?style=flat)](https://github.com/remsky/Kokoro-FastAPI)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-halo--ai-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.gg/dSyV646eBs)
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
@@ -23,6 +27,7 @@
 [![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
 [![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
+[![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
 </div>
 
@@ -34,7 +39,7 @@
 
 ## ما هذا
 
-الطبقة الأساسية لتشغيل الذكاء الاصطناعي المحلي على عتادك الخاص. سكريبت واحد يُثبّت كل شيء. خمس خدمات أساسية. كلها systemd. كلها إعادة تشغيل تلقائي. ssh فقط. *"i know kung fu." (أنا أعرف الكونغ فو.)*
+الطبقة الأساسية لتشغيل الذكاء الاصطناعي المحلي على عتادك الخاص. سكريبت واحد يُثبّت كل شيء. ثماني خطوات، كلها systemd، كلها إعادة تشغيل تلقائي، كل شيء يمر عبر lemonade server على :13305. ssh فقط. *"i know kung fu."* *(أنا أعرف الكونغ فو.)*
 
 ## التثبيت
 
@@ -46,28 +51,88 @@ cd halo-ai-core
 ./install.sh --status     # تحقق مما يعمل
 ```
 
+[![Install Demo](https://img.shields.io/badge/asciinema-شاهد_عرض_التثبيت-d40000?style=flat&logo=asciinema&logoColor=white)](halo-ai-core-install.cast) *~3 دقائق على عتاد strix halo*
+
 ## ماذا تحصل
 
 | | |
 |---|---|
-| **gpu** | rocm 7.2.1 — ذاكرة موحدة كاملة 128 جيجابايت على gfx1151 |
-| **الاستدلال** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
-| **الواجهة الخلفية** | lemonade sdk 9.x — llm، whisper، kokoro، stable diffusion |
-| **الوكلاء** | gaia sdk 0.17.x — ابنِ وكلاء ai يعملون 100% محلياً |
-| **البوابة** | caddy 2.x — وكيل عكسي، تكوين جاهز، توجيه تلقائي |
+| **gpu** | rocm 7.12.0 — ذاكرة موحدة كاملة 128 جيجابايت على gfx1151 |
+| **الاستدلال** | llama.cpp (Vulkan) — عبر واجهة llamacpp الخلفية في lemonade. بدون تجميع. *(شكراً u/Look_0ver_There)* |
+| **الواجهة الخلفية** | lemonade server 10.2.0 — موجّه موحد على :13305. متوافق مع openai + anthropic + ollama |
+| **الصوت** | kokoro tts (cpu) + whisper.cpp (vulkan) — تحويل الكلام لنص ونص لكلام |
+| **البرمجة** | claude code — وكيل برمجة ai محلي، يُشغّل عبر lemonade |
+| **البوابة** | caddy 2.x — لوحة تحكم على :80 |
+| **vpn** | wireguard — امسح رمز qr، ادخل لمكدسك من هاتفك |
+| **لوحة التحكم** | خادم إحصائيات على :5090 — gpu، ذاكرة، خدمات، تحميل تلقائي عند الإقلاع |
 
 ```
-┌─────────────────────────────────────────────┐
-│                   Caddy (:80)                │
-├──────────┬──────────┬───────────┬───────────┤
-│ llama.cpp│ Lemonade │   Gaia    │  قطعك    │
-│  :8080   │  :13305  │  الوكلاء  │  الخاصة  │
-├──────────┴──────────┴───────────┴───────────┤
-│              ROCm 7.2.1 (gfx1151)           │
-├─────────────────────────────────────────────┤
-│         Arch Linux / systemd / btrfs        │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                   Caddy (:80)                    │
+├──────────────────────────────────────────────────┤
+│           Lemonade Server (:13305)               │
+│     موجّه موحد — جميع الـ api، جميع الواجهات الخلفية      │
+├────────────┬─────────────┬───────────────────────┤
+│ llama.cpp  │  whisper.cpp │  kokoro tts          │
+│  (Vulkan)  │  (Vulkan)    │  (CPU)               │
+├────────────┴─────────────┴───────────────────────┤
+│  Claude Code  │  لوحة التحكم (:5090)  │ WireGuard │
+├───────────────┴───────────────────────┴──────────┤
+│              ROCm 7.12.0 (gfx1151)               │
+├──────────────────────────────────────────────────┤
+│          Arch Linux / systemd / btrfs            │
+└──────────────────────────────────────────────────┘
 ```
+
+> **[شاهد التثبيت الكامل](halo-ai-core-install.cast)** — تثبيت نظيف مسجّل على strix halo. انسخ المستودع وشغّل `asciinema play halo-ai-core-install.cast` لمشاهدته مباشرة.
+
+## اختبارات الأداء — جاهز من العلبة
+
+هذه الأرقام من `install.sh --yes-all` نظيف على عتاد strix halo. بدون ضبط يدوي. بدون حيل. سكريبت التثبيت يطبّق جميع التحسينات تلقائياً. اختبارات الأداء أُجريت عبر واجهة lemonade sdk api بواسطة claude code.
+
+| النموذج | التكميم | الاختبار | prompt tok/s | gen tok/s | TTFT |
+|---------|---------|----------|-------------|----------|------|
+| qwen3-30B-A3B | Q4_K_M | قصير (13→256) | **251.7** | **73.0** | 52ms |
+| qwen3-30B-A3B | Q4_K_M | متوسط (75→512) | **494.3** | **72.5** | 152ms |
+| qwen3-30B-A3B | Q4_K_M | طويل (39→1024) | **385.9** | **71.9** | 101ms |
+| qwen3-30B-A3B | Q4_K_M | مستمر (54→2048) | **437.0** | **70.5** | 124ms |
+
+*توليد ثابت 70-73 tok/s بدون تدهور على 2048 توكن. 18 جيجابايت من 64 جيجابايت vram مستخدمة. ttft أقل من 200ms. اختُبر 2026-04-08.*
+
+### ما يجعله سريعاً
+
+- **lemonade server** — موجّه موحد على :13305. متوافق مع openai وanthropic وollama. نقطة نهاية واحدة لكل شيء.
+- **llama.cpp (Vulkan)** — واجهة Vulkan الخلفية المُعدّة مسبقاً عبر Lemonade. بدون تجميع، بدون ترقيعات. يعمل على أي GPU يدعم Vulkan. *(h/t u/Look_0ver_There)*
+- **kokoro tts** — تحويل نص لكلام سريع على المعالج. 9 لغات.
+- **whisper.cpp (Vulkan)** — تحويل كلام لنص مع تسريع gpu.
+- **محسّن لـ gfx1151** — كل ملف ثنائي يستهدف شريحتك بالضبط. بدون بناءات عامة.
+- **128 جيجابايت ذاكرة موحدة** — لا حدود VRAM. حمّل نماذج 35B بدون تردد.
+
+لا تحتاج للبحث عنها. لا تحتاج لتهيئتها. `install.sh` يفعل ذلك من أجلك. هذا هو المغزى.
+
+## وصول فوري من الهاتف — امسح وانطلق
+
+عند انتهاء التثبيت، يظهر رمز qr في الطرفية. افتح تطبيق wireguard على هاتفك، امسحه، وستكون متصلاً بمكدس الذكاء الاصطناعي بالكامل. بدون توجيه منافذ. بدون وسيط سحابي. بدون تهيئة. فقط امسح وانطلق.
+
+```
+  ┌──────────────────────────────────────────┐
+  │  امسح بهاتفك                              │
+  │  تطبيق WireGuard → + → مسح رمز QR        │
+  └──────────────────────────────────────────┘
+
+         ▄▄▄▄▄▄▄  ▄▄▄▄▄  ▄▄▄▄▄▄▄
+         █ ▄▄▄ █ ██▀▄ █  █ ▄▄▄ █
+         █ ███ █ ▄▀▀▄██  █ ███ █
+                  (رمز QR الخاص بك هنا)
+
+  IP VPN الهاتف: 10.100.0.2
+  Lemonade:     http://10.100.0.1:13305
+  Gaia:         http://10.100.0.1:4200
+```
+
+vpn wireguard. نفق مشفر. هاتفك يتحدث مباشرة مع مكدسك عبر شبكتك المحلية. يعمل من أي مكان على wifi — أو من أي مكان في العالم إذا وجّهت udp 51820.
+
+> *ميزة اقترحها زاك بارو. إنجاز كبير. برافو.*
 
 ## الفلسفة
 
@@ -77,7 +142,32 @@ cd halo-ai-core
 
 هذا هو النواة. كل شيء آخر قطعة ليغو تختار أن تضيفها.
 
-> *"they get the kingdom. they forge their own keys." (يحصلون على المملكة. يصنعون مفاتيحهم بأنفسهم.)*
+> *"they get the kingdom. they forge their own keys."* *(يحصلون على المملكة. يصنعون مفاتيحهم بأنفسهم.)*
+
+## التكامل مع الخدمات المدفوعة
+
+محلي أولاً. سحابي عندما تريد. رابط واحد، كل مزوّدي الذكاء الاصطناعي الرئيسيين.
+
+<div align="center">
+
+[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Anthropic](https://img.shields.io/badge/Anthropic-191919?style=flat-square&logo=anthropic&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Gemini](https://img.shields.io/badge/Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Azure](https://img.shields.io/badge/Azure_AI-0078D4?style=flat-square&logo=microsoftazure&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Mistral](https://img.shields.io/badge/Mistral-FF7000?style=flat-square&logo=mistral&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Groq](https://img.shields.io/badge/Groq-F55036?style=flat-square&logo=groq&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![OpenRouter](https://img.shields.io/badge/OpenRouter-6467F2?style=flat-square&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Perplexity](https://img.shields.io/badge/Perplexity-20808D?style=flat-square&logo=perplexity&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![ElevenLabs](https://img.shields.io/badge/ElevenLabs-000000?style=flat-square&logo=elevenlabs&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Replicate](https://img.shields.io/badge/Replicate-000000?style=flat-square&logo=replicate&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Cohere](https://img.shields.io/badge/Cohere-39594D?style=flat-square&logo=cohere&logoColor=white)](https://github.com/stampby/halo-ai.services)
+[![Stability](https://img.shields.io/badge/Stability_AI-9B59B6?style=flat-square&logoColor=white)](https://github.com/stampby/halo-ai.services)
+
+**[halo-ai.services →](https://github.com/stampby/halo-ai.services)** — أدلة التكامل، أنماط التوجيه، إدارة مفاتيح api
+
+</div>
+
+> *"sometimes you gotta run before you can walk."* *(أحياناً عليك أن تركض قبل أن تمشي.)* — halo-ai يعمل محلياً. الخدمات المدفوعة هي مخرج الطوارئ، وليست الأساس.
 
 ## قطع ليغو
 
@@ -85,7 +175,8 @@ cd halo-ai-core
 
 | القطعة | ماذا تفعل | الحالة |
 |--------|----------|--------|
-| **ssh mesh** | شبكات متعددة الأجهزة | [الدليل →](docs/wiki/SSH-Mesh.md) |
+| **ssh mesh** | شبكات متعددة الأجهزة (افتراضي، يعمل في أي مكان) | [الدليل →](docs/wiki/SSH-Mesh.md) |
+| **vlan tagging** | عزل شبكة 802.1Q (يتطلب مبدّل مُدار) | [الدليل →](docs/wiki/Network-Layout.md) |
 | **خط الصوت** | whisper + kokoro tts | [الدليل →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | واجهة دردشة | مخطط |
 | **comfyui** | توليد صور/فيديو | مخطط |
@@ -94,6 +185,10 @@ cd halo-ai-core
 | **بوتات ديسكورد** | وكلاء ai في ديسكورد | مخطط |
 
 [كيف تبني قطعتك الخاصة →](docs/wiki/Adding-a-Service.md)
+
+## جاهز من العلبة
+
+ثبّت النواة، افتح المتصفح، ابدأ التحدث مع ذكائك الاصطناعي. لا حاجة لسطر الأوامر.
 
 ## موصى به: الوكلاء الأساسيون
 
@@ -111,7 +206,7 @@ cd halo-ai-core
 
 ## الأمان
 
-مفاتيح ssh فقط. لا كلمات مرور. لا منافذ مفتوحة. لا استثناءات. جميع الخدمات على 127.0.0.1. *"you shall not pass." (لن تمر.)*
+مفاتيح ssh فقط. لا كلمات مرور. لا منافذ مفتوحة. لا استثناءات. جميع الخدمات على 127.0.0.1. *"you shall not pass."* *(لن تمر.)*
 
 ```bash
 ssh-keygen -t ed25519
@@ -122,7 +217,7 @@ ssh-copy-id bcloud@10.0.0.10
 
 ## الخصوصية
 
-**صفر قياس عن بُعد. صفر تتبع. صفر جمع بيانات.** لا شيء يتصل بالخارج. بياناتك تبقى على جهازك. *"there is no cloud. there is only zuul." (لا توجد سحابة. يوجد فقط زوول.)*
+**صفر قياس عن بُعد. صفر تتبع. صفر جمع بيانات.** لا شيء يتصل بالخارج. بياناتك تبقى على جهازك. *"there is no cloud. there is only zuul."* *(لا توجد سحابة. يوجد فقط زوول.)*
 
 ## التوثيق
 
@@ -166,7 +261,7 @@ ssh-copy-id bcloud@10.0.0.10
 
 <div align="center">
 
-*"i am inevitable." (أنا حتمي.)* — *ختم المعماري*
+*"i am inevitable."* *(أنا حتمي.)* — *ختم المعماري*
 
 MIT
 

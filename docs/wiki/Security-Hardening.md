@@ -65,7 +65,7 @@ Every service binds to `127.0.0.1`:
 |---------|----------|------|
 | llama-server | 127.0.0.1 | 8080 |
 | Lemonade UI | 127.0.0.1 | 13305 |
-| Gaia UI | 127.0.0.1 | 4200 |
+| Gaia UI | 127.0.0.1 | 4200 | Optional — only if Gaia web UI enabled |
 | Caddy | 127.0.0.1 | 80 |
 
 Nothing listens on `0.0.0.0` except SSH. Caddy proxies internally.

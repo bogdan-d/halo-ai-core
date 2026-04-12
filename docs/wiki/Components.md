@@ -1,6 +1,6 @@
 # Components
 
-## ROCm 7.13
+## ROCm 7.2.1
 
 AMD's GPU compute stack. Used by vLLM and whisper.cpp for HIP-accelerated inference. llama.cpp uses Vulkan instead (13-21% faster generation — see [VULKAN-PERFORMANCE.md](../VULKAN-PERFORMANCE.md)).
 
@@ -61,12 +61,13 @@ ExecStart=
 ExecStart=/usr/local/bin/llama-server --host 0.0.0.0 --port 8080 --n-gpu-layers 999 -m /path/to/model.gguf
 ```
 
-## Lemonade SDK 9.x
+## Lemonade Server 10.2.0
 
 AMD's unified AI backend. Wraps llama.cpp, whisper, kokoro TTS, and stable diffusion under one API.
 
-- Venv: `~/lemonade-env/`
-- CLI: `~/lemonade-env/bin/lemonade`
+- Package: `lemonade-server` (AUR)
+- CLI: `lemonade`
+- Daemon: `lemond`
 - Service: `lemonade.service`
 - Port: 13305
 

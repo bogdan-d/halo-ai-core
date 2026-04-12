@@ -26,7 +26,7 @@ cd ~/myservice && make && sudo make install
 
 From pip (in a venv, never system-wide):
 ```bash
-~/.pyenv/versions/3.13.4/bin/python3 -m venv ~/myservice-env
+~/.pyenv/versions/3.13.12/bin/python3 -m venv ~/myservice-env
 ~/myservice-env/bin/pip install myservice
 ```
 

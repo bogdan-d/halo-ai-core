@@ -24,6 +24,9 @@ Every component is independent. Remove llama.cpp? Lemonade still works. Remove G
 ### systemd Native
 Every service is a systemd unit. `systemctl start`, `systemctl stop`, `systemctl status`. No custom process managers. No Docker. No Kubernetes. Just systemd.
 
+### Lemonade as Unified Router
+All LLM inference goes through Lemonade (:13305), not directly to llama.cpp (:8080). Lemonade wraps llama.cpp, whisper, kokoro TTS, and sd-cpp under one OpenAI-compatible API. Downstream services (Gaia, agents) should target Lemonade, never llama.cpp directly.
+
 ### Caddy as Gateway
 All services bind to `localhost`. Caddy is the only thing that could listen externally (and by default it only serves a status page). Drop a `.caddy` file in `/etc/caddy/conf.d/` and Caddy picks it up on reload.
 
@@ -38,8 +41,8 @@ No web panels exposed. No open ports except 22. You SSH in and do everything fro
 | Service | Internal Port | Caddy Port | Notes |
 |---------|--------------|------------|-------|
 | Caddy | 80 | — | Landing page |
-| llama.cpp | 8080 | 8081 | OpenAI-compatible API |
-| Lemonade | 13305 | 13306 | AMD unified backend |
+| llama.cpp | 8080 | — | Internal only, accessed via Lemonade |
+| Lemonade | 13305 | 13306 | Unified router — all LLM traffic goes through here |
 | Gaia | varies | — | Agent framework |
 | SSH | 22 | — | Only external port |
 
@@ -52,7 +55,7 @@ No web panels exposed. No open ports except 22. You SSH in and do everything fro
 | Lemonade venv | `~/lemonade-env/` |
 | Gaia venv | `~/gaia-env/` |
 | Gaia source | `~/gaia/` |
-| Python 3.13 | `~/.pyenv/versions/3.13.4/` |
+| Python 3.13 | `~/.pyenv/versions/3.13.12/` |
 | Caddy config | `/etc/caddy/Caddyfile` |
 | Caddy drop-ins | `/etc/caddy/conf.d/*.caddy` |
 | ROCm | `/opt/rocm/` |
