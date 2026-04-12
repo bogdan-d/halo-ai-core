@@ -10,7 +10,7 @@
 
 ### the bare-metal ai foundation for amd strix halo
 
-**6 core services · 128gb unified · portable vllm + voxtral tts · zero cloud · lego blocks**
+**8 core services · 128gb unified · lemonade + llama.cpp + kokoro tts · zero cloud · lego blocks**
 
 *stamped by the architect*
 
@@ -18,8 +18,8 @@
 [![CodeQL](https://github.com/stampby/halo-ai-core/actions/workflows/codeql.yml/badge.svg)](https://github.com/stampby/halo-ai-core/actions/workflows/codeql.yml)
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?style=flat&logo=archlinux&logoColor=white)](https://archlinux.org)
 [![ROCm](https://img.shields.io/badge/ROCm_7.12.0-ED1C24?style=flat&logo=amd&logoColor=white)](https://rocm.docs.amd.com)
-[![vLLM](https://img.shields.io/badge/vLLM_0.19.0-00d4ff?style=flat&logo=amd&logoColor=white)](https://github.com/lemonade-sdk/vllm-rocm)
-[![Voxtral](https://img.shields.io/badge/Voxtral_TTS_4B-ff6b35?style=flat)](https://github.com/stampby/voxtral-tts.c)
+[![Lemonade](https://img.shields.io/badge/Lemonade_10.2.0-00d4ff?style=flat&logo=amd&logoColor=white)](https://github.com/lemonade-sdk/lemonade)
+[![Kokoro TTS](https://img.shields.io/badge/Kokoro_TTS-ff6b35?style=flat)](https://github.com/remsky/Kokoro-FastAPI)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-halo--ai-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.gg/dSyV646eBs)
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
@@ -39,7 +39,7 @@
 
 ## what is this
 
-the foundation layer for running local ai on your own hardware. one script installs everything. five core services. all systemd. all auto-restart. ssh only. *"i know kung fu."*
+the foundation layer for running local ai on your own hardware. one script installs everything. eight steps, all systemd, all auto-restart, everything routes through lemonade server on :13305. ssh only. *"i know kung fu."*
 
 ## install
 
@@ -58,22 +58,26 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.12.0 — full 128gb unified memory on gfx1151 |
-| **inference** | vllm-rocm 0.19.0 — portable, pre-built for gfx1151/1150/110X/120X. no compile. |
-| **backend** | lemonade sdk 10.2.0 — llm, whisper, kokoro, stable diffusion, 6 backends |
-| **voice** | voxtral tts 4B — voice cloning from 3 seconds of audio. 9 languages, 20 voices |
-| **agents** | gaia sdk — 10 agent profiles (chat, code, talk, rag, vision, blender, docker, mcp) |
-| **gateway** | caddy 2.x — reverse proxy, https, auto-routing |
+| **inference** | llama.cpp (ROCm + Vulkan) — via lemonade's llamacpp backend. no compile. |
+| **backend** | lemonade server 10.2.0 — unified router on :13305. openai + anthropic + ollama compatible |
+| **voice** | kokoro tts (cpu) + whisper.cpp (vulkan) — speech-to-text and text-to-speech |
+| **coding** | claude code — local ai coding agent, launched through lemonade |
+| **gateway** | caddy 2.x — dashboard on :80 |
 | **vpn** | wireguard — scan a qr code, access your stack from your phone |
+| **dashboard** | stats server on :5090 — gpu, ram, services, auto-load on boot |
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                     Caddy (HTTPS)                │
-├────────────┬────────────┬────────────────────────┤
-│  Lemonade  │    Gaia    │    Muse / Piper        │
-│  LLM+media │  AI agents │  voice+image+video     │
-├────────────┴────────────┴────────────────────────┤
-│  vLLM ROCm 0.19.0  │  Voxtral TTS 4B (cloning)  │
-├─────────────────────┴────────────────────────────┤
+│                   Caddy (:80)                    │
+├──────────────────────────────────────────────────┤
+│           Lemonade Server (:13305)               │
+│     unified router — all apis, all backends      │
+├────────────┬─────────────┬───────────────────────┤
+│ llama.cpp  │  whisper.cpp │  kokoro tts          │
+│  (ROCm)    │  (Vulkan)    │  (CPU)               │
+├────────────┴─────────────┴───────────────────────┤
+│  Claude Code  │  Dashboard (:5090)  │ WireGuard  │
+├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤
 │          Arch Linux / systemd / btrfs            │
@@ -97,9 +101,10 @@ these numbers come from a clean `install.sh --yes-all` on strix halo hardware. n
 
 ### what makes it fast
 
-- **vllm-rocm** — portable pre-built vLLM with ROCm 7.12.0, HIP kernels compiled for your exact GPU arch. no compile, no patching. extract and run.
-- **lemonade sdk** — 6 backends: FLM (NPU), llama.cpp (ROCm/Vulkan/CPU), sd-cpp (ROCm), whisper.cpp (Vulkan), kokoro (CPU)
-- **voxtral tts** — 4B param voice synthesis with 3-second voice cloning. pure C inference via voxtral-tts.c
+- **lemonade server** — unified router on :13305. openai, anthropic, and ollama compatible. one endpoint for everything.
+- **llama.cpp (ROCm)** — HIP + Vulkan + ROCWMMA + hipblaslt + aotriton. install.sh patches and builds it automatically.
+- **kokoro tts** — fast cpu-based text-to-speech. 9 languages.
+- **whisper.cpp (Vulkan)** — speech-to-text with gpu acceleration.
 - **gfx1151 optimized** — every binary targets your exact silicon. no generic builds.
 - **128gb unified memory** — no VRAM wall. load 35B models without blinking.
 
