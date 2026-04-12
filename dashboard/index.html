@@ -239,6 +239,14 @@
  <div class="stat"><span class="stat-label">npu</span><span class="stat-value" id="s-npu">--</span></div><span class="stat-sep">|</span>
  <div class="stat"><span class="stat-label">up</span><span class="stat-value" id="s-uptime">--</span></div>
  </div>
+ <div class="stats-bar mono" style="padding:.3rem 2rem;gap:.2rem 1.2rem;border-top:1px solid var(--line);">
+ <div class="stat"><span class="stat-label" style="color:var(--accent);">LLM</span></div><span class="stat-sep">|</span>
+ <div class="stat"><span class="stat-label">model</span><span class="stat-value" id="s-model" style="font-size:.7rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;">--</span></div><span class="stat-sep">|</span>
+ <div class="stat"><span class="stat-label">prompt</span><span class="stat-value" id="s-prompt-tps">--</span><span class="stat-unit">tok/s</span></div><span class="stat-sep">|</span>
+ <div class="stat"><span class="stat-label">gen</span><span class="stat-value" id="s-gen-tps">--</span><span class="stat-unit">tok/s</span></div><span class="stat-sep">|</span>
+ <div class="stat"><span class="stat-label">ttft</span><span class="stat-value" id="s-ttft">--</span><span class="stat-unit">ms</span></div><span class="stat-sep">|</span>
+ <div class="stat"><span class="stat-label">backend</span><span class="stat-value" id="s-backend" style="font-size:.7rem;">--</span></div>
+ </div>
  <div class="main">
  <div class="ctrl-panel">
  <div class="svc-card" id="panel-lemonade">
@@ -396,6 +404,17 @@
  document.getElementById('s-netin').textContent=(d.net.recv/(1024**3)).toFixed(1)
  document.getElementById('s-netout').textContent=(d.net.sent/(1024**3)).toFixed(1)
  }
+ }catch{}
+ }
+ // ── LLM Live Stats ──
+ async function fetchLLMStats(){
+ try{
+ const r=await fetch('/api/llm/stats',{signal:AbortSignal.timeout(5000)}),d=await r.json()
+ document.getElementById('s-model').textContent=d.model||'--'
+ document.getElementById('s-prompt-tps').textContent=d.prompt_tps||'--'
+ document.getElementById('s-gen-tps').textContent=d.gen_tps||'--'
+ document.getElementById('s-ttft').textContent=d.ttft_ms||'--'
+ document.getElementById('s-backend').textContent=d.backend||'--'
  }catch{}
  }
  // ── Lemonade Control ──
@@ -778,6 +797,7 @@
  // ── Polling ──
  fetchStats(); setInterval(fetchStats, 3000)
  fetchLemonadeStatus(); setInterval(fetchLemonadeStatus, 10000)
+ fetchLLMStats(); setInterval(fetchLLMStats, 10000)
  fetchSSH(); setInterval(fetchSSH, 60000)
  fetchAgents(); setInterval(fetchAgents, 30000)
  // One-time on load

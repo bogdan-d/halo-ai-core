@@ -44,6 +44,15 @@
 		respond 403
 	}
 
+	# LLM live stats — local only
+	handle /api/llm/* {
+		handle @local {
+			uri strip_prefix /api
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+
 	# Lemonade control + Software stack — local only
 	handle /api/lemonade/* {
 		handle @local {

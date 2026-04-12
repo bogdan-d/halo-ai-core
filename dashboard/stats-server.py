@@ -608,6 +608,50 @@ def get_software_versions():
     return {'versions': versions, 'frozen': frozen}
 
 
+# ── LLM Live Stats ───────────────────────────────────────────
+_last_llm_stats = {'model': '', 'prompt_tps': 0, 'gen_tps': 0, 'ttft_ms': 0, 'ctx_used': 0, 'ctx_max': 0, 'backend': ''}
+
+def get_llm_stats():
+    """Get live LLM stats — probe with tiny request for real timings."""
+    global _last_llm_stats
+    try:
+        # First check what model is loaded
+        req = urllib.request.Request('http://127.0.0.1:13305/v1/models')
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            models = json.loads(resp.read())
+            if not models.get('data'):
+                return {'model': '', 'prompt_tps': 0, 'gen_tps': 0, 'ttft_ms': 0, 'backend': 'none'}
+            model_name = models['data'][0].get('id', '')
+
+        # Tiny probe — "hi" with 1 token, gets real timings from llama.cpp
+        payload = json.dumps({
+            "model": model_name,
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 1, "temperature": 0,
+            "chat_template_kwargs": {"enable_thinking": False}
+        }).encode()
+        req = urllib.request.Request(
+            'http://127.0.0.1:13305/v1/chat/completions',
+            data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+            t = data.get('timings', {})
+            _last_llm_stats = {
+                'model': model_name,
+                'prompt_tps': round(t.get('prompt_per_second', 0), 1),
+                'gen_tps': round(t.get('predicted_per_second', 0), 1),
+                'ttft_ms': round(t.get('prompt_ms', 0)),
+                'gen_ms': round(t.get('predicted_ms', 0)),
+                'backend': 'vulkan',
+            }
+    except Exception as e:
+        _last_llm_stats['error'] = str(e)[:100]
+    return _last_llm_stats
+
+
 # Cache hardware info (doesn't change)
 HW_INFO = get_hw_info()
 
@@ -652,6 +696,9 @@ class StatsHandler(BaseHTTPRequestHandler):
             self._respond(get_lemonade_backends())
         elif self.path == '/api/lemonade/models':
             self._respond(get_lemonade_models())
+        # LLM live stats
+        elif self.path == '/api/llm/stats':
+            self._respond(get_llm_stats())
         # Software stack
         elif self.path == '/api/software/versions':
             self._respond(get_software_versions())
