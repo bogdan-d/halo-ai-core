@@ -1,0 +1,23 @@
+[Unit]
+Description=Lemonade AI Server
+After=network.target halo-llama-server.service
+Wants=halo-llama-server.service
+
+[Service]
+Type=simple
+User=<YOUR_USER>
+Group=<YOUR_USER>
+EnvironmentFile=/srv/ai/configs/rocm.env
+WorkingDirectory=/srv/ai/lemonade
+ExecStart=/srv/ai/lemonade/build/lemonade-router --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+SupplementaryGroups=video render
+ProtectSystem=strict
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectHome=read-only
+ReadWritePaths=/srv/ai
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,59 @@
+{
+    admin off
+    auto_https off
+    order file_server before reverse_proxy
+}
+
+:80 {
+    # Public pages: no auth required
+    @public path /setup /profiles
+    handle @public {
+        root * /srv/ai/configs
+        @isSetup path /setup
+        rewrite @isSetup /setup-wizard.html
+        @isProfiles path /profiles
+        rewrite @isProfiles /profiles.html
+        file_server
+    }
+
+    # Everything else: auth required
+    route {
+        basicauth {
+            caddy $2a$14$GfQWB.bJ0SNHRWVhLTRmt.JRcmXzkmTzpnPzVPvFicuwYwUwDiupy
+        }
+
+        handle_path /chat/* {
+            reverse_proxy 127.0.0.1:3000
+        }
+
+        handle_path /research/* {
+            reverse_proxy 127.0.0.1:3001
+        }
+
+        handle_path /workflows/* {
+            reverse_proxy 127.0.0.1:5678
+        }
+
+        handle_path /api/* {
+            reverse_proxy 127.0.0.1:8080
+        }
+
+        handle_path /comfyui/* {
+            reverse_proxy 127.0.0.1:8188
+        }
+
+        handle_path /cave/* {
+            reverse_proxy 127.0.0.1:3005
+        }
+
+        handle_path /dashboard/* {
+            reverse_proxy 127.0.0.1:3003
+        }
+
+        handle_path /dashboard-api/* {
+            reverse_proxy 127.0.0.1:3002
+        }
+
+        reverse_proxy 127.0.0.1:3000
+    }
+}

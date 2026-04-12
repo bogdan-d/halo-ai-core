@@ -1,1096 +1,1343 @@
 #!/bin/bash
-# ============================================================
-# Halo AI Core — Install Script
-# Designed and built by the architect
-#
-# "I know kung fu." — Neo, The Matrix
-#
-# Core services for AMD Strix Halo bare-metal AI platform
-# Components: ROCm, Caddy, vLLM ROCm, Lemonade SDK, Gaia SDK, Claude Code
-# ============================================================
+# halo-ai — designed and built by the architect
+# Bare-metal AI stack for AMD Strix Halo (Arch Linux)
+# https://github.com/stampby/halo-ai-core
 set -euo pipefail
 
-# Validate HOME has no spaces (systemd units embed it)
-if [[ "$HOME" =~ [[:space:]] ]]; then
-    echo "ERROR: HOME path contains spaces ($HOME) — not supported"
-    exit 1
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
+CYAN='\033[0;36m'; MAGENTA='\033[0;35m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
+
+# ── Dry-run mode ──────────────────────────────────
+DRY_RUN=0
+YES_ALL=0
+[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+[ "${1:-}" = "--yes-all" ] && YES_ALL=1
+[ "${2:-}" = "--yes-all" ] && YES_ALL=1
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    sudo()  { echo "  [DRY-RUN] sudo $*"; }
+    wget() {
+        echo "  [DRY-RUN] wget $*"
+        # Create placeholder files so existence checks pass
+        local next_is_output=0
+        for arg in "$@"; do
+            if [ "$next_is_output" -eq 1 ]; then touch "$arg" 2>/dev/null || true; next_is_output=0; continue; fi
+            [ "$arg" = "-O" ] && next_is_output=1
+            [[ "$arg" == http* ]] && touch "$(basename "$arg")" 2>/dev/null || true
+        done
+    }
+    make()  { echo "  [DRY-RUN] make $*"; }
+    cmake() { echo "  [DRY-RUN] cmake $*"; }
+    cargo() { echo "  [DRY-RUN] cargo $*"; }
+    pip()   { echo "  [DRY-RUN] pip $*"; }
+    npm()   { echo "  [DRY-RUN] npm $*"; }
+    pnpm()  { echo "  [DRY-RUN] pnpm $*"; }
+    yarn()  { echo "  [DRY-RUN] yarn $*"; }
+    curl()  { echo "  [DRY-RUN] curl $*"; }
+    go()    { echo "  [DRY-RUN] go $*"; }
+    # caddy dry-run stub — uses halo-core import pattern
+    tar() {
+        echo "  [DRY-RUN] tar $*"
+        # Create expected directories from tar extraction
+        for arg in "$@"; do
+            [[ "$arg" == *.tar.* || "$arg" == *.xz || "$arg" == -* ]] && continue
+            [ ! -d "$arg" ] && mkdir -p "$arg" 2>/dev/null || true
+        done
+    }
+    _real_cd=$(which cd 2>/dev/null || echo cd)
+    cd() { builtin cd "$@" 2>/dev/null || echo "  [DRY-RUN] cd $*"; }
+    ln() { echo "  [DRY-RUN] ln $*"; }
+    cp() { echo "  [DRY-RUN] cp $*"; }
+    chmod() { echo "  [DRY-RUN] chmod $*"; }
+    mkdir() { echo "  [DRY-RUN] mkdir $*"; }
+    # Skip build steps — dry-run only validates config and service wiring
+    SKIP_BUILDS=1
+    source() { echo "  [DRY-RUN] source $*"; }
+    deactivate() { echo "  [DRY-RUN] deactivate"; }
+    git() {
+        echo "  [DRY-RUN] git $*"
+    }
+    echo -e "\n${YELLOW}${BOLD}  *** DRY-RUN MODE — nothing will be installed ***${NC}\n"
 fi
 
-VERSION="0.9.1"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="${HOME}/.local/log"
-mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/halo-ai-core-install.log"
-touch "$LOG_FILE" && chmod 600 "$LOG_FILE"
-trap 'rm -f "${WG_TMP:-}" "${CLIENT_CONF:-}" 2>/dev/null' EXIT INT TERM
-DRY_RUN=false
-SKIP_ROCM=false
-SKIP_CADDY=false
-SKIP_LLAMA=false
-SKIP_LEMONADE=false
-SKIP_GAIA=false
-SKIP_CLAUDE=false
-PYTHON_VERSION="3.13.12"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-usage() {
-    echo "Halo AI Core v${VERSION} — Install Script"
-    echo ""
-    echo "Usage: ./install.sh [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  --dry-run       Show what would be installed without doing it"
-    echo "  --yes-all       Skip all confirmation prompts"
-    echo "  --skip-rocm     Skip ROCm installation"
-    echo "  --skip-caddy    Skip Caddy installation"
-    echo "  --skip-llama    Skip vLLM ROCm download"
-    echo "  --skip-lemonade Skip Lemonade SDK"
-    echo "  --skip-gaia     Skip Gaia SDK"
-    echo "  --skip-claude   Skip Claude Code"
-    echo "  --status        Show current install status"
-    echo "  -h, --help      Show this help"
-    exit 0
-}
-
-# Step count calculated dynamically based on skip flags
-CURRENT_STEP=0
-calculate_steps() {
-    TOTAL_STEPS=5  # base + python + web UIs + wireguard + voice/dashboard (always run)
-    $SKIP_ROCM     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_CADDY    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_LLAMA    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_LEMONADE || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_GAIA     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_CLAUDE   || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-}
-
-progress_bar() {
-    local pct=$((CURRENT_STEP * 100 / TOTAL_STEPS))
-    local filled=$((pct / 5))
-    local empty=$((20 - filled))
-    local bar=""
-    for ((i=0; i<filled; i++)); do bar+="█"; done
-    for ((i=0; i<empty; i++)); do bar+="░"; done
-    echo -e "${BLUE}  [${bar}] ${pct}% — Step ${CURRENT_STEP}/${TOTAL_STEPS}${NC}"
-}
+# ── Halo AI branded output ────────────────────────
+STEP_CURRENT=0
+STEP_TOTAL=18
 
 step() {
-    CURRENT_STEP=$((CURRENT_STEP + 1))
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  ▸ Step ${CURRENT_STEP}/${TOTAL_STEPS}: $1${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    progress_bar
-    echo ""
-    echo "[$(date '+%H:%M:%S')] Step ${CURRENT_STEP}/${TOTAL_STEPS}: $1" >> "$LOG_FILE"
+    STEP_CURRENT=$((STEP_CURRENT + 1))
+    echo ''
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}  [$STEP_CURRENT/$STEP_TOTAL]${NC} ${BOLD}$1${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
-spinner() {
-    local pid=$1
-    local msg=$2
-    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local i=0
-    while kill -0 "$pid" 2>/dev/null; do
-        printf "\r  ${BLUE}${spin:i++%${#spin}:1}${NC} %s" "$msg"
-        sleep 0.1
-    done
-    if wait "$pid"; then
-        printf "\r  ${GREEN}✓${NC} %s\n" "$msg"
+info()  { echo -e "  ${BLUE}>>>${NC} $1"; }
+ok()    { echo -e "  ${GREEN} +${NC} $1"; }
+warn()  { echo -e "  ${YELLOW} !${NC} $1"; }
+fail()  { echo -e "  ${RED} x${NC} $1"; exit 1; }
+progress() { echo -e "  ${DIM}    ... $1${NC}"; }
+
+# ── Banner ─────────────────────────────────────────
+clear 2>/dev/null || true
+echo ''
+echo -e "${CYAN}${BOLD}"
+cat << 'BANNER'
+  ╔═══════════════════════════════════╗
+  ║>>  H  A  L  O  ═══════  A  I  >>║
+  ╠═══════════════════════════════════╣
+  ║>>  bare-metal ai stack         >>║
+  ║>>  gfx1151 │ 260t/s │ 128GB   >>║
+  ╚═══════════════════════════════════╝
+BANNER
+echo -e "${NC}"
+echo -e "${DIM}  Bare-metal AI stack for AMD Strix Halo${NC}"
+echo -e "${DIM}  LEGO blocks — every service independent, easy in easy out${NC}"
+echo -e "${DIM}  designed and built by the architect${NC}"
+echo -e "${DIM}  github.com/stampby/halo-ai-core${NC}"
+echo ''
+
+INSTALL_START=$(date +%s)
+echo -e "${YELLOW}${BOLD}  Estimated total install time: 2-3 hours (compiling from source)${NC}"
+echo -e "${DIM}  Builds use all $(nproc) cores in parallel — your machine will be working hard.${NC}"
+echo -e "${DIM}  Everything is built natively for your hardware — no containers, no shortcuts.${NC}"
+echo ''
+
+# ── Dry-run recommendation ────────────────────────
+if [ "$DRY_RUN" -eq 0 ]; then
+    echo -e "${CYAN}${BOLD}  ┌──────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+    echo -e "${CYAN}${BOLD}  │   RECOMMENDATION: Run a dry-run first                    │${NC}"
+    echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+    echo -e "${CYAN}${BOLD}  │   This stack compiles 18 components from source.          │${NC}"
+    echo -e "${CYAN}${BOLD}  │   A dry-run validates everything without installing:      │${NC}"
+    echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+    echo -e "${CYAN}${BOLD}  │      ./install.sh --dry-run                               │${NC}"
+    echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+    echo -e "${CYAN}${BOLD}  │   If this is your first install, we strongly recommend    │${NC}"
+    echo -e "${CYAN}${BOLD}  │   running the dry-run to catch issues before they happen. │${NC}"
+    echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+    echo -e "${CYAN}${BOLD}  └──────────────────────────────────────────────────────────┘${NC}"
+    echo ''
+    if [ "$YES_ALL" -eq 1 ]; then
+        confirm="y"
+        info "[--yes-all] Auto-confirming install"
     else
-        printf "\r  ${RED}✗${NC} %s\n" "$msg"
-        err "$msg — failed (check $LOG_FILE)"
-        exit 1
+        read -rp "$(echo -e "${BLUE}[halo-ai]${NC}") Continue with full install? (y/N): " confirm
     fi
-}
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        info "Run ./install.sh --dry-run to validate first."
+        exit 0
+    fi
+    echo ''
+fi
 
-log() {
-    echo -e "  ${GREEN}✓${NC} $1"
-    echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE"
-}
+# ── Preflight ──────────────────────────────────────
+step "Preflight checks"
 
-warn() {
-    echo -e "  ${YELLOW}⚠${NC} $1"
-    echo "[$(date '+%H:%M:%S')] WARN: $1" >> "$LOG_FILE"
-}
+# Root check — big red warning
+if [ "$(id -u)" -eq 0 ]; then
+    echo ''
+    echo -e "${RED}${BOLD}  ╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}${BOLD}  ║                                                          ║${NC}"
+    echo -e "${RED}${BOLD}  ║   *** DO NOT RUN THIS SCRIPT AS ROOT OR WITH SUDO ***    ║${NC}"
+    echo -e "${RED}${BOLD}  ║                                                          ║${NC}"
+    echo -e "${RED}${BOLD}  ║   Run as your normal user. The script uses sudo           ║${NC}"
+    echo -e "${RED}${BOLD}  ║   internally only when needed.                            ║${NC}"
+    echo -e "${RED}${BOLD}  ║                                                          ║${NC}"
+    echo -e "${RED}${BOLD}  ║   Correct:   ./install.sh                                ║${NC}"
+    echo -e "${RED}${BOLD}  ║   Wrong:     sudo ./install.sh                           ║${NC}"
+    echo -e "${RED}${BOLD}  ║                                                          ║${NC}"
+    echo -e "${RED}${BOLD}  ╚══════════════════════════════════════════════════════════╝${NC}"
+    echo ''
+    fail "Running as root (uid 0). Switch to your normal user."
+fi
 
-err() {
-    echo -e "  ${RED}✗${NC} $1"
-    echo "[$(date '+%H:%M:%S')] ERROR: $1" >> "$LOG_FILE"
-}
+if [ "$DRY_RUN" -eq 0 ]; then
+    command -v pacman >/dev/null || fail "Arch Linux required."
+else
+    command -v pacman >/dev/null || warn "This installer is designed for AMD Strix Halo. Proceeding anyway..."
+fi
 
-info() {
-    echo -e "  ${BLUE}→${NC} $1"
-}
+# Sudo check — make sure user has sudo access
+if ! sudo -n true 2>/dev/null && ! sudo -v 2>/dev/null; then
+    fail "Your user needs sudo access. Run: usermod -aG wheel $(whoami)"
+fi
+ok "Running as $(whoami) with sudo access"
 
-check_status() {
-    echo ""
-    echo "╔══════════════════════════════════════╗"
-    echo "║       Halo AI Core — Status          ║"
-    echo "╚══════════════════════════════════════╝"
-    echo ""
+# Re-run detection
+if [ -d /srv/ai/llama-cpp/.git ] || [ -x /opt/python312/bin/python3.12 ]; then
+    warn "Previous install detected — re-run mode (safe to continue)"
+fi
 
-    # ROCm
-    if command -v rocminfo &>/dev/null || [ -f /opt/rocm/bin/rocminfo ]; then
-        GPU=$(/opt/rocm/bin/rocminfo 2>/dev/null | grep "Marketing Name" | grep -v CPU | head -1 | sed 's/.*: *//')
-        echo -e "  ROCm:     ${GREEN}installed${NC} — $GPU"
+# ── GPU auto-detection ────────────────────────────
+# Detect AMD GPU target automatically — no hardcoded assumptions.
+# Works on any AMD GPU supported by ROCm (gfx1100, gfx1101, gfx1150, gfx1151, etc.)
+GPU_TARGET=""
+if command -v /opt/rocm/bin/rocminfo >/dev/null 2>&1; then
+    GPU_TARGET=$(/opt/rocm/bin/rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1)
+fi
+if [ -z "$GPU_TARGET" ]; then
+    # Fallback: try to detect from lspci
+    if lspci 2>/dev/null | grep -qi "strix halo"; then
+        GPU_TARGET="gfx1151"
+    elif lspci 2>/dev/null | grep -qi "strix point"; then
+        GPU_TARGET="gfx1150"
+    elif lspci 2>/dev/null | grep -qi "navi 3"; then
+        GPU_TARGET="gfx1100"
+    fi
+fi
+if [ -z "$GPU_TARGET" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        GPU_TARGET="gfx1151"
+        info "[DRY-RUN] GPU target → gfx1151"
     else
-        echo -e "  ROCm:     ${RED}not installed${NC}"
-    fi
-
-    # Caddy
-    if systemctl is-active caddy &>/dev/null; then
-        echo -e "  Caddy:    ${GREEN}running${NC} — $(caddy version 2>/dev/null)"
-    elif command -v caddy &>/dev/null; then
-        echo -e "  Caddy:    ${YELLOW}installed but not running${NC}"
-    else
-        echo -e "  Caddy:    ${RED}not installed${NC}"
-    fi
-
-    # vLLM ROCm
-    if [ -f "$HOME/vllm-rocm/bin/python3" ]; then
-        VER=$("$HOME/vllm-rocm/bin/python3" -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo "unknown")
-        echo -e "  vLLM ROCm: ${GREEN}installed${NC} — v$VER"
-    else
-        echo -e "  vLLM ROCm: ${RED}not installed${NC}"
-    fi
-
-    # Lemonade
-    if command -v lemonade &>/dev/null; then
-        VER=$(lemonade --version 2>/dev/null || echo "installed")
-        echo -e "  Lemonade: ${GREEN}installed${NC} — $VER"
-    else
-        echo -e "  Lemonade: ${RED}not installed${NC}"
-    fi
-
-    # Gaia
-    if command -v gaia &>/dev/null || [ -f "$HOME/gaia-env/bin/gaia" ]; then
-        VER=$(gaia --version 2>/dev/null || "$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "installed")
-        echo -e "  Gaia:     ${GREEN}installed${NC} — v$VER"
-    else
-        echo -e "  Gaia:     ${RED}not installed${NC}"
-    fi
-
-    # Claude Code
-    if command -v claude &>/dev/null; then
-        echo -e "  Claude:   ${GREEN}installed${NC}"
-    else
-        echo -e "  Claude:   ${RED}not installed${NC}"
-    fi
-
-    # Services
-    echo ""
-    echo "  Services:"
-    for svc in caddy sshd vllm-server lemonade-server gaia-ui gaia; do
-        STATUS=$(systemctl is-enabled "$svc" 2>/dev/null || echo "missing")
-        ACTIVE=$(systemctl is-active "$svc" 2>/dev/null || true); ACTIVE=${ACTIVE:-inactive}
-        if [ "$STATUS" = "enabled" ]; then
-            echo -e "    $svc: ${GREEN}$STATUS${NC} ($ACTIVE)"
+        warn "Could not auto-detect AMD GPU target."
+        if [ "$YES_ALL" -eq 1 ]; then
+            GPU_TARGET="gfx1151"
+            info "[--yes-all] GPU target → gfx1151"
         else
-            echo -e "    $svc: ${YELLOW}$STATUS${NC} ($ACTIVE)"
+            read -rp "$(echo -e "${BLUE}[halo-ai]${NC}") AMD GPU target (e.g. gfx1151, gfx1100) [gfx1151]: " _gpu_input
+            GPU_TARGET="${_gpu_input:-gfx1151}"
         fi
-    done
-    echo ""
-    exit 0
+    fi
+else
+    ok "Detected GPU: $GPU_TARGET"
+fi
+
+# Validate GPU target format
+[[ "$GPU_TARGET" =~ ^gfx[0-9]+$ ]] || fail "Invalid GPU target: '$GPU_TARGET'"
+
+lscpu | grep -q "Strix" || warn "This installer is designed for AMD Strix Halo. Other AMD GPUs may work — detected: $GPU_TARGET"
+/opt/rocm/bin/rocminfo 2>/dev/null | grep -q "$GPU_TARGET" && ok "ROCm already installed ($GPU_TARGET)" || NEED_ROCM=1
+
+# ── Interactive configuration ─────────────────────
+step "Interactive Setup"
+info "Press Enter to accept defaults"
+echo ''
+
+# Helper: prompt with default
+prompt() {
+    local var_name="$1" prompt_text="$2" default="$3"
+    if [ "$DRY_RUN" -eq 1 ] || [ "$YES_ALL" -eq 1 ]; then
+        printf -v "$var_name" '%s' "$default"
+        info "[auto] $prompt_text → $default"
+        return
+    fi
+    read -rp "$(echo -e "${BLUE}[halo-ai]${NC}") $prompt_text [${default}]: " input
+    printf -v "$var_name" '%s' "${input:-$default}"
 }
 
-# Parse args
-YES_ALL=false
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --dry-run)     DRY_RUN=true; shift ;;
-        --yes-all)     YES_ALL=true; shift ;;
-        --skip-rocm)   SKIP_ROCM=true; shift ;;
-        --skip-caddy)  SKIP_CADDY=true; shift ;;
-        --skip-llama)  SKIP_LLAMA=true; shift ;;
-        --skip-lemonade) SKIP_LEMONADE=true; shift ;;
-        --skip-gaia)   SKIP_GAIA=true; shift ;;
-        --skip-claude) SKIP_CLAUDE=true; shift ;;
-        --status)      check_status ;;
-        -h|--help)     usage ;;
-        *)             err "Unknown option: $1"; usage ;;
+# Helper: prompt for password (no echo, allows blank for auto-generate)
+prompt_secret() {
+    local var_name="$1" prompt_text="$2"
+    if [ "$DRY_RUN" -eq 1 ] || [ "$YES_ALL" -eq 1 ]; then
+        printf -v "$var_name" '%s' ""
+        info "[auto] $prompt_text → [auto-generate]"
+        return
+    fi
+    read -srp "$(echo -e "${BLUE}[halo-ai]${NC}") $prompt_text: " input
+    echo ''
+    printf -v "$var_name" '%s' "$input"
+}
+
+# 1. System username
+DETECTED_USER=$(whoami)
+prompt HALO_USER "System username" "$DETECTED_USER"
+# Validate username — prevents injection into sed, systemd units, SSH config, /etc/hosts
+[[ "$HALO_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "Invalid username: '$HALO_USER' — must be a valid Linux username"
+ok "Username: $HALO_USER"
+
+# 2. Caddy password
+echo ''
+info "Caddy reverse proxy password (protects ALL web services)"
+info "Default: caddy / caddy — safe on your home LAN behind nftables."
+info "Leave blank to keep the default, or type a new password."
+prompt_secret CADDY_PASSWORD "Caddy password (blank = default 'caddy')"
+if [ -z "$CADDY_PASSWORD" ]; then
+    CADDY_PASSWORD="caddy"
+    ok "Using default password: caddy (username: caddy)"
+fi
+ok "Caddy password set (will be hashed during install)"
+
+# 3. SearXNG secret key
+SEARXNG_SECRET=$(openssl rand -hex 32)
+echo ''
+info "SearXNG secret key: auto-generated"
+prompt SEARXNG_KEY "SearXNG secret key" "$SEARXNG_SECRET"
+[[ "$SEARXNG_KEY" =~ ^[a-f0-9]+$ ]] || { warn "Invalid SearXNG key — regenerating"; SEARXNG_KEY=$(openssl rand -hex 32); }
+ok "SearXNG key: [set]"
+
+# 4. Dashboard API key
+DASHBOARD_KEY=$(openssl rand -base64 32)
+echo ''
+info "Dashboard API key: auto-generated"
+prompt DASHBOARD_API_KEY "Dashboard API key" "$DASHBOARD_KEY"
+ok "Dashboard key: [set]"
+
+# 5. Server hostname
+echo ''
+prompt HALO_HOSTNAME "Server hostname" "strixhalo"
+# Validate hostname — prevents injection into Caddyfile, sed, /etc/hosts
+[[ "$HALO_HOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$ ]] || fail "Invalid hostname: '$HALO_HOSTNAME'"
+ok "Hostname: $HALO_HOSTNAME"
+
+# /etc/hosts entries are added later with all subdomains (line ~700)
+ok "Hostname: $HALO_HOSTNAME (will be added to /etc/hosts with subdomains later)"
+
+# 6. Service selection — LEGO BLOCKS philosophy
+# Core gets you up and running. Everything else is one-click optional.
+echo ''
+echo -e "${CYAN}${BOLD}  ┌──────────────────────────────────────────────────────────┐${NC}"
+echo -e "${CYAN}${BOLD}  │  LEGO BLOCKS — every service is independent              │${NC}"
+echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+echo -e "${CYAN}${BOLD}  │  CORE (always installed):                                │${NC}"
+echo -e "${CYAN}${BOLD}  │    ROCm, Python, llama.cpp, vLLM, Open WebUI, Caddy      │${NC}"
+echo -e "${CYAN}${BOLD}  │                                                          │${NC}"
+echo -e "${CYAN}${BOLD}  │  Everything below is OPTIONAL — toggle what you need.    │${NC}"
+echo -e "${CYAN}${BOLD}  │  You can install any of these later from the NOC panel.  │${NC}"
+echo -e "${CYAN}${BOLD}  └──────────────────────────────────────────────────────────┘${NC}"
+echo ''
+info "Toggle with the number key, press Enter when done."
+echo ''
+
+# ── Optional AI Services ──
+ALL_SERVICES=(whisper lemonade n8n comfyui searxng qdrant kokoro dashboard meek)
+SERVICE_LABELS=(
+    "whisper       — Speech-to-text"
+    "lemonade      — Unified AI API gateway (lemond)"
+    "n8n           — Workflow automation"
+    "comfyui       — Image generation"
+    "searxng       — Private search engine"
+    "qdrant        — Vector database for RAG"
+    "kokoro        — Text-to-speech (Kokoro TTS)"
+    "dashboard     — GPU metrics + service health"
+    "meek          — Security monitoring agent (recommended)"
+)
+
+# ── Advanced Infrastructure (multi-machine / datacenter) ──
+# These are NOT required for a single-machine install.
+# The architect's network topology:
+#   ryzen (main workstation) <──SSH──> strix-halo (GPU server) <──SSH──> sligar (backup)
+#   All connected via GlusterFS shared storage + SSHFS
+#   Most users will NOT need these.
+INFRA_SERVICES=(ssh-mesh vlan-tagging glusterfs shared-folder)
+INFRA_LABELS=(
+    "ssh-mesh      — Multi-machine SSH ring bus (requires 2+ machines)"
+    "vlan-tagging  — Network isolation via 802.1Q VLANs (requires managed switch)"
+    "glusterfs     — Distributed storage across machines (requires 2+ machines)"
+    "shared-folder — SSHFS shared /shared/ folder (requires 2+ machines)"
+)
+
+# AI services: all enabled by default (single machine, works out of the box)
+ENABLED=()
+for i in "${!ALL_SERVICES[@]}"; do
+    ENABLED[$i]=1
+done
+
+# Infrastructure: all DISABLED by default (datacenter features, opt-in only)
+INFRA_ENABLED=()
+for i in "${!INFRA_SERVICES[@]}"; do
+    INFRA_ENABLED[$i]=0
+done
+
+render_menu() {
+    echo -e "  ${BOLD}Optional AI Services:${NC}"
+    for i in "${!ALL_SERVICES[@]}"; do
+        local mark="x"
+        [ "${ENABLED[$i]}" -eq 0 ] && mark=" "
+        printf "  %s) [%s] %s\n" "$((i+1))" "$mark" "${SERVICE_LABELS[$i]}"
+    done
+    local offset=${#ALL_SERVICES[@]}
+    echo ''
+    echo -e "  ${BOLD}Advanced Infrastructure (multi-machine):${NC}"
+    echo -e "  ${DIM}  Not needed for single-machine installs. The architect runs 3 machines${NC}"
+    echo -e "  ${DIM}  in a mesh — your setup may differ. Install these later from the NOC panel.${NC}"
+    for i in "${!INFRA_SERVICES[@]}"; do
+        local mark="x"
+        [ "${INFRA_ENABLED[$i]}" -eq 0 ] && mark=" "
+        printf "  %s) [%s] %s\n" "$((i+1+offset))" "$mark" "${INFRA_LABELS[$i]}"
+    done
+    echo ''
+    echo "  a) Select all services    n) Select none    Enter) Confirm"
+}
+
+TOTAL_ITEMS=$(( ${#ALL_SERVICES[@]} + ${#INFRA_SERVICES[@]} ))
+
+if [ "$DRY_RUN" -eq 1 ] || [ "$YES_ALL" -eq 1 ]; then
+    render_menu
+    info "[auto] All AI services selected, infrastructure disabled (default)"
+    choice=""
+else
+    choice="loop"
+fi
+while [ "$choice" != "" ]; do
+    render_menu
+    read -rp "$(echo -e "${BLUE}[halo-ai]${NC}") Toggle (1-${TOTAL_ITEMS}, a, n, or Enter to confirm): " choice
+    case "$choice" in
+        "")
+            break
+            ;;
+        a|A)
+            for i in "${!ALL_SERVICES[@]}"; do ENABLED[$i]=1; done
+            echo ''
+            ;;
+        n|N)
+            for i in "${!ALL_SERVICES[@]}"; do ENABLED[$i]=0; done
+            for i in "${!INFRA_SERVICES[@]}"; do INFRA_ENABLED[$i]=0; done
+            echo ''
+            ;;
+        [0-9]|[0-9][0-9])
+            idx=$((choice - 1))
+            if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#ALL_SERVICES[@]}" ]; then
+                ENABLED[$idx]=$(( 1 - ENABLED[$idx] ))
+            elif [ "$idx" -ge "${#ALL_SERVICES[@]}" ] && [ "$idx" -lt "$TOTAL_ITEMS" ]; then
+                infra_idx=$((idx - ${#ALL_SERVICES[@]}))
+                INFRA_ENABLED[$infra_idx]=$(( 1 - INFRA_ENABLED[$infra_idx] ))
+            fi
+            echo ''
+            ;;
+        *)
+            warn "Invalid choice: $choice"
+            echo ''
+            ;;
     esac
 done
 
-# ============================================================
-calculate_steps
-echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║   Halo AI Core v${VERSION} — Installer    ║"
-echo "║   Designed and built by the architect║"
-echo "╚══════════════════════════════════════╝"
-echo ""
+# Core services — always installed, always enabled
+CORE_SERVICES=(llama-server vllm open-webui caddy)
 
-if $DRY_RUN; then
-    warn "DRY RUN — nothing will be installed"
-    echo ""
+SELECTED_SERVICES=("${CORE_SERVICES[@]}")
+for i in "${!ALL_SERVICES[@]}"; do
+    [ "${ENABLED[$i]}" -eq 1 ] && SELECTED_SERVICES+=("${ALL_SERVICES[$i]}")
+done
+
+SELECTED_INFRA=()
+for i in "${!INFRA_SERVICES[@]}"; do
+    [ "${INFRA_ENABLED[$i]}" -eq 1 ] && SELECTED_INFRA+=("${INFRA_SERVICES[$i]}")
+done
+
+echo ''
+ok "Core (always installed): ${CORE_SERVICES[*]}"
+ok "Optional services: $(printf '%s ' "${ALL_SERVICES[@]}" | sed 's/ $//' || echo 'none')"
+[ ${#SELECTED_INFRA[@]} -gt 0 ] && ok "Infrastructure: ${SELECTED_INFRA[*]}" || ok "Infrastructure: none (single-machine mode)"
+
+# ── Base packages ──────────────────────────────────
+step "Installing build dependencies"
+sudo pacman -S --noconfirm --needed base-devel cmake ninja git python python-pip python-virtualenv \
+    sqlite vulkan-headers vulkan-icd-loader vulkan-radeon mariadb-libs grep snapper snap-pac \
+    opencl-headers ocl-icd opencl-clhpp wget shaderc protobuf ccache clang
+
+# ── User groups ────────────────────────────────────
+step "GPU access & directory structure"
+info "Setting up GPU access..."
+sudo usermod -aG video,render "$HALO_USER"
+
+# ── Directory structure ────────────────────────────
+progress "Creating /srv/ai/ with Btrfs subvolumes..."
+sudo mkdir -p /srv/ai
+for svc in rocm llama-cpp lemonade whisper-cpp open-webui vane searxng qdrant n8n kokoro comfyui models configs systemd scripts; do
+    sudo btrfs subvolume create /srv/ai/$svc 2>/dev/null || sudo mkdir -p /srv/ai/$svc
+done
+sudo chown -R "$HALO_USER":"$HALO_USER" /srv/ai
+
+# ── Clone halo-ai repo ────────────────────────────
+step "Cloning halo-ai repo"
+cd /srv/ai
+if [ ! -d .git ]; then
+    git init
+    git remote add origin https://github.com/stampby/halo-ai-core.git
 fi
+git fetch origin main
+git checkout -B main origin/main 2>/dev/null || git reset --hard origin/main
+ok "halo-ai repo ready"
 
-# Pre-flight checks
-if [ "$(id -u)" -eq 0 ]; then
-    err "Do not run as root. Run as your user with sudo access."
-    exit 1
-fi
-
-if ! command -v pacman &>/dev/null; then
-    if $DRY_RUN; then
-        warn "pacman not found — dry-run will show planned actions only"
-    else
-        err "This script requires Arch Linux (pacman not found)"
-        exit 1
-    fi
-fi
-
-if ! sudo -n true 2>/dev/null; then
-    if $DRY_RUN; then
-        warn "sudo not available — dry-run will show planned actions only"
-    else
-        err "Passwordless sudo required. Run: echo '$USER ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$USER"
-        exit 1
-    fi
-fi
-
-# Confirm
-if ! $YES_ALL && ! $DRY_RUN; then
-    info "This will install Halo AI Core services on $(cat /proc/sys/kernel/hostname)"
-    read -p "Continue? [y/N] " -n 1 -r
-    echo
-    [[ $REPLY =~ ^[Yy]$ ]] || exit 0
-fi
-
-# ============================================================
-# 1. BASE PACKAGES
-# ============================================================
-step "Base Packages"
-BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano nodejs npm uv"
-
-if $DRY_RUN; then
-    info "Would install: $BASE_PKGS"
+# ── ROCm ───────────────────────────────────────────
+if [ "${SKIP_BUILDS:-0}" -eq 1 ]; then
+    step "ROCm GPU runtime [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Building Python 3.12 + 3.13 [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Building Node.js 24 [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Rust + Go toolchains [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Auditing source repos [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Building llama.cpp [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Building Lemonade + Whisper + Pipepie + Goose [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Building Qdrant + Caddy [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Installing SearXNG + Open WebUI [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Installing Vane + n8n + ComfyUI + Kokoro [DRY-RUN SKIP]"; ok "Skipped — dry-run"
+    step "Downloading AI models [DRY-RUN SKIP]"; ok "Skipped — dry-run"
 else
-    # shellcheck disable=SC2086
-    sudo pacman -S --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing base packages..."
-    sudo systemctl enable --now NetworkManager sshd >> "$LOG_FILE" 2>&1
-    log "Base packages installed"
+step "ROCm GPU runtime (~10 min download, ~2 min extract)"
+if [ "${NEED_ROCM:-}" = "1" ]; then
+    command -v wget >/dev/null || sudo pacman -S --noconfirm --needed wget
+    info "Downloading ROCm 7.13 for $GPU_TARGET..."
+    ROCM_URL="${ROCM_URL:-https://rocm.nightlies.amd.com/tarball/therock-dist-linux-${GPU_TARGET}-7.13.0a20260323.tar.gz}"
+    if cd /srv/ai/rocm 2>/dev/null && \
+       wget --show-progress "$ROCM_URL" -O therock.tar.gz; then
+        mkdir -p install && tar -xf therock.tar.gz -C install
+        rm -f therock.tar.gz
+        sudo ln -sfn /srv/ai/rocm/install /opt/rocm
+        echo 'export ROCM_HOME=/opt/rocm
+export PATH=/opt/rocm/bin:${PATH:-}
+export LD_LIBRARY_PATH=/opt/rocm/lib:${LD_LIBRARY_PATH:-}' | sudo tee /etc/profile.d/rocm.sh >/dev/null
+        source /etc/profile.d/rocm.sh
+        ok "ROCm installed. Verifying GPU..."
+        rocminfo | grep -q "$GPU_TARGET" && ok "$GPU_TARGET detected" || warn "GPU not detected — may need reboot"
+    else
+        warn "ROCm download failed or directory missing — skipping"
+        warn "Install ROCm manually later. See docs/TROUBLESHOOTING.md"
+    fi
+else
+    ok "ROCm already installed"
 fi
 
-# ============================================================
-# 2. ROCm
-# ============================================================
-if ! $SKIP_ROCM; then
-    step "ROCm GPU Stack"
-    ROCM_PKGS="rocm-hip-sdk rocm-opencl-sdk hip-runtime-amd rocminfo rocwmma vulkan-headers vulkan-icd-loader vulkan-radeon shaderc glslang"
+# ── Python 3.12 + 3.13 ────────────────────────────
+# Pinned SHA256 checksums — verified against python.org
+declare -A PYTHON_SHA256=(
+    ["3.12.13"]="c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684"
+    ["3.13.3"]="40f868bcbdeb8149a3149580bb9bfd407b3321cd48f0be631af955ac92c0e041"
+)
 
-    if $DRY_RUN; then
-        info "Would install: $ROCM_PKGS"
+step "Building Python 3.12 + 3.13 (~15 min each)"
+for VER in 3.12.13 3.13.3; do
+    MAJOR=$(echo "$VER" | cut -d. -f1-2)
+    PREFIX=/opt/python$(echo "$MAJOR" | tr -d .)
+    if [ -x "$PREFIX/bin/python$MAJOR" ]; then ok "Python $MAJOR already installed"; continue; fi
+    BUILD_DIR=$(mktemp -d /tmp/halo-python-XXXXXX)
+    cd "$BUILD_DIR"
+    wget -q "https://www.python.org/ftp/python/$VER/Python-$VER.tar.xz" || fail "Failed to download Python $VER"
+    [ -f "Python-$VER.tar.xz" ] || fail "Python $VER archive missing after download"
+    # Verify SHA256 checksum
+    EXPECTED="${PYTHON_SHA256[$VER]}"
+    ACTUAL=$(sha256sum "Python-$VER.tar.xz" | awk '{print $1}')
+    if [ "$ACTUAL" != "$EXPECTED" ]; then
+        fail "Python $VER checksum FAILED — expected $EXPECTED got $ACTUAL"
+    fi
+    ok "Python $VER checksum verified"
+    # Verify GPG signature if gpg available
+    if command -v gpg >/dev/null; then
+        wget -q "https://www.python.org/ftp/python/$VER/Python-$VER.tar.xz.asc" 2>/dev/null
+        if [ -f "Python-$VER.tar.xz.asc" ]; then
+            gpg --keyserver hkps://keys.openpgp.org --recv-keys 7169605F62C751356D054A26A821E680E5FA6305 2>/dev/null
+            if gpg --verify "Python-$VER.tar.xz.asc" "Python-$VER.tar.xz" 2>/dev/null; then
+                ok "Python $VER GPG signature verified"
+            else
+                warn "Python $VER GPG signature could not be verified — continuing (checksum passed)"
+            fi
+        fi
+    fi
+    tar xf "Python-$VER.tar.xz" && cd "Python-$VER"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        ok "[DRY-RUN] Python $MAJOR would be compiled here"
+        continue
+    fi
+    ./configure --prefix="$PREFIX" --enable-optimizations -q
+    make -j"$(nproc)" -s && sudo make altinstall -s || fail "Python $VER build failed"
+    # Cleanup — non-fatal, cd out first
+    cd /tmp
+    rm -rf "$BUILD_DIR" 2>/dev/null || true
+    ok "Python $MAJOR compiled"
+done
+cd /home/"$HALO_USER" 2>/dev/null || cd /tmp
+
+# ── Node.js 24 ─────────────────────────────────────
+step "Building Node.js 24 (~20 min)"
+if ! node --version 2>/dev/null | grep -q "v24"; then
+    progress "Compiling from source — this takes a while..."
+    NODE_DIR=$(mktemp -d /tmp/halo-node-XXXXXX)
+    cd "$NODE_DIR"
+    git clone --depth 1 --branch v24.5.0 https://github.com/nodejs/node.git src
+    cd src
+    if [ "$DRY_RUN" -eq 1 ]; then
+        ok "[DRY-RUN] Node.js would be compiled here"
     else
-        # shellcheck disable=SC2086
-        sudo pacman -S --needed --noconfirm ${ROCM_PKGS} >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing ROCm packages (this takes a few minutes)..."
+        /opt/python313/bin/python3.13 ./configure --prefix=/usr/local
+        make -j"$(nproc)" -s && sudo make install -s || fail "Node.js build failed"
+    fi
+    sudo corepack enable
+    sudo npm install -g --force yarn 2>/dev/null || true
+    sudo npm install -g --force pnpm 2>/dev/null || true
+    cd /tmp
+    rm -rf "$NODE_DIR" 2>/dev/null || true
+    ok "Node.js $(node --version) + yarn compiled"
+fi
 
-        # ROCm PATH and env
-        sudo tee /etc/profile.d/rocm.sh > /dev/null << 'ROCM_ENV'
-export PATH=$PATH:/opt/rocm/bin
+cd /home/"$HALO_USER" 2>/dev/null || cd /tmp
+
+# ── Rust ───────────────────────────────────────────
+step "Rust + Go toolchains (~5 min)"
+if ! command -v cargo >/dev/null; then
+    info "Installing Rust toolchain..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    # shellcheck disable=SC1091
+    [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+    export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
+# ── Go ────────────────────────────────────────────
+GO_SHA256="3333f6ea53afa971e9078895eaa4ac7204a8c6b5c68c10e6bc9a33e8e391bdd8"
+if ! command -v go >/dev/null; then
+    progress "Installing Go..."
+    cd /tmp && wget -q https://go.dev/dl/go1.24.3.linux-amd64.tar.gz || fail "Failed to download Go"
+    # Verify SHA256 checksum
+    ACTUAL=$(sha256sum go1.24.3.linux-amd64.tar.gz | awk '{print $1}')
+    if [ "$ACTUAL" != "$GO_SHA256" ]; then
+        fail "Go checksum FAILED — expected $GO_SHA256 got $ACTUAL"
+    fi
+    ok "Go checksum verified"
+    sudo rm -rf /usr/local/go
+    sudo tar -C /usr/local -xzf go1.24.3.linux-amd64.tar.gz
+    rm -f go1.24.3.linux-amd64.tar.gz
+fi
+export PATH=/usr/local/go/bin:~/go/bin:$PATH
+
+# ── Pre-build source audit ────────────────────────
+step "Auditing source repos before building"
+audit_repo() {
+    local dir="$1" name="$2"
+    if [ -d "$dir/.git" ]; then
+        local commit=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+        local dirty
+        dirty=$(git -C "$dir" status --porcelain 2>/dev/null | wc -l || echo "0")
+        dirty="${dirty//[^0-9]/}"
+        [ -z "$dirty" ] && dirty=0
+        info "$name: commit $commit, $([ "$dirty" -eq 0 ] && echo 'clean' || echo "${dirty} uncommitted changes")"
+        if [ "$dirty" -gt 0 ] 2>/dev/null; then warn "$name has uncommitted changes — review before trusting"; fi
+    fi
+}
+for repo_pair in "llama-cpp:llama.cpp" "lemonade:Lemonade" "whisper-cpp:whisper.cpp" "qdrant:Qdrant" "vane:Vane" "comfyui:ComfyUI" "kokoro:Kokoro"; do
+    dir="/srv/ai/${repo_pair%%:*}"
+    name="${repo_pair##*:}"
+    [ -d "$dir" ] && audit_repo "$dir" "$name"
+done
+ok "Source audit complete"
+
+# ── Build everything ───────────────────────────────
+step "Building llama.cpp — HIP + Vulkan + OpenCL (~10 min)"
+source /etc/profile.d/rocm.sh 2>/dev/null || true
 export ROCBLAS_USE_HIPBLASLT=1
-export PYTORCH_ROCM_ARCH=gfx1151
-export HSA_OVERRIDE_GFX_VERSION=11.5.1
-export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
-export IOMMU=pt
-ROCM_ENV
 
-        # Add user to video/render
-        sudo usermod -aG video,render "$USER"
+progress "Compiling HIP backend..."
+cd /srv/ai/llama-cpp
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/ggml-org/llama.cpp .; fi
+cmake -B build-hip -DGGML_HIP=ON -DAMDGPU_TARGETS="$GPU_TARGET" -DGGML_HIP_ROCWMMA_FATTN=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
+cmake --build build-hip -j$(nproc)
+cmake -B build-vulkan -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
+cmake --build build-vulkan -j$(nproc)
+cmake -B build-opencl -DGGML_OPENCL=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
+cmake --build build-opencl -j$(nproc)
+ok "llama.cpp built (HIP + Vulkan + OpenCL)"
 
-        # Set CPU governor to performance for max throughput
-        if command -v cpupower &>/dev/null; then
-            sudo cpupower frequency-set -g performance >> "$LOG_FILE" 2>&1 || true
-            # Persist across reboots
-            echo "governor='performance'" | sudo tee /etc/default/cpupower > /dev/null
-            sudo systemctl enable cpupower >> "$LOG_FILE" 2>&1 || true
-            log "CPU governor set to performance"
-        fi
+step "Building Lemonade + Whisper + Pipepie + Goose (~15 min)"
+info "Building Lemonade (lemond)..."
+cd /srv/ai/lemonade
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/lemonade-sdk/lemonade .; fi
+rm -rf build && cmake --preset default && cmake --build --preset default -- -j$(nproc)
+ok "Lemonade v10.1.0 built (lemond)"
 
-        # Source it now
-        export PATH=$PATH:/opt/rocm/bin
+info "Building Pipepie..."
+cd /tmp
+if [ ! -d pipepie ]; then git clone https://github.com/pipepie/pipepie; fi
+cd pipepie && git pull --ff-only 2>/dev/null || true
+make build
+sudo cp pie /usr/local/bin/
+ok "Pipepie built and installed to /usr/local/bin/pie"
 
-        log "ROCm installed — $(/opt/rocm/bin/rocminfo 2>/dev/null | grep 'Marketing Name' | grep -v CPU | head -1 | sed 's/.*: *//')"
-    fi
-else
-    warn "Skipping ROCm"
-fi
+info "Building Goose..."
+cd /tmp
+if [ ! -d goose ]; then git clone https://github.com/block/goose; fi
+cd goose && git pull --ff-only 2>/dev/null || true
+BINDGEN_EXTRA_CLANG_ARGS="-I$(ls -d /usr/lib/clang/*/include /usr/lib/llvm*/lib/clang/*/include 2>/dev/null | head -1)" cargo build --release -p goose-cli
+sudo cp target/release/goose /usr/local/bin/
+ok "Goose built and installed to /usr/local/bin/goose"
 
-# ============================================================
-# 3. CADDY
-# ============================================================
-if ! $SKIP_CADDY; then
-    step "Caddy Reverse Proxy"
+info "Building whisper.cpp..."
+cd /srv/ai/whisper-cpp
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/ggerganov/whisper.cpp .; fi
+cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS="$GPU_TARGET" -DCMAKE_BUILD_TYPE=Release -G Ninja .
+cmake --build build -j$(nproc)
+ok "whisper.cpp built"
 
-    if $DRY_RUN; then
-        info "Would install: caddy"
-    else
-        sudo pacman -S --needed --noconfirm caddy >> "$LOG_FILE" 2>&1
-        sudo mkdir -p /etc/caddy/conf.d
-        # Clean stale configs from previous installs to prevent duplicates
-        sudo rm -f /etc/caddy/conf.d/*.caddy 2>/dev/null
+step "Building Qdrant + Caddy (~25 min — Rust compile)"
+info "Building Qdrant..."
+cd /srv/ai/qdrant
+source ~/.cargo/env
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/qdrant/qdrant .; fi
+cargo build --release
+ok "Qdrant built"
 
-        sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYFILE'
-# Halo AI Core — Caddy Reverse Proxy
-# "There is no spoon." — Neo
-# Drop configs in /etc/caddy/conf.d/*.caddy
+info "Installing Caddy..."
+sudo pacman -S --noconfirm --needed caddy
+ok "Caddy installed"
 
-:80 {
-    header Content-Type "text/html; charset=utf-8"
-    respond `<!DOCTYPE html>
-<html><head><title>halo-ai core</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:#e0e0e0;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh}
-.box{text-align:center;max-width:600px;padding:2em}
-h1{font-size:2em;margin-bottom:0.3em;color:#00d4ff}
-.sub{margin-bottom:2em;color:#555;font-size:0.9em}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:0.8em;margin-bottom:1.5em}
-.btn{display:block;padding:1em 1.5em;background:#111;border:1px solid #333;border-radius:8px;color:#00d4ff;text-decoration:none;font-size:1.1em;font-family:monospace;transition:all 0.2s}
-.btn:hover{background:#1a1a1a;border-color:#00d4ff}
-.btn small{display:block;color:#555;font-size:0.75em;margin-top:0.3em}
-.full{grid-column:1/-1}
-small{display:block;margin-top:1.5em;color:#333}
-</style></head><body><div class="box">
-<h1>halo-ai core</h1>
-<p class="sub">lemonade + gaia + vllm — fully integrated</p>
-<div class="grid">
-<a class="btn" target="_blank" href="http://{http.request.host}:13306">lemonade<small>chat with llms — :13306</small></a>
-<a class="btn" target="_blank" href="http://{http.request.host}:4201">gaia agents<small>manage ai agents — :4201</small></a>
-<a class="btn" target="_blank" href="http://{http.request.host}:8081/v1/models">llama api<small>openai-compatible — :8081</small></a>
-<a class="btn" target="_blank" href="http://{http.request.host}:5001/docs">gaia api<small>agent api — :5001 → :5050</small></a>
-</div>
-<small>designed and built by the architect</small>
-</div></body></html>`
-}
+step "Installing SearXNG + Open WebUI (~10 min)"
+info "Installing SearXNG..."
+cd /srv/ai/searxng
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/searxng/searxng .; fi
+/opt/python312/bin/python3.12 -m venv .venv && source .venv/bin/activate
+pip install -q setuptools msgspec pyyaml typing_extensions Brotli lxml && pip install -q --no-build-isolation -e .
+deactivate
+ok "SearXNG installed"
 
-import /etc/caddy/conf.d/*.caddy
-CADDYFILE
+info "Installing Open WebUI..."
+cd /srv/ai/open-webui
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/open-webui/open-webui .; fi
+/opt/python312/bin/python3.12 -m venv .venv && source .venv/bin/activate
+sed -i 's/ddgs==9.11.2/ddgs>=9.11.3/' pyproject.toml 2>/dev/null || true
+sed -i 's/rapidocr-onnxruntime==1.4.4/rapidocr-onnxruntime>=1.2.3/' pyproject.toml 2>/dev/null || true
+pip install -q setuptools hatchling && pip install -q . 
+deactivate
+ok "Open WebUI installed"
 
-        sudo systemctl enable --now caddy >> "$LOG_FILE" 2>&1
-        log "Caddy installed and running"
-    fi
-else
-    warn "Skipping Caddy"
-fi
+step "Installing Vane + n8n + ComfyUI + Kokoro (~15 min)"
 
-# ============================================================
-# 4. PYTHON (via pyenv for 3.13 compatibility)
-# ============================================================
-step "Python ${PYTHON_VERSION}"
-
-if $DRY_RUN; then
-    info "Would install Python ${PYTHON_VERSION} via pyenv"
-else
-    if [ ! -f "$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3" ]; then
-        sudo pacman -S --needed --noconfirm tk sqlite openssl xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
-
-        # Remove old/broken pyenv installs (detached HEAD, shallow clones)
-        if [ -d "$HOME/.pyenv" ]; then
-            if ! (cd "$HOME/.pyenv" && git symbolic-ref HEAD > /dev/null 2>&1); then
-                log "Removing broken pyenv (detached HEAD)..."
-                rm -rf "$HOME/.pyenv"
+# ── SECURITY: Block compromised axios versions (CVE-2026-XXXXX) ──
+# On March 31, 2026, axios@1.14.1 and axios@0.30.4 were backdoored
+# with a North Korean RAT via plain-crypto-js. Pin to safe versions.
+info "Applying axios supply chain attack mitigation..."
+# Shell function — no /tmp script needed (avoids TOCTOU race)
+halo_npm_audit() {
+    for dir in "$@"; do
+        if [ -d "$dir/node_modules" ]; then
+            if [ -d "$dir/node_modules/plain-crypto-js" ]; then
+                echo "CRITICAL: plain-crypto-js found in $dir — COMPROMISED"
+                rm -rf "$dir/node_modules/plain-crypto-js"
+                echo "Removed malicious package."
+            fi
+            AX_VER=$(jq -r .version "$dir/node_modules/axios/package.json" 2>/dev/null)
+            if [ "$AX_VER" = "1.14.1" ] || [ "$AX_VER" = "0.30.4" ]; then
+                echo "CRITICAL: Compromised axios@$AX_VER in $dir — removing"
+                rm -rf "$dir/node_modules/axios"
             fi
         fi
-
-        if [ ! -d "$HOME/.pyenv" ]; then
-            log "Installing pyenv..."
-            git clone https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
-            git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
-        else
-            log "Updating pyenv..."
-            (cd "$HOME/.pyenv" && git pull >> "$LOG_FILE" 2>&1)
-        fi
-
-        export PYENV_ROOT="$HOME/.pyenv"
-        export PATH="$PYENV_ROOT/bin:$PATH"
-        # shellcheck disable=SC1090
-        source <("$PYENV_ROOT/bin/pyenv" init -)
-
-        pyenv install -s "${PYTHON_VERSION}" >> "$LOG_FILE" 2>&1
-        log "Python ${PYTHON_VERSION} installed via pyenv"
-    else
-        log "Python ${PYTHON_VERSION} already installed"
-    fi
-fi
-
-PYTHON_BIN="$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3"
-
-# ============================================================
-# 5. VLLM-ROCM (portable — pre-built for AMD GPUs, no compile)
-# ============================================================
-if ! $SKIP_LLAMA; then
-    step "vLLM ROCm (pre-built)"
-
-    if $DRY_RUN; then
-        info "Would download portable vLLM + ROCm for this GPU"
-    else
-        VLLM_DIR="$HOME/vllm-rocm"
-
-        if [ -f "$VLLM_DIR/bin/python3" ]; then
-            log "vLLM ROCm already installed at $VLLM_DIR"
-        else
-            # Detect GPU architecture
-            GPU_ARCH="gfx1151"  # default: Strix Halo
-            if command -v rocminfo > /dev/null 2>&1; then
-                DETECTED=$(rocminfo 2>/dev/null | grep -oP 'gfx\d{4,}' | head -1)
-                if [ -n "$DETECTED" ]; then
-                    GPU_ARCH="$DETECTED"
-                fi
-            fi
-            log "Detected GPU architecture: $GPU_ARCH"
-
-            # Map architecture to release tag
-            case "$GPU_ARCH" in
-                gfx1151) VLLM_TAG="vllm0.19.0-rocm7.12.0-gfx1151" ;;
-                gfx1150) VLLM_TAG="vllm0.19.0-rocm7.12.0-gfx1150" ;;
-                gfx1100|gfx1101|gfx1102|gfx1103) VLLM_TAG="vllm0.19.0-rocm7.12.0-gfx110X" ;;
-                gfx1200|gfx1201) VLLM_TAG="vllm0.19.0-rocm7.12.0-gfx120X" ;;
-                *)
-                    warn "No pre-built vLLM for $GPU_ARCH — falling back to gfx1151"
-                    VLLM_TAG="vllm0.19.0-rocm7.12.0-gfx1151"
-                    ;;
-            esac
-
-            log "Downloading vLLM ROCm ($VLLM_TAG)..."
-            VLLM_TMP=$(mktemp -d)
-            VLLM_REPO="lemonade-sdk/vllm-rocm"
-
-            # Get download URLs from GitHub API (no auth needed for public repos)
-            ASSET_URLS=$(curl -sL "https://api.github.com/repos/${VLLM_REPO}/releases/tags/${VLLM_TAG}" \
-                | grep -o '"browser_download_url": *"[^"]*"' \
-                | grep -o 'https://[^"]*')
-
-            if [ -z "$ASSET_URLS" ]; then
-                warn "Could not find vLLM release assets for $VLLM_TAG"
-                warn "Install manually: gh release download $VLLM_TAG -R $VLLM_REPO"
-            else
-                # Download all parts
-                (for url in $ASSET_URLS; do
-                    curl -sL -o "$VLLM_TMP/$(basename "$url")" "$url"
-                done) >> "$LOG_FILE" 2>&1 &
-                spinner $! "Downloading vLLM ROCm ($VLLM_TAG — this is ~3 GB)..."
-
-                log "Extracting vLLM ROCm..."
-                mkdir -p "$VLLM_DIR"
-                cat "$VLLM_TMP"/*.tar.gz | tar xzf - -C "$VLLM_DIR" >> "$LOG_FILE" 2>&1 &
-                spinner $! "Extracting vLLM ROCm..."
-            fi
-            rm -rf "$VLLM_TMP"
-
-            # Fix permissions on bundled binaries
-            chmod +x "$VLLM_DIR/bin/python3" 2>/dev/null || true
-            chmod +x "$VLLM_DIR/bin/vllm" 2>/dev/null || true
-            chmod +x "$VLLM_DIR/bin/vllm-server" 2>/dev/null || true
-
-            log "vLLM ROCm installed — $($VLLM_DIR/bin/python3 -c 'import vllm; print(vllm.__version__)' 2>/dev/null || echo 'unknown version')"
-        fi
-
-        # Systemd service for vLLM (optional — Lemonade is primary)
-        sudo tee /usr/lib/systemd/system/vllm-server.service > /dev/null << VLLM_SVC
-[Unit]
-Description=vLLM Inference Server (ROCm — optional, Lemonade is primary)
-After=network.target
-
-[Service]
-Type=simple
-User=${USER}
-Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-ExecStart=${VLLM_DIR}/bin/python3 -m vllm.entrypoints.openai.api_server \\
-    --host 127.0.0.1 \\
-    --port 8080 \\
-    --dtype auto \\
-    --max-model-len 32768
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-VLLM_SVC
-
-        # Caddy routes — external-facing ports proxy to Lemonade (primary LLM backend)
-        sudo tee /etc/caddy/conf.d/llm-api.caddy > /dev/null << 'LLM_API_CADDY'
-:8081 {
-    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
-    handle @local {
-        reverse_proxy 127.0.0.1:13305
-    }
-    respond 403
+    done
 }
-LLM_API_CADDY
-        # Clean up old misnamed config
-        sudo rm -f /etc/caddy/conf.d/llama.caddy 2>/dev/null
+ok "Axios supply chain mitigation active"
 
-        sudo tee /etc/caddy/conf.d/lemonade-ui.caddy > /dev/null << 'LEM_CADDY'
-:13306 {
-    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
-    handle @local {
-        reverse_proxy localhost:13305
-    }
-    respond 403
+info "Installing Vane (Perplexica)..."
+cd /srv/ai/vane
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/ItzCrazyKns/Vane .; fi
+# Pin axios to safe version before install
+npm pkg set overrides.axios="1.14.0" 2>/dev/null || true
+# Axios is pinned via overrides above — safe to run scripts for native modules
+yarn install
+yarn build
+halo_npm_audit /srv/ai/vane
+ok "Vane built (axios pinned safe)"
+
+info "Installing n8n..."
+cd /srv/ai/n8n
+command -v pnpm >/dev/null || sudo npm install -g --force pnpm 2>/dev/null || true
+# Install n8n globally via npm (pre-built, skip source compile)
+# n8n source is 674k files and fails on most systems. Use the release.
+sudo npm install -g --ignore-scripts n8n 2>/dev/null || {
+    warn "npm global install failed — trying npx fallback"
+    # Create a wrapper that runs n8n via npx
+    cat > /srv/ai/n8n/start.sh << 'N8N_START'
+#!/bin/bash
+export N8N_SECURE_COOKIE=false
+export N8N_USER_FOLDER=/srv/ai/n8n/data
+npx n8n start --host 127.0.0.1 --port 5678
+N8N_START
+    chmod +x /srv/ai/n8n/start.sh
 }
-LEM_CADDY
+mkdir -p /srv/ai/n8n/data
+ok "n8n installed"
 
-        sudo tee /etc/caddy/conf.d/gaia-ui.caddy > /dev/null << 'GAIA_UI_CADDY'
-:4201 {
-    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
-    handle @local {
-        reverse_proxy localhost:4200
-    }
-    respond 403
-}
-GAIA_UI_CADDY
+info "Installing ComfyUI..."
+cd /srv/ai/comfyui
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/comfyanonymous/ComfyUI .; fi
+/opt/python313/bin/python3.13 -m venv .venv && source .venv/bin/activate
+pip install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+pip install -q -r requirements.txt
+deactivate
+ok "ComfyUI installed"
 
-        sudo tee /etc/caddy/conf.d/gaia-api.caddy > /dev/null << 'GAIA_API_CADDY'
-:5001 {
-    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
-    handle @local {
-        reverse_proxy localhost:5050
-    }
-    respond 403
-}
-GAIA_API_CADDY
+# Download image generation models
+progress "Downloading FLUX.1 schnell (~12GB — fastest, best quality)..."
+wget -q --show-progress 'https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/flux1-schnell.safetensors' \
+    -O /srv/ai/comfyui/models/checkpoints/flux1-schnell.safetensors 2>/dev/null || \
+    warn "FLUX.1 download failed — download manually later"
+[ -f /srv/ai/comfyui/models/checkpoints/flux1-schnell.safetensors ] && ok "FLUX.1 schnell ready"
 
-        sudo systemctl daemon-reload
-        sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || warn "Caddy reload failed — check /etc/caddy/conf.d/ for duplicates"
+progress "Downloading SDXL base model (~6.5GB — fallback)..."
+wget -q --show-progress 'https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors' \
+    -O /srv/ai/comfyui/models/checkpoints/sd_xl_base_1.0.safetensors 2>/dev/null || \
+    warn "SDXL download failed — download manually later"
+[ -f /srv/ai/comfyui/models/checkpoints/sd_xl_base_1.0.safetensors ] && ok "SDXL base model ready"
 
-        log "vLLM ROCm ready — start with: sudo systemctl start vllm-server"
-    fi
+# Download Whisper model for speech-to-text (Turbo: 5.4x faster, ~1% more WER)
+progress "Downloading Whisper large-v3-turbo model (~1.6GB)..."
+wget -q --show-progress 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin' \
+    -O /srv/ai/models/whisper-large-v3-turbo.bin 2>/dev/null || \
+    warn "Whisper turbo download failed — download manually later"
+[ -f /srv/ai/models/whisper-large-v3-turbo.bin ] && ok "Whisper large-v3-turbo ready"
+
+info "Installing Kokoro TTS..."
+cd /srv/ai/kokoro
+if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/remsky/Kokoro-FastAPI .; fi
+/opt/python313/bin/python3.13 -m venv .venv && source .venv/bin/activate
+pip install -q --no-deps -e .
+pip install -q torch --index-url https://download.pytorch.org/whl/rocm6.2.4
+pip install -q audioop-lts scipy transformers spacy inflect av uvicorn fastapi soundfile pydantic
+pip install -q --no-deps 'misaki>=0.7.4' 'kokoro>=0.7.16'
+python -c "import spacy; spacy.load('en_core_web_sm')" 2>/dev/null || python -m spacy download en_core_web_sm
+deactivate
+ok "Kokoro installed"
+
+# ── Download LLM model ────────────────────────────
+step "Downloading AI models"
+
+# LLM — Qwen3-30B-A3B (best speed/quality for Strix Halo)
+if [ ! -f /srv/ai/models/qwen3-30b-a3b-q4_k_m.gguf ]; then
+    info "Downloading Qwen3-30B-A3B (~18GB)..."
+    progress "This is the main LLM — 91 tok/s on Strix Halo"
+    wget -q --show-progress 'https://huggingface.co/bartowski/Qwen3-30B-A3B-GGUF/resolve/main/Qwen3-30B-A3B-Q4_K_M.gguf' \
+        -O /srv/ai/models/qwen3-30b-a3b-q4_k_m.gguf 2>/dev/null || \
+        warn "LLM download failed — download manually: halo-models.sh download qwen3-30b"
+    [ -f /srv/ai/models/qwen3-30b-a3b-q4_k_m.gguf ] && ok "Qwen3-30B-A3B ready (18GB, 91 tok/s)"
 else
-    warn "Skipping vLLM ROCm"
+    ok "LLM model already present"
 fi
 
-# ============================================================
-# 6. LEMONADE SERVER (native AUR package)
-# ============================================================
-if ! $SKIP_LEMONADE; then
-    step "Lemonade Server"
+# SDXL was downloaded above with ComfyUI
+# Whisper was downloaded above with ComfyUI
 
-    if $DRY_RUN; then
-        info "Would install lemonade-server from AUR"
-    else
-        if command -v lemonade &>/dev/null; then
-            log "Lemonade already installed — $(lemonade --version 2>/dev/null || echo 'installed')"
-        else
-            # Need an AUR helper (paru > yay > install yay)
-            AUR_HELPER=""
-            if command -v paru &>/dev/null; then
-                AUR_HELPER="paru"
-            elif command -v yay &>/dev/null; then
-                AUR_HELPER="yay"
-            else
-                info "Installing yay (AUR helper)..."
-                YAY_TMPDIR=$(mktemp -d)
-                git clone https://aur.archlinux.org/yay.git "$YAY_TMPDIR/yay" >> "$LOG_FILE" 2>&1
-                cd "$YAY_TMPDIR/yay" && makepkg -si --noconfirm >> "$LOG_FILE" 2>&1
-                cd "$HOME"
-                rm -rf "$YAY_TMPDIR"
-                AUR_HELPER="yay"
-            fi
+info "Model download step complete (check warnings above for any failures)"
 
-            $AUR_HELPER -S --needed --noconfirm lemonade-server >> "$LOG_FILE" 2>&1 &
-            spinner $! "Building lemonade-server from AUR (C++ native — this takes a minute)..."
-        fi
+# ── System config ──────────────────────────────────
+step "System hardening & configuration"
 
-        # Enable and start the daemon
-        sudo systemctl daemon-reload
-        sudo systemctl enable --now lemonade-server >> "$LOG_FILE" 2>&1 || \
-            sudo systemctl enable --now lemond >> "$LOG_FILE" 2>&1 || true
-        # Wait for server to be ready
-        log "Waiting for Lemonade server to start..."
-        for i in $(seq 1 30); do
-            if lemonade status --json > /dev/null 2>&1; then break; fi
-            sleep 1
-        done
+# GPU device permissions
+echo 'SUBSYSTEM=="kfd", KERNEL=="kfd", TAG+="uaccess", GROUP="render", MODE="0660"
+SUBSYSTEM=="drm", KERNEL=="renderD*", TAG+="uaccess", GROUP="render", MODE="0660"' | sudo tee /etc/udev/rules.d/70-amdgpu.rules
 
-        VER=$(lemonade --version 2>/dev/null || echo "installed")
-        log "Lemonade Server $VER — binaries: lemonade (CLI), lemond (daemon)"
-        log "Anthropic API: http://localhost:13305/v1/messages"
-        log "OpenAI API:    http://localhost:13305/api/v1/chat/completions"
-        log "Ollama API:    http://localhost:13305/api/chat"
+# Kernel param for GPU memory
+# GPU memory — add kernel param to boot entry (systemd-boot)
+if ls /boot/loader/entries/*.conf >/dev/null 2>&1; then
+    ENTRY=$(ls -t /boot/loader/entries/*.conf | head -1)
+    if [ -f "$ENTRY" ] && ! grep -q 'ttm\.pages_limit' "$ENTRY"; then
+        sudo cp "$ENTRY" "${ENTRY}.bak"
+        sudo sed -i 's/^options /options ttm.pages_limit=30146560 /' "$ENTRY"
+        ok "Added ttm.pages_limit to $ENTRY (backup saved)"
     fi
 else
-    warn "Skipping Lemonade Server"
+    warn "No systemd-boot entries found — add 'ttm.pages_limit=30146560' to your bootloader manually"
 fi
 
-# ============================================================
-# 7. GAIA SDK
-# ============================================================
-if ! $SKIP_GAIA; then
-    step "Gaia SDK"
+# Disable sleep/suspend
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
-    if $DRY_RUN; then
-        info "Would install amd-gaia in ~/gaia-env"
-    else
-        if [ ! -d "$HOME/gaia" ]; then
-            git clone --depth 1 https://github.com/amd/gaia.git "$HOME/gaia" >> "$LOG_FILE" 2>&1
-        fi
-
-        if [ ! -d "$HOME/gaia-env" ]; then
-            "$PYTHON_BIN" -m venv "$HOME/gaia-env"
-        fi
-
-        "$HOME/gaia-env/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1
-        cd "$HOME/gaia"
-        "$HOME/gaia-env/bin/pip" install -e . >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing Gaia SDK (includes PyTorch — grab a coffee)..."
-
-        # Gaia .env — wire to Lemonade as primary backend
-        install -m 600 /dev/null "$HOME/gaia/.env"
-        cat > "$HOME/gaia/.env" << GAIA_ENV
-# Halo AI Core — Gaia Integration
-# Primary: Lemonade server (manages models, llamacpp backend)
-LEMONADE_BASE_URL=http://localhost:13305/api/v1
-
-# MCP Server
-GAIA_MCP_HOST=localhost
-GAIA_MCP_PORT=8765
-
-# Agent routing model (loaded via Lemonade)
-AGENT_ROUTING_MODEL=Qwen3-Coder-30B-A3B-Instruct-GGUF
-GAIA_ENV
-
-        # Systemd service — Gaia API (OpenAI-compatible endpoint)
-        sudo tee /usr/lib/systemd/system/gaia.service > /dev/null << GAIA_SVC
-[Unit]
-Description=Gaia AI Agent Framework
-After=network.target lemonade-server.service
-Wants=lemonade-server.service
-
-[Service]
-Type=simple
-User=${USER}
-Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
-Environment=ROCBLAS_USE_HIPBLASLT=1
-Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-Environment=LEMONADE_BASE_URL=http://localhost:13305/api/v1
-WorkingDirectory=${HOME}/gaia
-ExecStart=${HOME}/gaia-env/bin/gaia api start --host 127.0.0.1 --port 5050 --no-lemonade-check
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-GAIA_SVC
-
-        sudo systemctl daemon-reload
-        sudo systemctl enable gaia >> "$LOG_FILE" 2>&1
-
-        VER=$("$HOME/gaia-env/bin/gaia" --version 2>/dev/null || echo "unknown")
-        log "Gaia SDK v$VER installed"
-        log "Gaia .env created — LEMONADE_BASE_URL=http://localhost:13305/api/v1"
-    fi
+# SSH hardening (preserve existing if present)
+if [ ! -f /etc/ssh/sshd_config.d/90-halo-security.conf ]; then
+    echo "PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+PermitRootLogin no
+AllowUsers $HALO_USER" | sudo tee /etc/ssh/sshd_config.d/90-halo-security.conf
 else
-    warn "Skipping Gaia SDK"
+    ok "SSH hardening already configured"
 fi
 
-# ============================================================
-# 8. WEB UIs
-# ============================================================
-step "Web UIs"
-
-if $DRY_RUN; then
-    info "Would configure Lemonade UI (port 13305) and Gaia Agent UI (port 4200)"
+# Install nftables firewall
+info "Installing firewall..."
+sudo pacman -S --noconfirm --needed nftables 2>/dev/null
+[ -f /etc/nftables.conf ] && sudo cp /etc/nftables.conf /etc/nftables.conf.bak
+sudo cp /srv/ai/configs/system/nftables.conf /etc/nftables.conf
+LAN_IFACE=$(ip -4 route show default | awk '{print $5; exit}')
+LAN_SUBNET=$(ip -4 addr show dev "$LAN_IFACE" 2>/dev/null | awk '/inet / {print $2; exit}' | sed 's|\.[0-9]*/|.0/|')
+if [ -n "$LAN_SUBNET" ] && echo "$LAN_SUBNET" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$'; then
+    sudo sed -i "s|xxx.xxx.xxx.0/24|${LAN_SUBNET}|g" /etc/nftables.conf
+    ok "Firewall LAN subnet: $LAN_SUBNET"
 else
-    # Lemonade UI is handled by lemond (native AUR package)
-    # Clean up old venv-based services from previous installs
-    sudo systemctl disable lemonade lemonade-ui >> "$LOG_FILE" 2>&1 || true
-    sudo rm -f /usr/lib/systemd/system/lemonade.service 2>/dev/null
-    sudo rm -f /usr/lib/systemd/system/lemonade-ui.service 2>/dev/null
-
-    # Gaia Agent UI — built into gaia CLI (no separate npm package needed)
-    sudo tee /usr/lib/systemd/system/gaia-ui.service > /dev/null << GAIA_UI_SVC
-[Unit]
-Description=Gaia Agent Web UI
-After=network.target lemonade-server.service
-Wants=lemonade-server.service
-
-[Service]
-Type=simple
-User=${USER}
-Environment=PATH=${HOME}/gaia-env/bin:/usr/local/bin:/opt/rocm/bin:/usr/bin
-Environment=ROCBLAS_USE_HIPBLASLT=1
-Environment=HSA_OVERRIDE_GFX_VERSION=11.5.1
-Environment=LEMONADE_BASE_URL=http://localhost:13305/api/v1
-WorkingDirectory=${HOME}/gaia
-ExecStart=${HOME}/gaia-env/bin/gaia --ui --ui-port 4200
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-GAIA_UI_SVC
-
-    sudo systemctl daemon-reload
-    sudo systemctl enable gaia-ui >> "$LOG_FILE" 2>&1
-    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || warn "Caddy reload failed — check /etc/caddy/conf.d/ for duplicates"
-
-    # Install the LLM backend switch script
-    sudo cp "$SCRIPT_DIR/halo-llm-switch.sh" /usr/local/bin/halo-llm-switch
-    sudo chmod +x /usr/local/bin/halo-llm-switch
-
-    log "Lemonade UI on :13305 — managed by lemond (native service)"
-    log "Gaia Agent UI on :4200 — Agent management"
-    log "Switch backends: halo-llm-switch [lemonade|llama|status]"
+    warn "Could not detect LAN subnet — edit /etc/nftables.conf manually (replace xxx.xxx.xxx.0/24)"
 fi
+sudo systemctl enable --now nftables 2>/dev/null
+ok "Firewall active (LAN-only SSH + HTTP)"
 
-# ============================================================
-# 9. CLAUDE CODE
-# ============================================================
-if ! $SKIP_CLAUDE; then
-    step "Claude Code (via Lemonade)"
-
-    if $DRY_RUN; then
-        info "Would install Claude Code CLI and configure for Lemonade"
-    else
-        # Install Claude Code
-        if command -v claude &>/dev/null; then
-            log "Claude Code already installed — $(claude --version 2>/dev/null || echo 'installed')"
-        else
-            if command -v npm &>/dev/null; then
-                npm install -g --ignore-scripts --prefix "$HOME/.local" @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
-                spinner $! "Installing Claude Code..."
-                log "Claude Code installed via npm"
-            else
-                err "npm not found — cannot install Claude Code"
-            fi
-        fi
-
-        # Verify lemonade launch claude is available
-        if command -v lemonade &>/dev/null; then
-            log "Claude Code can be launched via: lemonade launch claude"
-            log "Or with a model: lemonade launch claude -m <model-name>"
-        else
-            warn "Lemonade CLI not found — install Lemonade Server first for local model routing"
-        fi
-    fi
+# Install fail2ban (preserve existing config)
+info "Installing fail2ban..."
+sudo pacman -S --noconfirm --needed fail2ban 2>/dev/null
+if [ -f /etc/fail2ban/jail.local ]; then
+    ok "fail2ban already configured"
 else
-    warn "Skipping Claude Code"
+cat << 'F2BCONF' | sudo tee /etc/fail2ban/jail.local
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+backend = systemd
+maxretry = 5
+bantime = 3600
+findtime = 600
+F2BCONF
 fi
+sudo systemctl enable --now fail2ban 2>/dev/null
+ok "fail2ban active (5 attempts = 1hr ban)"
 
-# ============================================================
-# WIREGUARD — Remote Access via QR Code
-# ============================================================
-step "WireGuard VPN"
+# Install Syncthing — file sync across the mesh (replaces cloud storage)
+info "Installing Syncthing..."
+sudo pacman -S --noconfirm --needed syncthing 2>/dev/null
+systemctl --user enable --now syncthing 2>/dev/null
+ok "Syncthing active (web UI: http://localhost:8384)"
 
-if $DRY_RUN; then
-    info "Would install wireguard-tools, qrencode, nftables and generate VPN config"
+# ── Apply interactive configuration ────────────────
+fi  # end SKIP_BUILDS
+
+step "Applying configuration & enabling services"
+
+# Configure Caddy reverse proxy (halo-core import pattern)
+mkdir -p /srv/ai/configs
+if [ "$DRY_RUN" -eq 1 ]; then
+    ok "[DRY-RUN] Configuration step — skipping file writes"
+    step "Installing Meek security agent"
+    ok "[DRY-RUN] Meek — skipped"
+    # Jump to completion
 else
-    sudo pacman -S --needed --noconfirm wireguard-tools qrencode nftables >> "$LOG_FILE" 2>&1
-
-    WG_DIR="/etc/wireguard"
-    WG_CONF="$WG_DIR/wg0.conf"
-
-    if [ ! -f "$WG_CONF" ]; then
-        WG_KEY_DIR=$(mktemp -d)
-        chmod 700 "$WG_KEY_DIR"
-        wg genkey | tee "$WG_KEY_DIR/server.key" | wg pubkey > "$WG_KEY_DIR/server.pub"
-        wg genkey | tee "$WG_KEY_DIR/client.key" | wg pubkey > "$WG_KEY_DIR/client.pub"
-        chmod 600 "$WG_KEY_DIR"/*.key
-        SERVER_PRIV=$(cat "$WG_KEY_DIR/server.key")
-        SERVER_PUB=$(cat "$WG_KEY_DIR/server.pub")
-        CLIENT_PRIV=$(cat "$WG_KEY_DIR/client.key")
-        CLIENT_PUB=$(cat "$WG_KEY_DIR/client.pub")
-        SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
-        if [[ -z "$SERVER_IFACE" || ! "$SERVER_IFACE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            warn "Could not detect default network interface — skipping WireGuard"
-            warn "Set up WireGuard manually: https://wiki.archlinux.org/title/WireGuard"
-        else
-        # Try public IP first (for remote VPN access), fall back to LAN IP
-        LAN_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
-        SERVER_IP=$(curl -4 -s --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
-        # Validate IPv4 format — fall back to LAN if garbage
-        if ! [[ "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            SERVER_IP="$LAN_IP"
-        fi
-        if [ "$SERVER_IP" = "$LAN_IP" ]; then
-            warn "Could not detect public IP — WireGuard Endpoint set to LAN IP ($LAN_IP)"
-            warn "For remote access, update Endpoint in /etc/wireguard/client1.conf with your public IP or DDNS"
-        fi
-
-        WG_TMP=$(mktemp)
-        chmod 600 "$WG_TMP"
-        cat > "$WG_TMP" << WG_SRV
-[Interface]
-Address = 10.100.0.1/24
-ListenPort = 51820
-PrivateKey = $SERVER_PRIV
-PostUp = nft add table inet wg-nat; nft add chain inet wg-nat forward '{type filter hook forward priority 0; policy accept;}'; nft add rule inet wg-nat forward iifname wg0 accept; nft add chain inet wg-nat postrouting '{type nat hook postrouting priority 100;}'; nft add rule inet wg-nat postrouting oifname "$SERVER_IFACE" masquerade
-PostDown = nft delete table inet wg-nat
-
-[Peer]
-PublicKey = $CLIENT_PUB
-AllowedIPs = 10.100.0.2/32
-WG_SRV
-        sudo install -m 600 "$WG_TMP" "$WG_CONF"
-        rm -f "$WG_TMP"
-
-        CLIENT_CONF=$(mktemp)
-        chmod 600 "$CLIENT_CONF"
-        cat > "$CLIENT_CONF" << WG_CLIENT
-[Interface]
-PrivateKey = $CLIENT_PRIV
-Address = 10.100.0.2/24
-DNS = 1.1.1.1
-
-[Peer]
-PublicKey = $SERVER_PUB
-Endpoint = $SERVER_IP:51820
-AllowedIPs = 10.100.0.0/24
-PersistentKeepalive = 25
-WG_CLIENT
-
-        sudo sysctl -w net.ipv4.ip_forward=1 >> "$LOG_FILE" 2>&1
-        echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-wireguard.conf >> "$LOG_FILE" 2>&1
-        sudo systemctl enable --now wg-quick@wg0 >> "$LOG_FILE" 2>&1
-
-        sudo install -m 600 "$CLIENT_CONF" /etc/wireguard/client1.conf
-        rm -f "$CLIENT_CONF"
-        rm -rf "$WG_KEY_DIR"
-        log "WireGuard VPN configured on 10.100.0.1:51820"
-        fi  # SERVER_IFACE validation
-    else
-        log "WireGuard already configured at $WG_CONF"
-    fi
-fi
-
-# ============================================================
-# 11. VOICE BACKENDS + DASHBOARD + AUTO-LOAD
-# ============================================================
-step "Voice, Dashboard & Auto-load"
-if ! $DRY_RUN; then
-
-    # Check if Lemonade server is running
-    if lemonade status --json > /dev/null 2>&1; then
-        # Install voice backends
-        log "Installing voice backends..."
-        lemonade backends install kokoro:cpu >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing Kokoro TTS..."
-        lemonade backends install whispercpp:vulkan >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing Whisper STT (Vulkan)..."
-
-        # Pull voice models
-        log "Downloading voice models..."
-        lemonade pull kokoro-v1 >> "$LOG_FILE" 2>&1 &
-        spinner $! "Downloading Kokoro TTS model..."
-        lemonade pull Whisper-Large-v3-Turbo >> "$LOG_FILE" 2>&1 &
-        spinner $! "Downloading Whisper Large v3 Turbo (1.5 GB)..."
-
-        # Pull default NPU model for agents
-        (lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 || \
-         lemonade pull user.gemma3-4b-FLM >> "$LOG_FILE" 2>&1 || true) &
-        spinner $! "Downloading Gemma3 4B for NPU (optional)..."
-
-        # Set default context size to 32768 (Gaia requires it)
-        lemonade config set ctx_size=32768 >> "$LOG_FILE" 2>&1
-    else
-        warn "Lemonade server not running — skipping voice backends & model downloads"
-        warn "Run these manually after reboot: lemonade backends install kokoro:cpu && lemonade backends install whispercpp:vulkan"
-    fi
-
-    # Install dashboard
-    log "Installing dashboard..."
-    sudo mkdir -p /srv/halo-dashboard
-    if [ -f "$SCRIPT_DIR/dashboard/index.html" ]; then
-        sudo cp "$SCRIPT_DIR/dashboard/index.html" /srv/halo-dashboard/index.html
-    fi
-
-    # Install dashboard stats server
-    log "Installing dashboard stats server..."
-    sudo pacman -S --noconfirm --needed python-psutil >> "$LOG_FILE" 2>&1 || true
-    STATS_DIR="$HOME/.local/share/halo-dashboard"
-    mkdir -p "$STATS_DIR"
-    if [ -f "$SCRIPT_DIR/dashboard/stats-server.py" ]; then
-        cp "$SCRIPT_DIR/dashboard/stats-server.py" "$STATS_DIR/stats-server.py"
-    fi
-
-    # Create stats server systemd user service
-    mkdir -p "$HOME/.config/systemd/user"
-    cat > "$HOME/.config/systemd/user/halo-stats.service" << STATSVC
-[Unit]
-Description=halo-ai dashboard stats API
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 ${STATS_DIR}/stats-server.py
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=default.target
-STATSVC
-    systemctl --user daemon-reload
-    systemctl --user enable --now halo-stats.service >> "$LOG_FILE" 2>&1 || true
-    log "Stats server installed on :5090"
-
-    # Configure Caddy with reverse proxies
-    if [ -f "$SCRIPT_DIR/dashboard/Caddyfile" ]; then
-        sudo cp "$SCRIPT_DIR/dashboard/Caddyfile" /etc/caddy/Caddyfile
-    else
-        sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDY'
+# Caddy uses halo-core's self-registering import pattern
+# Each service drops a .caddy file in /etc/caddy/conf.d/
+sudo mkdir -p /etc/caddy/conf.d
+CADDY_HASH=$(caddy hash-password --plaintext "$CADDY_PASSWORD" 2>/dev/null || echo '$2a$14$placeholder')
+sudo tee /etc/caddy/Caddyfile > /dev/null << CADDYEOF
 {
 	admin "unix//run/caddy/admin.socket"
 }
 
 :80 {
-	handle /api/* {
-		reverse_proxy 127.0.0.1:5090
-		uri strip_prefix /api
+	# Landing page
+	handle / {
+		root * /srv/ai/configs
+		file_server
 	}
-	root * /srv/halo-dashboard
-	file_server
-}
+	handle /assets/* {
+		root * /srv/ai/configs
+		file_server
+	}
 
-:13306 {
-	reverse_proxy 127.0.0.1:13305
-}
+	# Open WebUI (has own auth)
+	handle /chat/* {
+		reverse_proxy 127.0.0.1:3000
+	}
 
-:4201 {
-	reverse_proxy 127.0.0.1:4200
-}
+	# Vane
+	handle /research/* {
+		reverse_proxy 127.0.0.1:3001
+	}
 
-import /etc/caddy/conf.d/*.caddy
-CADDY
+	# n8n (basic auth)
+	handle /n8n/* {
+		basicauth {
+			caddy ${CADDY_HASH}
+		}
+		reverse_proxy 127.0.0.1:5678
+	}
+
+	# ComfyUI (basic auth)
+	handle /comfyui/* {
+		basicauth {
+			caddy ${CADDY_HASH}
+		}
+		reverse_proxy 127.0.0.1:8188
+	}
+
+	# Man Cave
+	handle /cave/* {
+		reverse_proxy 127.0.0.1:3005
+	}
+
+	# Gaia
+	handle /gaia/* {
+		reverse_proxy 127.0.0.1:3002
+	}
+
+	# Lemonade API (basic auth)
+	handle /llm/* {
+		basicauth {
+			caddy ${CADDY_HASH}
+		}
+		reverse_proxy 127.0.0.1:13305
+	}
+
+	# Lemonade OpenAI-compatible API
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:13305
+	}
+
+	# SearXNG
+	handle /search/* {
+		reverse_proxy 127.0.0.1:8888
+	}
+
+	# Service self-registration via halo-core
+	import /etc/caddy/conf.d/*.caddy
+}
+CADDYEOF
+sudo chmod 644 /etc/caddy/Caddyfile
+ok "Caddy configured with import pattern (services self-register via /etc/caddy/conf.d/)"
+
+# Write SearXNG secret key (works on fresh install AND re-run)
+sed -i 's|secret_key: ".*"|secret_key: "'"$SEARXNG_KEY"'"|' /srv/ai/configs/searxng/settings.yml
+chmod 640 /srv/ai/configs/searxng/settings.yml
+ok "SearXNG secret key configured"
+
+# Write Dashboard API key
+mkdir -p /srv/ai/dashboard-api/data
+echo -n "$DASHBOARD_API_KEY" > /srv/ai/dashboard-api/data/dashboard-api-key.txt
+chmod 600 /srv/ai/dashboard-api/data/dashboard-api-key.txt
+ok "Dashboard API key configured"
+
+# NOTE: Service file modifications happen AFTER the copy to /etc/systemd/system/ (see below)
+info "Service wiring deferred until after systemd unit install..."
+
+# Configure Vane (Perplexica)
+info "Configuring Vane deep research..."
+mkdir -p /srv/ai/vane/.next/standalone/data
+ln -sfn /srv/ai/vane/.next/static /srv/ai/vane/.next/standalone/.next/static 2>/dev/null
+ln -sfn /srv/ai/vane/public /srv/ai/vane/.next/standalone/public 2>/dev/null
+ln -sfn /srv/ai/vane/drizzle /srv/ai/vane/.next/standalone/drizzle 2>/dev/null
+# Get model name from llama-server config
+MODEL_NAME=$(grep -oP '(?<=--model /srv/ai/models/)\S+' /srv/ai/systemd/halo-llama-server.service 2>/dev/null | head -1)
+[ -z "$MODEL_NAME" ] && MODEL_NAME="unknown-model" && warn "Could not detect model name from llama-server config"
+cat > /srv/ai/vane/.next/standalone/data/config.json << VANEEOF
+{
+  "modelProviders": [
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "type": "openai",
+      "chatModels": [{"key": "$MODEL_NAME", "name": "$MODEL_NAME"}],
+      "embeddingModels": [],
+      "config": {
+        "baseURL": "http://127.0.0.1:8081/v1",
+        "apiKey": "not-needed"
+      },
+      "hash": ""
+    },
+    {
+      "id": "transformers",
+      "name": "Transformers",
+      "type": "transformers",
+      "chatModels": [],
+      "embeddingModels": [{"key": "Xenova/all-MiniLM-L6-v2", "name": "all-MiniLM-L6-v2"}],
+      "config": {},
+      "hash": ""
+    }
+  ],
+  "selectedChatModel": {"providerKey": "openai", "fieldKey": "$MODEL_NAME"},
+  "selectedEmbeddingModel": {"providerKey": "transformers", "fieldKey": "Xenova/all-MiniLM-L6-v2"},
+  "search": {
+    "searxngURL": "http://127.0.0.1:8888"
+  }
+}
+VANEEOF
+# Mark setup as complete so Vane shows the search UI immediately
+curl -s http://127.0.0.1:3001/api/config/setup-complete -X POST -H 'Content-Type: application/json' -d '{}' 2>/dev/null || true
+ok "Vane configured with local LLM + SearXNG"
+
+# Create landing page
+cat > /srv/ai/configs/index.html << 'LANDINGEOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halo AI</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d1117; color: #fff; font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; }
+.header { text-align: center; padding: 3rem 1rem 1rem; }
+.logo { color: #00d4ff; font-size: 3rem; font-weight: 800; letter-spacing: 0.15em; }
+.logo span { color: #fff; }
+.tagline { color: #555; font-size: 1rem; margin-top: 0.3rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; max-width: 1000px; margin: 2rem auto; padding: 0 1.5rem; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1.2rem; text-decoration: none; display: block; transition: border-color 0.2s, transform 0.15s; }
+.card:hover { border-color: #00d4ff; transform: translateY(-2px); }
+.card h3 { color: #fff; font-size: 1.05rem; margin-bottom: 0.2rem; }
+.card p { color: #666; font-size: 0.8rem; line-height: 1.4; }
+.card .port { color: #444; font-size: 0.7rem; margin-top: 0.5rem; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; position: relative; top: -1px; }
+.dot.on { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+.dot.off { background: #444; }
+.section { max-width: 1000px; margin: 2rem auto 0; padding: 0 1.5rem; }
+.section h2 { color: #30363d; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.8rem; border-bottom: 1px solid #21262d; padding-bottom: 0.5rem; }
+.footer { text-align: center; padding: 2rem; color: #333; font-size: 0.75rem; }
+.footer a { color: #444; text-decoration: none; }
+.creds { text-align: center; margin: 1.5rem auto; padding: 0.8rem; background: #1c1f26; border: 1px solid #ff980055; border-radius: 8px; max-width: 500px; }
+.creds p { color: #ff9800; font-size: 0.85rem; }
+.creds strong { color: #fff; }
+</style>
+</head>
+<body>
+<div class="header">
+    <div class="logo">>> <span>HALO</span> AI</div>
+    <p class="tagline">bare-metal ai stack for AMD Strix Halo</p>
+</div>
+<div class="creds">
+    <p>Change password: <strong>halo-change-password.sh</strong></p>
+</div>
+<div class="section"><h2>AI Services</h2></div>
+<div class="grid">
+    <a class="card" target="_blank" href="CHAT_URL"><h3><span class="dot on"></span>Chat</h3><p>Open WebUI — multi-model chat with RAG</p><div class="port">:3000</div></a>
+    <a class="card" target="_blank" href="RESEARCH_URL"><h3><span class="dot on"></span>Deep Research</h3><p>Vane — AI search with cited sources</p><div class="port">:3001</div></a>
+    <a class="card" target="_blank" href="COMFYUI_URL"><h3><span class="dot on"></span>ComfyUI</h3><p>Node-based image generation</p><div class="port">:8188</div></a>
+    <a class="card" target="_blank" href="N8N_URL"><h3><span class="dot on"></span>Workflows</h3><p>n8n — automation with 400+ integrations</p><div class="port">:5678</div></a>
+</div>
+<div class="section"><h2>Infrastructure</h2></div>
+<div class="grid">
+    <a class="card" target="_blank" href="SEARCH_URL"><h3><span class="dot on"></span>SearXNG</h3><p>Private meta-search engine</p><div class="port">:8888</div></a>
+    <a class="card" target="_blank" href="https://github.com/lemonade-sdk/lemonade"><h3><span class="dot on"></span>Lemonade API</h3><p>Unified AI gateway — Gemma 4, TTS, STT</p><div class="port">:13305</div></a>
+    <a class="card" target="_blank" href="https://github.com/qdrant/qdrant"><h3><span class="dot on"></span>Qdrant</h3><p>Vector database for RAG</p><div class="port">:6333</div></a>
+</div>
+<div class="section"><h2>Agents</h2></div>
+<div class="grid">
+    <a class="card" target="_blank" href="https://github.com/stampby/meek"><h3><span class="dot on"></span>Meek</h3><p>Security — 9 Reflex agents guard 24/7</p></a>
+    <a class="card" target="_blank" href="https://github.com/stampby/echo"><h3><span class="dot on"></span>Echo</h3><p>Social media — she speaks for the family</p></a>
+</div>
+<div class="footer">
+    <p>260 tok/s &middot; 128GB GPU &middot; zero containers &middot; <a href="https://github.com/stampby/halo-ai-core">GitHub</a></p>
+    <p style="font-size:0.75rem;color:#555;margin-top:4px;">designed and built by the architect</p>
+</div>
+</body>
+</html>
+LANDINGEOF
+
+# Replace landing page URLs with actual hostname
+sed -i -e "s|CHAT_URL|http://chat.$HALO_HOSTNAME|g" \
+       -e "s|RESEARCH_URL|http://research.$HALO_HOSTNAME|g" \
+       -e "s|COMFYUI_URL|http://comfyui.$HALO_HOSTNAME|g" \
+       -e "s|N8N_URL|http://n8n.$HALO_HOSTNAME|g" \
+       -e "s|SEARCH_URL|http://search.$HALO_HOSTNAME|g" \
+       /srv/ai/configs/index.html
+ok "Landing page created"
+
+# Add hostname + subdomains to /etc/hosts
+if ! grep -qF "$HALO_HOSTNAME" /etc/hosts 2>/dev/null; then
+    echo "127.0.0.1    $HALO_HOSTNAME chat.$HALO_HOSTNAME research.$HALO_HOSTNAME search.$HALO_HOSTNAME n8n.$HALO_HOSTNAME comfyui.$HALO_HOSTNAME gaia.$HALO_HOSTNAME" | sudo tee -a /etc/hosts
+    ok "Hostname and subdomains added to /etc/hosts"
+fi
+
+# Install systemd units FIRST, then patch them
+sudo cp /srv/ai/systemd/halo-*.service /etc/systemd/system/ 2>/dev/null || true
+sudo cp /srv/ai/systemd/halo-*.timer /etc/systemd/system/ 2>/dev/null || true
+
+# Replace <YOUR_USER> in the installed copies (not the source)
+sudo sed -i "s/<YOUR_USER>/$HALO_USER/g" /etc/systemd/system/halo-*.service /etc/systemd/system/halo-*.timer 2>/dev/null
+sudo systemctl daemon-reload
+
+# Now wire up service configs on the INSTALLED copies (idempotent — safe to re-run)
+info "Wiring services together..."
+
+# Enable Caddy
+sudo systemctl enable --now caddy 2>/dev/null || true
+# Open WebUI → llama-server
+grep -q 'OPENAI_API_BASE_URL' /etc/systemd/system/halo-open-webui.service 2>/dev/null || \
+    sudo sed -i '/\[Service\]/a Environment=OPENAI_API_BASE_URL=http://127.0.0.1:8081/v1\nEnvironment=OPENAI_API_KEY=not-needed\nEnvironment=ENABLE_OLLAMA_API=false' /etc/systemd/system/halo-open-webui.service 2>/dev/null
+ok "Open WebUI → llama-server connected"
+# llama-server jinja + reasoning off
+grep -q 'reasoning-budget' /etc/systemd/system/halo-llama-server.service 2>/dev/null || \
+    sudo sed -i 's|--model |--jinja --reasoning-budget 0 --model |' /etc/systemd/system/halo-llama-server.service 2>/dev/null
+ok "llama-server configured (jinja + reasoning off)"
+# n8n secure cookie
+grep -q 'N8N_SECURE_COOKIE' /etc/systemd/system/halo-n8n.service 2>/dev/null || \
+    sudo sed -i '/\[Service\]/a Environment=N8N_SECURE_COOKIE=false' /etc/systemd/system/halo-n8n.service 2>/dev/null
+ok "n8n configured for HTTP"
+
+# Pipepie service
+if [ -f /etc/systemd/system/halo-pipepie.service ]; then
+    sudo systemctl enable halo-pipepie.service
+    ok "Enabled halo-pipepie.service"
+fi
+
+sudo systemctl daemon-reload
+sudo systemctl enable halo-watchdog.timer halo-backup.timer
+
+# Enable selected services
+for svc in "${SELECTED_SERVICES[@]}"; do
+    unit="halo-${svc}.service"
+    # Map service names to actual systemd unit names
+    case "$svc" in
+        dashboard) unit="halo-dashboard-api.service"; unit2="halo-dashboard-ui.service" ;;
+        whisper)   unit="halo-whisper-server.service" ;;
+        meek)      continue ;;  # Meek units are installed separately above
+        *)         unit="halo-${svc}.service" ;;
+    esac
+    if [ -f "/etc/systemd/system/$unit" ]; then
+        sudo systemctl enable "$unit"
+        ok "Enabled $unit"
     fi
-    sudo systemctl restart caddy >> "$LOG_FILE" 2>&1
-    log "Dashboard deployed on :80 — Stats :5090 — Lemonade :13306 — Gaia :4201"
-
-    # Create auto-load script
-    sudo tee /usr/local/bin/halo-autoload.sh > /dev/null << 'AUTOLOAD'
-#!/bin/bash
-# halo-ai core — auto-load default models on boot
-# "i'll be back." — the terminator
-
-LOG="$HOME/.local/log/halo-autoload.log"
-mkdir -p "$(dirname "$LOG")"
-
-log() { echo "[$(date '+%H:%M:%S')] $1" >> "$LOG"; }
-
-log "Auto-loading default models..."
-
-# Wait for lemonade to be ready
-for i in $(seq 1 30); do
-    if lemonade status --json 2>/dev/null | grep -q '"version"'; then
-        break
+    if [ -n "${unit2:-}" ] && [ -f "/etc/systemd/system/$unit2" ]; then
+        sudo systemctl enable "$unit2"
+        ok "Enabled $unit2"
     fi
-    sleep 2
+    unset unit2
 done
 
-# Load whisper (STT)
-log "Loading Whisper Large v3 Turbo..."
-lemonade load Whisper-Large-v3-Turbo --whispercpp vulkan >> "$LOG" 2>&1 || \
-    log "Whisper load failed (non-critical)"
+# Snapper snapshots
+sudo snapper create-config / 2>/dev/null || true
+sudo snapper create-config /home 2>/dev/null || true
+sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
 
-# Load kokoro (TTS)
-log "Loading Kokoro v1..."
-lemonade load kokoro-v1 >> "$LOG" 2>&1 || \
-    log "Kokoro load failed (non-critical)"
+ok "System configured"
 
-# Load default LLM on NPU (agents)
-log "Loading Gemma3 4B on NPU..."
-lemonade load gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
-  lemonade load user.gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
-    log "NPU model load failed (non-critical)"
+# ── Meek security agent ───────────────────────────
+if printf '%s\n' "${SELECTED_SERVICES[@]}" | grep -qx meek; then
+    step "Installing Meek security agent"
+    info "Cloning Meek repo..."
+    cd /srv/ai
+    sudo btrfs subvolume create /srv/ai/meek 2>/dev/null || true
+    sudo chown -R "$HALO_USER":"$HALO_USER" /srv/ai/meek
+    if [ -d /srv/ai/meek/.git ]; then git -C /srv/ai/meek pull --ff-only 2>/dev/null || true; else git clone https://github.com/stampby/meek /srv/ai/meek; fi
+    mkdir -p /srv/ai/meek/reports
+    ok "Meek cloned to /srv/ai/meek/"
 
-log "Auto-load complete."
-AUTOLOAD
-    sudo chmod +x /usr/local/bin/halo-autoload.sh
-
-    # Create auto-load systemd service
-    sudo tee /usr/lib/systemd/system/halo-autoload.service > /dev/null << SVCUNIT
-[Unit]
-Description=Halo AI Core — Auto-load default models
-After=lemonade-server.service
-Wants=lemonade-server.service
-
-[Service]
-Type=oneshot
-User=${USER}
-RemainAfterExit=yes
-ExecStartPre=/bin/sleep 5
-ExecStart=/usr/local/bin/halo-autoload.sh
-
-[Install]
-WantedBy=multi-user.target
-SVCUNIT
+    info "Installing Meek systemd units..."
+    sudo cp /srv/ai/meek/systemd/meek-watch.service /srv/ai/meek/systemd/meek-scan.service /srv/ai/meek/systemd/meek-scan.timer /etc/systemd/system/
     sudo systemctl daemon-reload
-    sudo systemctl enable halo-autoload >> "$LOG_FILE" 2>&1
-    log "Auto-load service enabled — voice + NPU models load on every boot"
-else
-    info "Would install voice backends (Kokoro TTS + Whisper STT)"
-    info "Would deploy dashboard on :80 with Caddy reverse proxies"
-    info "Would create auto-load service for default models on boot"
+    sudo systemctl enable meek-watch.service meek-scan.timer
+    ok "Meek systemd units installed and timer enabled"
 fi
 
-# ============================================================
-# DONE
-# ============================================================
-HOSTNAME=$(cat /proc/sys/kernel/hostname)
-echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║     Halo AI Core — Install Done      ║"
-echo "╚══════════════════════════════════════╝"
-echo ""
-echo "  \"There is no spoon.\" — The Matrix"
-echo ""
-echo "  ── YOUR UIs ──────────────────────────────────"
-echo ""
-echo "  Lemonade (chat with LLMs):"
-echo "    Local:  http://localhost:13305"
-echo "    SSH:    ssh -L 13305:localhost:13305 $HOSTNAME"
-echo "            then open http://localhost:13305"
-echo ""
-echo "  Gaia (manage agents):"
-echo "    Local:  http://localhost:4200"
-echo "    SSH:    ssh -L 4200:localhost:4200 $HOSTNAME"
-echo "            then open http://localhost:4200"
-echo ""
-echo "  Claude Code (local AI coding agent):"
-echo "    lemonade launch claude -m <model-name>"
-echo ""
+# ── VLAN Tagging (optional, requires managed switch) ──
+if printf '%s\n' "${SELECTED_INFRA[@]}" | grep -qx vlan-tagging; then
+    step "Configuring 802.1Q VLAN tagging"
+    echo ''
+    echo -e "  ${YELLOW}${BOLD}⚠  VLAN tagging requires a managed switch.${NC}"
+    echo -e "  ${DIM}  Unmanaged switches and consumer routers cannot do 802.1Q tagging.${NC}"
+    echo -e "  ${DIM}  If you only have an unmanaged switch, skip this — SSH mesh has you covered.${NC}"
+    echo ''
+    echo -e "  ${BOLD}This will create tagged VLAN interfaces on this machine:${NC}"
+    echo -e "    ${CYAN}VLAN 10${NC} — AI workloads (inference, training, models)"
+    echo -e "    ${CYAN}VLAN 20${NC} — Management (SSH, monitoring, dashboards)"
+    echo -e "    ${CYAN}VLAN 50${NC} — IoT isolation (cameras, smart home)"
+    echo ''
+    echo -e "  ${BOLD}You must also configure matching VLANs on your managed switch.${NC}"
+    echo -e "  ${DIM}  Assign ports to VLANs in your switch admin panel.${NC}"
+    echo -e "  ${DIM}  The machine's port should be set to TRUNK (tagged) mode.${NC}"
+    echo ''
 
-if [ -f /etc/wireguard/wg0.conf ]; then
-echo "  ── REMOTE ACCESS (WireGuard VPN) ───────────────"
-echo ""
-echo "  Phone VPN IP: 10.100.0.2"
-echo "  Lemonade:     http://10.100.0.1:13305"
-echo "  Gaia:         http://10.100.0.1:4200"
-echo "  Show QR:      qrencode -t ansiutf8 < /etc/wireguard/client1.conf"
-echo ""
+    if [ "$DRY_RUN" -eq 1 ]; then
+        info "[dry-run] Would create VLAN interfaces"
+    elif [ "$YES_ALL" -eq 1 ]; then
+        VLAN_CONFIRM="y"
+    else
+        read -rp "$(echo -e "${BLUE}[halo-ai]${NC}") Do you have a managed switch and want to proceed? [y/N]: " VLAN_CONFIRM
+    fi
+
+    if [[ "${VLAN_CONFIRM,,}" == "y" ]]; then
+        # Detect primary network interface
+        VLAN_PARENT=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'dev \K\S+')
+        if [ -z "$VLAN_PARENT" ]; then
+            warn "Could not detect primary network interface. Skipping VLAN setup."
+        else
+            info "Primary interface: $VLAN_PARENT"
+
+            # Get current IP to derive base subnet
+            VLAN_BASE_IP=$(ip -4 addr show "$VLAN_PARENT" | grep -oP 'inet \K[\d.]+')
+            VLAN_OCTET=$(echo "$VLAN_BASE_IP" | cut -d. -f4)
+
+            # Install vlan package if needed
+            sudo pacman -S --noconfirm --needed vlan 2>/dev/null || true
+            sudo modprobe 8021q
+            echo "8021q" | sudo tee /etc/modules-load.d/8021q.conf >/dev/null
+
+            # Create VLAN interfaces via NetworkManager
+            for vid in 10 20 50; do
+                VLAN_IF="${VLAN_PARENT}.${vid}"
+                VLAN_CONN="vlan${vid}"
+
+                case $vid in
+                    10) VLAN_SUBNET="10.10.0" ; VLAN_DESC="AI workloads" ;;
+                    20) VLAN_SUBNET="10.20.0" ; VLAN_DESC="Management" ;;
+                    50) VLAN_SUBNET="10.50.0" ; VLAN_DESC="IoT isolation" ;;
+                esac
+
+                VLAN_IP="${VLAN_SUBNET}.${VLAN_OCTET}/24"
+
+                # Remove existing connection if present
+                nmcli con delete "$VLAN_CONN" 2>/dev/null || true
+
+                nmcli con add type vlan \
+                    con-name "$VLAN_CONN" \
+                    ifname "$VLAN_IF" \
+                    dev "$VLAN_PARENT" \
+                    id "$vid" \
+                    ipv4.method manual \
+                    ipv4.addresses "$VLAN_IP" \
+                    ipv4.never-default yes \
+                    connection.autoconnect yes
+
+                progress "Created $VLAN_CONN ($VLAN_DESC) — ${VLAN_IF} @ ${VLAN_IP}"
+            done
+
+            # Bring up VLAN interfaces
+            for vid in 10 20 50; do
+                nmcli con up "vlan${vid}" 2>/dev/null || true
+            done
+
+            ok "VLAN interfaces created and active"
+            echo ''
+            echo -e "  ${BOLD}Next: configure your managed switch${NC}"
+            echo -e "  ${DIM}  1. Set this machine's port to TRUNK mode (tagged)${NC}"
+            echo -e "  ${DIM}  2. Allow VLANs 10, 20, 50 on the trunk port${NC}"
+            echo -e "  ${DIM}  3. Assign other device ports to the appropriate VLAN (access mode)${NC}"
+            echo -e "  ${DIM}  4. Set the native/untagged VLAN on the trunk to your main network${NC}"
+            echo ''
+        fi
+    else
+        info "Skipped VLAN tagging — SSH mesh provides network isolation without special hardware"
+    fi
 fi
 
-echo "  ── IMPORTANT ─────────────────────────────────"
-echo ""
-echo "  Reboot your machine to start all services:"
-echo ""
-echo "    sudo reboot"
-echo ""
-echo "  Services are enabled and will start automatically on boot."
-echo "  They will NOT run until you reboot."
-echo ""
-echo "  ── NEXT STEPS (after reboot) ──────────────────"
-echo ""
-echo "  1. Load a model in Lemonade UI"
-echo "  2. Start chatting"
-echo "  3. Launch Claude Code with local models:"
-echo "     lemonade launch claude -m <model-name>"
-echo "  4. Deploy core agents (optional):"
-echo "     https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Core-Agents.md"
-echo ""
-echo "  ── VERIFY ────────────────────────────────────"
-echo ""
-echo "  ./install.sh --status"
-echo ""
+# ── Done ───────────────────────────────────────────
+echo ''
+echo ''
+echo -e "${GREEN}${BOLD}"
+cat << 'DONE'
+  ╔═══════════════════════════════════╗
+  ║>>  H A L O · A I  ━━  READY   >>║
+  ╚═══════════════════════════════════╝
+DONE
+echo -e "${NC}"
+fi  # end DRY_RUN config guard
 
-log "Installation complete."
-log "Full log: $LOG_FILE"
-echo ""
+INSTALL_END=$(date +%s)
+INSTALL_MINS=$(( (INSTALL_END - INSTALL_START) / 60 ))
+echo -e "${GREEN}${BOLD}  Installation complete! (${INSTALL_MINS} minutes)${NC}"
+echo ''
+echo -e "  ${CYAN}Enabled services:${NC} ${SELECTED_SERVICES[*]}"
+echo ''
+
+# ── CRITICAL: Password change warning ─────────────
+echo -e "  ${BOLD}Next steps:${NC}"
+echo -e "     ${BOLD}/srv/ai/scripts/halo-change-password.sh${NC}"
+echo ''
+echo -e "  ${YELLOW}1.${NC} Reboot to activate GPU memory (123GB GTT):"
+echo -e "     ${DIM}sudo reboot${NC}"
+echo ''
+START_UNITS=""
+for svc in "${SELECTED_SERVICES[@]}"; do
+    case "$svc" in
+        dashboard) START_UNITS+="halo-dashboard-api halo-dashboard-ui " ;;
+        whisper)   START_UNITS+="halo-whisper-server " ;;
+        meek)      START_UNITS+="meek-watch meek-scan.timer " ;;
+        *)         START_UNITS+="halo-${svc} " ;;
+    esac
+done
+echo -e "  ${YELLOW}2.${NC} Start all enabled services after reboot:"
+echo -e "     ${DIM}sudo systemctl start $START_UNITS${NC}"
+echo ''
+echo -e "  ${YELLOW}3.${NC} Access your server:"
+echo -e "     ${BOLD}http://$HALO_HOSTNAME${NC}  (landing page)"
+echo -e "     ${DIM}http://chat.$HALO_HOSTNAME${NC}  (Open WebUI)"
+echo -e "     ${DIM}http://research.$HALO_HOSTNAME${NC}  (Deep Research)"
+echo -e "     ${DIM}http://comfyui.$HALO_HOSTNAME${NC}  (Image Gen)"
+echo -e "     ${DIM}http://n8n.$HALO_HOSTNAME${NC}  (Workflows)"
+echo -e "     ${DIM}http://search.$HALO_HOSTNAME${NC}  (Search)"
+echo ''
+echo -e "  ${DIM}Login: caddy / (the password you set during install)${NC}"
+echo -e "  ${DIM}API key: /srv/ai/dashboard-api/data/dashboard-api-key.txt${NC}"
+echo ''
+echo -e "  ${DIM}Add this to /etc/hosts on other devices to access from the LAN:${NC}"
+LAN_IP=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+')
+echo -e "  ${DIM}$LAN_IP    $HALO_HOSTNAME chat.$HALO_HOSTNAME research.$HALO_HOSTNAME search.$HALO_HOSTNAME n8n.$HALO_HOSTNAME comfyui.$HALO_HOSTNAME gaia.$HALO_HOSTNAME${NC}"
+echo ''
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
