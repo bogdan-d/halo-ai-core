@@ -6,12 +6,24 @@ All numbers verified on AMD Strix Halo (Ryzen AI MAX+ 395, 128GB unified, gfx115
 
 ---
 
-## The Numbers — Kernel 6.19.11, Lemonade 10.2.0
+## The Numbers
 
-**Stack:** Arch Linux → kernel 6.19.11 → Lemonade Server 10.2.0 → llama.cpp Vulkan *(h/t u/Look_0ver_There)* → gfx1151
-**Model:** Qwen3.5-35B-A3B (Q4_K_XL, 19.7GB) — MoE, 3B active params
-**Governor:** performance | **VRAM used:** ~19GB / 64GB
-**Tested:** 2026-04-12
+**Stack:** Arch Linux → Lemonade Server 10.2.0 → llama.cpp Vulkan *(h/t u/Look_0ver_There)* → gfx1151
+**Rotation:** 5 days of results kept. Oldest auto-deleted by `bench-kernel.sh`.
+
+### 2026-04-12: Kernel 6.19.11, Lemonade lemonade version 10.2.0
+
+**Model:** Qwen3-30B-A3B-GGUF | **Governor:** performance | **GPU:** Radeon 8060S Graphics
+
+| Test | Prompt t/s | Gen t/s | TTFT | Total |
+|------|-----------|---------|------|-------|
+| Short Burst | 193.5 | **165.2** | 68ms | 53ms |
+| Medium Response | 136.6 | **89.5** | 37ms | 901ms |
+| Long Generation | 135.5 | **88.1** | 57ms | 5869ms |
+| Sustained 2K | 212.3 | **84.6** | 79ms | 24280ms |
+| Code Gen | 168.0 | **87.2** | 77ms | 10186ms |
+| Reasoning | 146.1 | **89.2** | 58ms | 1624ms |
+| Long Context | 526.9 | **87.3** | 121ms | 5983ms |
 
 ### Synthetic Benchmarks (bench-kernel.sh, averaged over 2-3 runs)
 
