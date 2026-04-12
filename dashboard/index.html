@@ -127,6 +127,18 @@
  .ctrl-toggle button:hover { color:var(--text); }
  .ctrl-toggle button.active { background:var(--btn-active);color:#fff; }
  .ctrl-status { font-size:.7rem;color:var(--text-dim);margin-bottom:.75rem; }
+ .model-item {
+ display:flex;align-items:center;gap:.6rem;padding:.5rem .65rem;
+ border-bottom:1px solid var(--line);cursor:pointer;transition:background .15s;
+ font-size:.8rem;
+ }
+ .model-item:last-child { border-bottom:none; }
+ .model-item:hover { background:rgba(255,255,255,.04); }
+ .model-item.selected { background:var(--btn-active);color:#fff;border-radius:4px; }
+ .model-item .m-name { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem; }
+ .model-item .m-dl { font-size:.6rem;padding:.15rem .4rem;border-radius:3px; }
+ .model-item .m-dl.yes { color:var(--green);border:1px solid var(--green); }
+ .model-item .m-dl.no { color:var(--text-muted);border:1px solid var(--border); }
  .ctrl-footer { display:flex;align-items:center;gap:1rem;font-size:.65rem; }
  .ctrl-footer a { color:var(--accent);text-decoration:none; }
  .ctrl-footer a:hover { text-decoration:underline; }
@@ -252,19 +264,24 @@
  <div class="svc-card" id="panel-lemonade">
  <div class="card-header">
  <div class="card-dot off" id="dot-lemonade"></div>
- <span class="card-title">Lemonade</span>
+ <a class="card-title" id="lemon-title-link" href="/" target="_blank" style="text-decoration:none;color:var(--text);cursor:pointer;transition:color .2s;">Lemonade</a>
  <span class="pill mono" id="lemon-version" style="margin-left:.4rem;">--</span>
  <span class="card-meta mono" id="lemon-status">loading</span>
  </div>
- <div class="ctrl-row">
- <div class="ctrl-toggle mono" id="backend-toggle">
- <button class="active" data-backend="vulkan">Vulkan</button>
- <button data-backend="rocm">ROCm</button>
- <button data-backend="cpu">CPU</button>
+ <div class="ctrl-toggle mono" id="backend-tabs" style="margin-bottom:.75rem;">
+ <button class="active" data-backend="vulkan" data-recipe="llamacpp">Vulkan</button>
+ <button data-backend="rocm" data-recipe="llamacpp">ROCm</button>
+ <button data-backend="cpu" data-recipe="llamacpp">CPU</button>
+ <button data-backend="npu" data-recipe="flm" style="border-left:2px solid var(--accent);">NPU</button>
+ <button data-backend="" data-recipe="kokoro">TTS</button>
+ <button data-backend="" data-recipe="whispercpp">STT</button>
+ <button data-backend="" data-recipe="sd-cpp">Image</button>
  </div>
- <select class="ctrl-select mono" id="model-select">
- <option value="">loading models...</option>
- </select>
+ <div id="model-list-container" style="max-height:288px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:.75rem;scrollbar-width:thin;">
+ <div id="model-list" class="mono" style="padding:.25rem;font-size:.65rem;">loading models...</div>
+ </div>
+ <div class="ctrl-row">
+ <span class="mono" style="font-size:.65rem;color:var(--text-dim);">Selected: <strong id="selected-model-name">none</strong></span>
  <select class="ctrl-select mono" id="ctx-select">
  <option value="2048">ctx 2048</option>
  <option value="4096" selected>ctx 4096</option>
@@ -272,13 +289,13 @@
  <option value="16384">ctx 16384</option>
  <option value="32768">ctx 32768</option>
  </select>
- <button class="gen-btn accent mono" onclick="applyModel()">Apply</button>
+ <button class="gen-btn accent mono" onclick="applyModel()">Load</button>
  <button class="gen-btn muted mono" onclick="unloadModel()">Unload</button>
  </div>
  <div class="ctrl-status mono" id="lemon-active-status">No model loaded</div>
  <div class="ctrl-footer mono">
  <a href="/" id="lemon-ui-link" target="_blank">Open Lemonade UI &rarr;</a>
- <a href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Model-Management" target="_blank">Wiki: Model Management &rarr;</a>
+ <a href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Model-Management.md" target="_blank">Wiki: Model Management &rarr;</a>
  </div>
  </div>
  </div>
@@ -287,7 +304,7 @@
  <div class="card-header">
  <div class="card-dot on"></div>
  <span class="card-title">Software Stack</span>
- <a class="wiki-link" href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Software-Stack" target="_blank" title="Wiki">?</a>
+ <a class="wiki-link" href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Components.md" target="_blank" title="Wiki">?</a>
  </div>
  <div id="version-list" class="mono">
  <div style="text-align:center;color:var(--text-muted);font-size:.6rem;">loading versions...</div>
@@ -305,7 +322,7 @@
  <div class="card-dot off" id="dot-ssh"></div>
  <span class="card-title">SSH Mesh</span>
  <span class="card-meta mono" id="ssh-count">--</span>
- <a class="wiki-link" href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/SSH-Mesh" target="_blank" title="Wiki">?</a>
+ <a class="wiki-link" href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/SSH-Mesh.md" target="_blank" title="Wiki">?</a>
  </div>
  <div id="ssh-machines" class="mono"></div>
  <div style="display:flex;gap:.4rem;margin-top:.75rem;">
@@ -419,47 +436,80 @@
  }
  // ── Lemonade Control ──
  let currentBackend = 'vulkan'
+ let currentRecipe = 'llamacpp'
+ let selectedModel = ''
  let lemonadeModels = []
- document.getElementById('lemon-ui-link').href = `http://${H}:13305`
- // Backend toggle
- document.getElementById('backend-toggle').addEventListener('click', e => {
+ let lemonadeBackends = []
+ document.getElementById('lemon-ui-link').href = '/lemonade'
+ document.getElementById('lemon-title-link').href = '/lemonade'
+ // Backend tabs — filter models by recipe
+ document.getElementById('backend-tabs').addEventListener('click', e => {
  const btn = e.target.closest('button')
- if (!btn) return
+ if (!btn || btn.disabled) return
  currentBackend = btn.dataset.backend
- document.querySelectorAll('#backend-toggle button').forEach(b => b.classList.toggle('active', b === btn))
+ currentRecipe = btn.dataset.recipe
+ document.querySelectorAll('#backend-tabs button').forEach(b => b.classList.toggle('active', b === btn))
+ renderModelList()
  })
  async function fetchBackends() {
  try {
  const r = await fetch('/api/lemonade/backends', {signal: AbortSignal.timeout(5000)})
  const data = await r.json()
- if (data.backends && data.backends.length) {
- currentBackend = data.backends[0]
- document.querySelectorAll('#backend-toggle button').forEach(b => {
- b.classList.toggle('active', b.dataset.backend === currentBackend)
- })
+ lemonadeBackends = data.backends || []
+ document.querySelectorAll('#backend-tabs button').forEach(btn => {
+ const recipe = btn.dataset.recipe
+ const be = btn.dataset.backend
+ const info = lemonadeBackends.find(b => b.recipe === recipe && (be ? b.backend === be : true))
+ if (info && info.status === 'installed') {
+ btn.disabled = false; btn.style.opacity = '1'
+ btn.title = info.version ? `v${info.version}` : 'installed'
+ } else if (info && info.status === 'installable') {
+ btn.disabled = false; btn.style.opacity = '.5'
+ btn.title = 'Not installed yet — click to browse available models'
+ } else if (!info) {
+ // Recipe exists in model list but no backend entry (e.g. experience)
+ btn.disabled = false; btn.style.opacity = '.5'
+ btn.title = recipe
+ } else {
+ btn.disabled = true; btn.style.opacity = '.2'
+ btn.title = 'Unsupported on this hardware'
  }
+ })
  } catch {}
+ }
+ function renderModelList() {
+ const el = document.getElementById('model-list')
+ console.log('renderModelList:', lemonadeModels.length, 'total, recipe:', currentRecipe, 'recipes:', [...new Set(lemonadeModels.map(m=>m.recipe))])
+ const filtered = lemonadeModels.filter(m => m.recipe === currentRecipe)
+ if (!filtered.length) {
+ el.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-muted);">No models for this backend</div>'
+ return
+ }
+ // Downloaded first
+ const sorted = [...filtered].sort((a,b) => (b.downloaded?1:0) - (a.downloaded?1:0) || a.name.localeCompare(b.name))
+ el.innerHTML = sorted.map(m =>
+ `<div class="model-item ${m.name===selectedModel?'selected':''}" onclick="selectModel('${m.name}')">
+ <span class="m-dl ${m.downloaded?'yes':'no'}">${m.downloaded?'ready':'pull'}</span>
+ <span class="m-name">${m.name}</span>
+ </div>`
+ ).join('')
+ }
+ function selectModel(name) {
+ selectedModel = name
+ document.getElementById('selected-model-name').textContent = name
+ renderModelList()
  }
  async function fetchModels() {
  try {
- const r = await fetch('/api/lemonade/models', {signal: AbortSignal.timeout(5000)})
+ document.getElementById('model-list').innerHTML = '<div style="padding:.5rem;text-align:center;color:var(--text-dim);">loading 100+ models...</div>'
+ const r = await fetch('/api/lemonade/models', {signal: AbortSignal.timeout(30000)})
  const raw = await r.json()
- lemonadeModels = raw.data || raw.models || raw || []
- const sel = document.getElementById('model-select')
- sel.innerHTML = ''
- if (!lemonadeModels.length) {
- sel.innerHTML = '<option value="">no models available</option>'
- return
- }
- lemonadeModels.forEach(m => {
- const name = m.id || m.name || 'unknown'
- const opt = document.createElement('option')
- opt.value = name
- opt.textContent = name
- sel.appendChild(opt)
- })
- } catch {
- document.getElementById('model-select').innerHTML = '<option value="">unavailable</option>'
+ lemonadeModels = raw.models || raw.data || []
+ console.log('Models loaded:', lemonadeModels.length, 'Recipe filter:', currentRecipe)
+ renderModelList()
+ } catch(e) {
+ console.error('fetchModels failed:', e)
+ document.getElementById('model-list').innerHTML = '<div style="padding:.5rem;text-align:center;color:var(--text-muted);">failed to load models</div>'
  }
  }
  async function fetchLemonadeStatus() {
@@ -480,10 +530,10 @@
  statusEl.textContent = 'offline'
  statusEl.style.color = 'var(--text-muted)'
  }
- if (data.model) {
- const toks = data.tokens_per_second ? ` | ${data.tokens_per_second} tok/s` : ''
- const ctx = data.context_size ? ` | ctx ${data.context_size}` : ''
- activeEl.textContent = `${data.model} on ${data.backend || currentBackend}${toks}${ctx}`
+ const models = data.models || []
+ if (models.length) {
+ const m = models[0]
+ activeEl.textContent = `${m.name} on ${m.recipe || currentBackend} (${m.device || 'gpu'})`
  activeEl.style.color = 'var(--accent)'
  } else {
  activeEl.textContent = 'No model loaded'
@@ -496,8 +546,8 @@
  }
  }
  async function applyModel() {
- const model = document.getElementById('model-select').value
- if (!model) { alert('Select a model first'); return }
+ const model = selectedModel
+ if (!model) { alert('Select a model from the list first'); return }
  const ctx = parseInt(document.getElementById('ctx-select').value)
  const statusEl = document.getElementById('lemon-active-status')
  statusEl.textContent = `Loading ${model} on ${currentBackend}...`
@@ -534,26 +584,25 @@
  }
  }
  // ── Software Stack ──
- const SOFTWARE_COMPONENTS = ['kernel','rocm','lemonade','llamacpp:vulkan','llamacpp:rocm','python','caddy']
  async function fetchVersions() {
  try {
  const r = await fetch('/api/software/versions', {signal: AbortSignal.timeout(5000)})
- const data = await r.json()
+ const raw = await r.json()
+ const versions = raw.versions || raw || {}
+ frozen = raw.frozen || false
+ document.getElementById('freeze-btn').textContent = frozen ? 'Unfreeze' : 'Freeze'
  const el = document.getElementById('version-list')
  let html = ''
- SOFTWARE_COMPONENTS.forEach(name => {
- const info = data[name] || {}
- const version = info.version || info.installed || '--'
- const isCurrent = info.status === 'current' || info.up_to_date
- const statusPill = isCurrent
- ? '<span class="pill green" style="font-size:.5rem;padding:.1rem .35rem;">current</span>'
- : '<span class="pill orange" style="font-size:.5rem;padding:.1rem .35rem;">update</span>'
+ for (const [name, info] of Object.entries(versions)) {
+ const version = (info.version || '--').replace(/^(lemonade version |Python )/i, '')
+ const wiki = info.wiki || '#'
+ const pill = '<span class="pill green" style="font-size:.5rem;padding:.1rem .35rem;">current</span>'
  html += `<div class="ver-row">
- <span class="ver-name">${name}</span>
+ <span class="ver-name">${name.replace('_',':')}</span>
  <span class="ver-value">${version}</span>
- <span class="ver-status">${statusPill}<a class="wiki-link" href="https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/${encodeURIComponent(name)}" target="_blank" title="Wiki: ${name}">?</a></span>
+ <span class="ver-status">${pill}<a class="wiki-link" href="${wiki}" target="_blank" title="Wiki: ${name}">?</a></span>
  </div>`
- })
+ }
  el.innerHTML = html
  } catch {
  document.getElementById('version-list').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:.6rem;">unavailable</div>'

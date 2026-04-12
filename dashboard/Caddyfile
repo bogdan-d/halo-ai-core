@@ -3,86 +3,30 @@
 }
 
 :80 {
-	@local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
+	@local remote_ip 127.0.0.1 ::1 10.0.0.0/24 10.100.0.0/24 192.168.101.0/24
 
-	# Stats JSON (static file, updated every 5s)
-	handle /stats.json {
-		root * /srv/halo-dashboard
-		file_server
-		header Cache-Control "no-cache"
-	}
-
-	# Stats server API (logs, exec, gaia) — local only
-	handle_path /api/logs {
+	# All /api/* routes — local only, pass straight to stats server
+	handle /api/* {
 		handle @local {
-			rewrite * /logs
-			reverse_proxy 127.0.0.1:5090
-		}
-		respond 403
-	}
-	handle /api/exec* {
-		handle @local {
-			uri replace /api/exec /exec
-			reverse_proxy 127.0.0.1:5090
-		}
-		respond 403
-	}
-	handle_path /api/gaia {
-		handle @local {
-			rewrite * /gaia
 			reverse_proxy 127.0.0.1:5090
 		}
 		respond 403
 	}
 
-	# Stats API — local only
-	handle /api/stats {
-		handle @local {
-			rewrite * /stats
-			reverse_proxy 127.0.0.1:5090
-		}
-		respond 403
-	}
-
-	# LLM live stats — local only
-	handle /api/llm/* {
-		handle @local {
-			uri strip_prefix /api
-			reverse_proxy 127.0.0.1:5090
-		}
-		respond 403
-	}
-
-	# Lemonade control + Software stack — local only
-	handle /api/lemonade/* {
-		handle @local {
-			uri strip_prefix /api
-			reverse_proxy 127.0.0.1:5090
-		}
-		respond 403
-	}
-	handle /api/software/* {
-		handle @local {
-			uri strip_prefix /api
-			reverse_proxy 127.0.0.1:5090
-		}
-		respond 403
-	}
-
-	# SSH mesh + agents + snapshots — local only
-	handle /api/ssh* {
+	# Legacy stats routes
+	handle /stats {
 		handle @local {
 			reverse_proxy 127.0.0.1:5090
 		}
 		respond 403
 	}
-	handle /api/agents* {
+	handle /models {
 		handle @local {
 			reverse_proxy 127.0.0.1:5090
 		}
 		respond 403
 	}
-	handle /api/snapshots* {
+	handle /exec* {
 		handle @local {
 			reverse_proxy 127.0.0.1:5090
 		}
@@ -102,6 +46,17 @@
 	handle /v1/* {
 		handle @local {
 			reverse_proxy 127.0.0.1:13305
+		}
+		respond 403
+	}
+
+	# Lemonade web app — proxy on /lemonade path
+	handle /lemonade* {
+		handle @local {
+			uri strip_prefix /lemonade
+			reverse_proxy 127.0.0.1:13305 {
+				header_down -Content-Security-Policy
+			}
 		}
 		respond 403
 	}

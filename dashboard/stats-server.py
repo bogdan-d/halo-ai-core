@@ -666,7 +666,7 @@ class StatsHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):
-        if self.path == '/stats':
+        if self.path in ('/stats', '/api/stats'):
             data = get_live_stats()
             data['hw'] = HW_INFO
             self._respond(data)
