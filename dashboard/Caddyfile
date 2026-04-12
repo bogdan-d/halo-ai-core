@@ -35,6 +35,15 @@
 		respond 403
 	}
 
+	# Stats API — local only
+	handle /api/stats {
+		handle @local {
+			rewrite * /stats
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+
 	# Lemonade control + Software stack — local only
 	handle /api/lemonade/* {
 		handle @local {
