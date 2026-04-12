@@ -35,6 +35,42 @@
 		respond 403
 	}
 
+	# Lemonade control + Software stack — local only
+	handle /api/lemonade/* {
+		handle @local {
+			uri strip_prefix /api
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+	handle /api/software/* {
+		handle @local {
+			uri strip_prefix /api
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+
+	# SSH mesh + agents + snapshots — local only
+	handle /api/ssh* {
+		handle @local {
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+	handle /api/agents* {
+		handle @local {
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+	handle /api/snapshots* {
+		handle @local {
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
+	}
+
 	# Whisper transcription proxy — local only
 	handle_path /api/transcribe {
 		handle @local {

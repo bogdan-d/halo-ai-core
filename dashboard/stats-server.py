@@ -3,6 +3,9 @@
 
 import json
 import os
+import shlex
+import signal
+import subprocess
 import time
 import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -450,6 +453,161 @@ def _autostart_agents():
             print(f'[AUTOSTART] {name}')
 
 
+# ── Lemonade Control ─────────────────────────────────────────
+def get_lemonade_status():
+    """Parse lemonade status for loaded models and server info."""
+    try:
+        r = subprocess.run(['lemonade', 'status'], capture_output=True, text=True, timeout=10)
+        out = r.stdout + r.stderr
+        result = {'running': False, 'version': '', 'models': [], 'raw': out[:500]}
+        if 'running' in out.lower():
+            result['running'] = True
+        for line in out.split('\n'):
+            if 'Version' in line and 'Value' not in line:
+                result['version'] = line.split()[-1] if line.split() else ''
+        # Parse model table if present
+        in_models = False
+        for line in out.split('\n'):
+            if line.startswith('---') and in_models:
+                continue
+            if 'Model' in line and 'Type' in line and 'Device' in line:
+                in_models = True
+                continue
+            if in_models and line.strip() and not line.startswith('-'):
+                parts = line.split()
+                if len(parts) >= 4:
+                    result['models'].append({
+                        'name': parts[0], 'type': parts[1],
+                        'device': parts[2], 'recipe': parts[3]
+                    })
+        return result
+    except Exception as e:
+        return {'running': False, 'error': str(e)}
+
+
+def get_lemonade_backends():
+    """Parse lemonade backends for installed/available backends."""
+    try:
+        r = subprocess.run(['lemonade', 'backends'], capture_output=True, text=True, timeout=10)
+        backends = []
+        current_recipe = ''
+        for line in r.stdout.split('\n'):
+            if line.startswith('---') or not line.strip() or 'Recipe' in line:
+                continue
+            parts = line.split()
+            if not parts:
+                continue
+            # Lines starting with non-space = new recipe
+            if not line.startswith(' ') and not line.startswith('\t'):
+                current_recipe = parts[0]
+                parts = parts[1:]
+            if len(parts) >= 2:
+                backend = parts[0]
+                status = parts[1]
+                version = ''
+                if status == 'installed' and len(parts) >= 3:
+                    version = parts[2]
+                backends.append({
+                    'recipe': current_recipe, 'backend': backend,
+                    'status': status, 'version': version
+                })
+        return {'backends': backends}
+    except Exception as e:
+        return {'backends': [], 'error': str(e)}
+
+
+def get_lemonade_models():
+    """Parse lemonade list for model catalog."""
+    try:
+        r = subprocess.run(['lemonade', 'list'], capture_output=True, text=True, timeout=15)
+        models = []
+        for line in r.stdout.split('\n'):
+            if line.startswith('---') or not line.strip() or 'Model Name' in line:
+                continue
+            # Fixed-width columns: name (40), downloaded (12), details
+            name = line[:40].strip()
+            rest = line[40:].strip()
+            if not name:
+                continue
+            parts = rest.split()
+            downloaded = parts[0] if parts else 'No'
+            recipe = parts[1] if len(parts) > 1 else ''
+            if name and downloaded in ('Yes', 'No'):
+                models.append({'name': name, 'downloaded': downloaded == 'Yes', 'recipe': recipe})
+        return {'models': models}
+    except Exception as e:
+        return {'models': [], 'error': str(e)}
+
+
+def lemonade_load(model, backend='vulkan', ctx_size=4096):
+    """Load a model with specified backend."""
+    cmd = ['lemonade', 'run', model, '--ctx-size', str(ctx_size)]
+    if backend and backend != 'default':
+        cmd.extend(['--llamacpp', backend])
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return {'status': 'ok' if r.returncode == 0 else 'error',
+                'output': (r.stdout + r.stderr)[:500]}
+    except subprocess.TimeoutExpired:
+        return {'status': 'timeout', 'output': 'Model load timed out (120s)'}
+    except Exception as e:
+        return {'status': 'error', 'output': str(e)}
+
+
+def lemonade_unload():
+    """Unload all models."""
+    try:
+        r = subprocess.run(['lemonade', 'unload'], capture_output=True, text=True, timeout=30)
+        return {'status': 'ok' if r.returncode == 0 else 'error',
+                'output': (r.stdout + r.stderr)[:500]}
+    except Exception as e:
+        return {'status': 'error', 'output': str(e)}
+
+
+# ── Software Stack ───────────────────────────────────────────
+FREEZE_FILE = '/srv/halo-dashboard/.freeze.json'
+
+def get_software_versions():
+    """Gather installed versions of all stack components."""
+    def _run(cmd):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=5, shell=isinstance(cmd, str))
+            return r.stdout.strip().split('\n')[0] if r.returncode == 0 else 'n/a'
+        except Exception:
+            return 'n/a'
+
+    frozen = os.path.exists(FREEZE_FILE)
+    wiki_base = 'https://github.com/stampby/halo-ai-core/blob/main/docs/wiki'
+
+    versions = {
+        'kernel': {'version': _run(['uname', '-r']), 'wiki': f'{wiki_base}/Build-From-Source.md'},
+        'rocm': {'version': '', 'wiki': f'{wiki_base}/Components.md'},
+        'lemonade': {'version': _run(['lemonade', '--version']), 'wiki': f'{wiki_base}/Model-Management.md'},
+        'python': {'version': _run(['python3', '--version']), 'wiki': f'{wiki_base}/Adding-a-Service.md'},
+        'caddy': {'version': _run(['caddy', 'version']), 'wiki': f'{wiki_base}/Caddy-Routing.md'},
+    }
+    # ROCm version from file
+    try:
+        with open('/opt/rocm/.info/version') as f:
+            versions['rocm']['version'] = f.read().strip()
+    except Exception:
+        versions['rocm']['version'] = 'n/a'
+
+    # llama.cpp backend versions from lemonade backends
+    try:
+        be = get_lemonade_backends()
+        for b in be.get('backends', []):
+            if b['recipe'] == 'llamacpp' and b['status'] == 'installed':
+                versions[f"llamacpp_{b['backend']}"] = {
+                    'version': b['version'] or 'installed',
+                    'wiki': f'{wiki_base}/Benchmarks.md'
+                }
+    except Exception:
+        pass
+
+    return {'versions': versions, 'frozen': frozen}
+
+
 # Cache hardware info (doesn't change)
 HW_INFO = get_hw_info()
 
@@ -487,6 +645,16 @@ class StatsHandler(BaseHTTPRequestHandler):
             self._respond(system_update())
         elif self.path == '/api/models/detailed':
             self._respond(model_list_detailed())
+        # Lemonade control
+        elif self.path == '/api/lemonade/status':
+            self._respond(get_lemonade_status())
+        elif self.path == '/api/lemonade/backends':
+            self._respond(get_lemonade_backends())
+        elif self.path == '/api/lemonade/models':
+            self._respond(get_lemonade_models())
+        # Software stack
+        elif self.path == '/api/software/versions':
+            self._respond(get_software_versions())
         elif self.path.startswith('/exec'):
             import urllib.parse
             qs = urllib.parse.urlparse(self.path).query
@@ -507,6 +675,25 @@ class StatsHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(length)) if length else {}
             self._respond(snapshot_create(body.get('name', '')))
+        elif path == '/api/lemonade/load':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+            self._respond(lemonade_load(
+                body.get('model', ''), body.get('backend', 'vulkan'),
+                body.get('ctx_size', 4096)
+            ))
+        elif path == '/api/lemonade/unload':
+            self._respond(lemonade_unload())
+        elif path == '/api/software/freeze':
+            with open(FREEZE_FILE, 'w') as f:
+                json.dump({'frozen': True, 'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')}, f)
+            self._respond({'status': 'frozen'})
+        elif path == '/api/software/unfreeze':
+            try:
+                os.remove(FREEZE_FILE)
+            except FileNotFoundError:
+                pass
+            self._respond({'status': 'unfrozen'})
         elif path.startswith('/api/agents/') and path.endswith('/start'):
             name = path.split('/')[3]
             self._respond(agent_start(name))
