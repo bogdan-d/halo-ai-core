@@ -3,6 +3,8 @@
 }
 
 :80 {
+	@local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
+
 	# Stats JSON (static file, updated every 5s)
 	handle /stats.json {
 		root * /srv/halo-dashboard
@@ -10,29 +12,44 @@
 		header Cache-Control "no-cache"
 	}
 
-	# Stats server API (logs, exec, gaia)
+	# Stats server API (logs, exec, gaia) — local only
 	handle_path /api/logs {
-		rewrite * /logs
-		reverse_proxy 127.0.0.1:5090
+		handle @local {
+			rewrite * /logs
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
 	}
 	handle /api/exec* {
-		uri replace /api/exec /exec
-		reverse_proxy 127.0.0.1:5090
+		handle @local {
+			uri replace /api/exec /exec
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
 	}
 	handle_path /api/gaia {
-		rewrite * /gaia
-		reverse_proxy 127.0.0.1:5090
+		handle @local {
+			rewrite * /gaia
+			reverse_proxy 127.0.0.1:5090
+		}
+		respond 403
 	}
 
-	# Whisper transcription proxy
+	# Whisper transcription proxy — local only
 	handle_path /api/transcribe {
-		rewrite * /transcribe
-		reverse_proxy 127.0.0.1:8082
+		handle @local {
+			rewrite * /transcribe
+			reverse_proxy 127.0.0.1:8082
+		}
+		respond 403
 	}
 
-	# Lemonade API proxy
+	# Lemonade API proxy — local only
 	handle /v1/* {
-		reverse_proxy 127.0.0.1:13305
+		handle @local {
+			reverse_proxy 127.0.0.1:13305
+		}
+		respond 403
 	}
 
 	# Dashboard (static files)

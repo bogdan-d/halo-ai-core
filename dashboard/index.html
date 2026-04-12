@@ -69,7 +69,7 @@
 
     /* ── Cards ── */
     .main { position:relative;z-index:1;padding:2rem;display:flex;flex-direction:column;align-items:center; }
-    .cards { display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;width:100%;max-width:1000px;margin-bottom:2rem; }
+    .cards { display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;width:100%;max-width:1200px;margin-bottom:2rem; }
 
     .svc-card {
       border:1px solid var(--border);border-radius:12px;padding:1.25rem;
@@ -317,6 +317,38 @@
         <div class="list-sections mono" id="gaia-agents"><div style="text-align:center;color:var(--text-muted);font-size:.6rem;grid-column:1/-1">loading agents...</div></div>
         <div class="card-hint mono">click to open Gaia &rarr;</div>
       </a>
+
+      <!-- SSH Manager -->
+      <div class="svc-card" id="panel-ssh" style="cursor:default;">
+        <div class="card-header">
+          <div class="card-dot off" id="dot-ssh"></div>
+          <span class="card-title">SSH Mesh</span>
+          <span class="card-meta mono" id="ssh-count">--</span>
+        </div>
+        <div class="pills mono" id="ssh-pills"><span class="pill">loading...</span></div>
+        <div id="ssh-machines" style="display:grid;grid-template-columns:1fr;gap:.3rem;"></div>
+        <div style="display:flex;gap:.4rem;margin-top:.75rem;">
+          <button class="gen-btn" style="flex:1;font-size:.6rem;padding:.3rem;" onclick="refreshSSH()">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Snapshot Manager -->
+      <div class="svc-card" id="panel-snapshots" style="cursor:default;">
+        <div class="card-header">
+          <div class="card-dot on" id="dot-snap"></div>
+          <span class="card-title">Snapshots</span>
+          <span class="card-meta mono" id="snap-count">--</span>
+        </div>
+        <div id="snap-list" style="max-height:150px;overflow-y:auto;margin-bottom:.5rem;"></div>
+        <div style="display:flex;gap:.4rem;">
+          <input type="text" id="snap-name" placeholder="snapshot name" class="gen-prompt" style="font-size:.65rem;padding:.3rem .5rem;">
+          <button class="gen-btn" style="font-size:.6rem;padding:.3rem .6rem;" onclick="createSnapshot()">Create</button>
+        </div>
+        <div style="display:flex;gap:.4rem;margin-top:.4rem;">
+          <button class="gen-btn" style="flex:1;font-size:.6rem;padding:.3rem;" onclick="previewUpdate()">Preview Update</button>
+        </div>
+        <div id="snap-status" style="font-size:.55rem;color:var(--text-dim);margin-top:.4rem;text-align:center;"></div>
+      </div>
     </div>
 
     <!-- Agents -->
@@ -570,6 +602,85 @@
       }catch{document.getElementById('lemon-models').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);font-size:.7rem">unavailable</div>'}
     }
     fetchModels(); setInterval(fetchModels,30000)
+
+    // ── SSH Mesh ──
+    async function refreshSSH() {
+      document.getElementById('ssh-pills').innerHTML = '<span class="pill">scanning...</span>'
+      try {
+        const r = await fetch('/api/ssh', {signal: AbortSignal.timeout(15000)})
+        const data = await r.json()
+        let online = 0, total = 0
+        let html = ''
+        for (const [name, info] of Object.entries(data)) {
+          total++
+          if (info.online) online++
+          html += `<div style="display:flex;align-items:center;gap:.5rem;padding:.2rem 0;font-size:.7rem;">
+            <span style="width:6px;height:6px;border-radius:50%;background:${info.online?'var(--green)':'var(--text-muted)'};flex-shrink:0;"></span>
+            <span style="font-weight:600;min-width:80px;" class="mono">${name}</span>
+            <span style="color:var(--text-dim);font-size:.6rem;">${info.ip}</span>
+            <span style="color:var(--text-muted);font-size:.55rem;margin-left:auto;">${info.role}</span>
+          </div>`
+        }
+        document.getElementById('ssh-machines').innerHTML = html
+        document.getElementById('ssh-count').textContent = `${online}/${total}`
+        document.getElementById('ssh-pills').innerHTML = `<span class="pill${online===total?' on':''}">${online===total?'all online':`${total-online} offline`}</span>`
+        document.getElementById('dot-ssh').className = online > 0 ? 'card-dot on' : 'card-dot off'
+      } catch(e) {
+        document.getElementById('ssh-machines').innerHTML = '<div style="color:var(--text-muted);font-size:.6rem;text-align:center;">unavailable</div>'
+      }
+    }
+    refreshSSH(); setInterval(refreshSSH, 60000)
+
+    // ── Snapshots ──
+    async function fetchSnapshots() {
+      try {
+        const r = await fetch('/api/snapshots', {signal: AbortSignal.timeout(5000)})
+        const data = await r.json()
+        document.getElementById('snap-count').textContent = data.count || 0
+        if (data.snapshots && data.snapshots.length) {
+          document.getElementById('snap-list').innerHTML = data.snapshots.map(s =>
+            `<div style="font-size:.6rem;color:var(--text-dim);padding:.15rem 0;border-bottom:1px solid var(--line);" class="mono">${s.path || s.raw}</div>`
+          ).join('')
+        } else {
+          document.getElementById('snap-list').innerHTML = '<div style="font-size:.6rem;color:var(--text-muted);text-align:center;">no snapshots</div>'
+        }
+      } catch(e) {
+        document.getElementById('snap-list').innerHTML = '<div style="font-size:.6rem;color:var(--text-muted);text-align:center;">unavailable</div>'
+      }
+    }
+    fetchSnapshots()
+
+    async function createSnapshot() {
+      const name = document.getElementById('snap-name').value.trim()
+      document.getElementById('snap-status').textContent = 'creating...'
+      try {
+        const r = await fetch('/api/snapshots/create', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({name}), signal: AbortSignal.timeout(15000)
+        })
+        const data = await r.json()
+        document.getElementById('snap-status').textContent = data.status === 'created' ? `snapshot "${data.name}" created` : `failed: ${data.output || data.error}`
+        document.getElementById('snap-name').value = ''
+        fetchSnapshots()
+      } catch(e) {
+        document.getElementById('snap-status').textContent = 'error: ' + e.message
+      }
+    }
+
+    async function previewUpdate() {
+      document.getElementById('snap-status').textContent = 'checking for updates...'
+      try {
+        const r = await fetch('/api/update/preview', {signal: AbortSignal.timeout(30000)})
+        const data = await r.json()
+        if (data.packages !== undefined) {
+          document.getElementById('snap-status').textContent = data.packages === 0 ? 'system is up to date' : `${data.packages} packages available`
+        } else {
+          document.getElementById('snap-status').textContent = data.error || 'check failed'
+        }
+      } catch(e) {
+        document.getElementById('snap-status').textContent = 'error: ' + e.message
+      }
+    }
 
     // ── Gaia agents ──
     async function fetchGaia(){
@@ -932,6 +1043,36 @@
       tab.addEventListener('click', () => switchMuseTab(tab.dataset.mode))
     })
 
+    // ── Agent State (Real Backend) ──
+    // Map dashboard agent IDs to Discord bot names
+    const agentMap = {sentinel:'echo',watchdog:'mechanic',muse:'muse',bouncer:'meek',medic:'amp',will:'bounty',scribe:'echo'}
+    const reverseMap = {echo:'sentinel',mechanic:'watchdog',muse:'muse',meek:'bouncer',amp:'medic',bounty:'will'}
+
+    async function saveAgentState(id, installed) {
+      const botName = agentMap[id] || id
+      try {
+        const endpoint = installed ? 'start' : 'stop'
+        await fetch(`/api/agents/${botName}/${endpoint}`, {method:'POST', signal:AbortSignal.timeout(10000)})
+      } catch(e) { console.warn('Agent API error:', e) }
+    }
+
+    async function restoreAgentStates() {
+      try {
+        const r = await fetch('/api/agents', {signal:AbortSignal.timeout(5000)})
+        const data = await r.json()
+        Object.entries(data).forEach(([botName, info]) => {
+          const dashId = reverseMap[botName]
+          if (!dashId) return
+          const el = document.getElementById('st-' + dashId)
+          if (!el) return
+          if (info.running) { el.textContent = 'active'; el.classList.add('on') }
+          else { el.textContent = 'ready'; el.classList.remove('on') }
+        })
+        if (data.muse && data.muse.running) { addMuseTab('image', 'Image'); addMuseTab('video', 'Video') }
+        if (data.bounty && data.bounty.running) addMuseTab('will', 'Will')
+      } catch(e) { console.warn('Agent status fetch failed:', e) }
+    }
+
     // Add tabs dynamically when agents are installed
     function addMuseTab(mode, label) {
       const tabs = document.getElementById('muse-tabs')
@@ -943,6 +1084,7 @@
       btn.addEventListener('click', () => switchMuseTab(mode))
       tabs.appendChild(btn)
     }
+    restoreAgentStates()
 
     async function generateImage(prompt) {
       genBtn.disabled = true
@@ -1128,6 +1270,7 @@
         await new Promise(r => setTimeout(r, 1200))
         statusEl.textContent = 'ready'
         statusEl.classList.remove('on')
+        saveAgentState(currentAgent, false)
         playTone(880, 0.15, 0.1)
         btn.textContent = 'Removed'
         await new Promise(r => setTimeout(r, 800))
@@ -1144,6 +1287,7 @@
         await new Promise(r => setTimeout(r, 500))
         playTone(1100, 0.15, 0.12)
         if (statusEl) { statusEl.textContent = 'active'; statusEl.classList.add('on') }
+        saveAgentState(currentAgent, true)
         // Add tab to Muse panel if relevant
         if (currentAgent === 'will') addMuseTab('will', 'Will')
         if (currentAgent === 'muse') { addMuseTab('image', 'Image'); addMuseTab('video', 'Video') }

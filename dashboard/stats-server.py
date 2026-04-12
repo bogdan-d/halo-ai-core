@@ -251,45 +251,285 @@ def get_gaia():
     return result
 
 
+# ── SSH Mesh Manager ──────────────────────────────────────────
+import subprocess as _sp_ssh
+import shlex as _shlex
+
+SSH_MACHINES = {
+    'strixhalo': {'ip': '10.0.0.10', 'user': 'bcloud', 'role': 'AI inference (headless)', 'os': 'Arch'},
+    'ryzen':     {'ip': '10.0.0.25', 'user': 'bcloud', 'role': 'Primary workstation', 'os': 'Arch/KDE'},
+    'sliger':    {'ip': '10.0.0.20', 'user': 'bcloud', 'role': 'AMP workloads', 'os': 'Arch'},
+    'minisforum':{'ip': '10.0.0.30', 'user': 'bcloud', 'role': 'Office/VSS', 'os': 'Windows 11'},
+    'pi':        {'ip': '10.0.0.40', 'user': 'bcloud', 'role': 'Storage/SATA', 'os': 'Debian'},
+}
+
+def ssh_status():
+    results = {}
+    for name, info in SSH_MACHINES.items():
+        reachable = False
+        try:
+            r = _sp_ssh.run(
+                ['ssh', '-o', 'ConnectTimeout=2', '-o', 'BatchMode=yes',
+                 f"{info['user']}@{info['ip']}", 'echo ok'],
+                capture_output=True, text=True, timeout=4
+            )
+            reachable = r.returncode == 0
+        except Exception:
+            pass
+        results[name] = {**info, 'online': reachable}
+    return results
+
+def ssh_test(name):
+    if name not in SSH_MACHINES:
+        return {'error': f'unknown machine: {name}'}
+    info = SSH_MACHINES[name]
+    try:
+        r = _sp_ssh.run(
+            ['ssh', '-o', 'ConnectTimeout=3', '-o', 'BatchMode=yes',
+             f"{info['user']}@{info['ip']}", 'uname -a && uptime'],
+            capture_output=True, text=True, timeout=8
+        )
+        return {'name': name, 'output': r.stdout.strip(), 'ok': r.returncode == 0}
+    except Exception as e:
+        return {'name': name, 'output': str(e), 'ok': False}
+
+
+# ── Snapshot Manager ──────────────────────────────────────────
+
+def snapshot_list():
+    try:
+        r = _sp_ssh.run(['sudo', 'btrfs', 'subvolume', 'list', '-s', '/'],
+                        capture_output=True, text=True, timeout=5)
+        snaps = []
+        for line in r.stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            parts = line.split()
+            # Extract ID, gen, path
+            snap = {'raw': line.strip()}
+            for i, p in enumerate(parts):
+                if p == 'path':
+                    snap['path'] = ' '.join(parts[i+1:])
+                elif p == 'ID':
+                    snap['id'] = parts[i+1] if i+1 < len(parts) else ''
+            snaps.append(snap)
+        return {'snapshots': snaps, 'count': len(snaps)}
+    except Exception as e:
+        return {'snapshots': [], 'error': str(e)}
+
+def snapshot_create(name=''):
+    tag = name or f"dashboard-{int(time.time())}"
+    try:
+        r = _sp_ssh.run(
+            ['sudo', 'btrfs', 'subvolume', 'snapshot', '/', f'/.snapshots/{tag}'],
+            capture_output=True, text=True, timeout=10
+        )
+        return {'status': 'created' if r.returncode == 0 else 'failed',
+                'name': tag, 'output': r.stdout + r.stderr}
+    except Exception as e:
+        return {'status': 'error', 'error': str(e)}
+
+def system_update():
+    """Dry-run pacman update to show what would change."""
+    try:
+        r = _sp_ssh.run(['pacman', '-Syu', '--print'], capture_output=True, text=True, timeout=30)
+        packages = [l.strip() for l in r.stdout.strip().split('\n') if l.strip() and '://' in l]
+        return {'packages': len(packages), 'list': packages[:50], 'preview': True}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+# ── Model Manager ──────────────────────────────────────────────
+
+def model_list_detailed():
+    """Get models with loaded/unloaded status from Lemonade."""
+    try:
+        req = urllib.request.Request('http://127.0.0.1:13305/api/v1/models', method='GET')
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            models = []
+            for m in data.get('data', []):
+                models.append({
+                    'id': m.get('id', ''),
+                    'owned_by': m.get('owned_by', 'local'),
+                })
+            return {'models': models, 'count': len(models)}
+    except Exception as e:
+        return {'models': [], 'error': str(e)}
+
+
+# ── Agent Process Controller ──────────────────────────────────
+import subprocess as _sp
+import signal
+
+AGENT_DIR = '/home/bcloud/discord-agents'
+AGENT_VENV = '/home/bcloud/discord-agents-env/bin/python'
+AGENT_STATE_FILE = os.path.join(AGENT_DIR, '.agent-state.json')
+VALID_AGENTS = ('echo', 'bounty', 'meek', 'amp', 'mechanic', 'muse')
+
+_agent_procs: dict = {}  # name -> subprocess.Popen
+
+
+def _load_agent_state():
+    try:
+        with open(AGENT_STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_agent_state():
+    state = {name: True for name in _agent_procs if _is_agent_alive(name)}
+    with open(AGENT_STATE_FILE, 'w') as f:
+        json.dump(state, f)
+
+
+def _is_agent_alive(name):
+    proc = _agent_procs.get(name)
+    return proc is not None and proc.poll() is None
+
+
+def agent_start(name):
+    if name not in VALID_AGENTS:
+        return {'error': f'unknown agent: {name}'}
+    # Kill any orphan processes for this agent before starting
+    try:
+        import subprocess
+        subprocess.run(['pkill', '-f', f'discord-agents/{name}/bot.py'], capture_output=True, timeout=3)
+    except Exception:
+        pass
+    if _is_agent_alive(name):
+        return {'status': 'already_running', 'agent': name, 'pid': _agent_procs[name].pid}
+    bot_path = os.path.join(AGENT_DIR, name, 'bot.py')
+    if not os.path.exists(bot_path):
+        return {'error': f'bot not found: {bot_path}'}
+    proc = _sp.Popen(
+        [AGENT_VENV, '-u', bot_path],
+        cwd=AGENT_DIR,
+        stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+        start_new_session=True,
+    )
+    _agent_procs[name] = proc
+    _save_agent_state()
+    return {'status': 'started', 'agent': name, 'pid': proc.pid}
+
+
+def agent_stop(name):
+    if name not in VALID_AGENTS:
+        return {'error': f'unknown agent: {name}'}
+    if not _is_agent_alive(name):
+        _agent_procs.pop(name, None)
+        _save_agent_state()
+        return {'status': 'not_running', 'agent': name}
+    proc = _agent_procs[name]
+    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    _agent_procs.pop(name, None)
+    _save_agent_state()
+    return {'status': 'stopped', 'agent': name}
+
+
+def agent_status_all():
+    result = {}
+    for name in VALID_AGENTS:
+        result[name] = {'running': _is_agent_alive(name)}
+        if _is_agent_alive(name):
+            result[name]['pid'] = _agent_procs[name].pid
+    return result
+
+
+def _autostart_agents():
+    """Restore agents that were running before shutdown."""
+    state = _load_agent_state()
+    for name, was_running in state.items():
+        if was_running and name in VALID_AGENTS:
+            agent_start(name)
+            print(f'[AUTOSTART] {name}')
+
+
 # Cache hardware info (doesn't change)
 HW_INFO = get_hw_info()
 
 
 class StatsHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/stats':
-            data = get_live_stats()
-            data['hw'] = HW_INFO
-            payload = json.dumps(data).encode()
-        elif self.path == '/models':
-            payload = json.dumps(get_models()).encode()
-        elif self.path == '/gaia':
-            payload = json.dumps(get_gaia()).encode()
-        elif self.path == '/logs':
-            payload = json.dumps(get_logs()).encode()
-        elif self.path.startswith('/exec'):
-            # Run safe read-only commands
-            import urllib.parse
-            qs = urllib.parse.urlparse(self.path).query
-            params = urllib.parse.parse_qs(qs)
-            cmd = params.get('cmd', [''])[0]
-            payload = json.dumps(run_safe_cmd(cmd)).encode()
-        else:
-            self.send_response(404)
-            self.end_headers()
-            return
-
+    def _respond(self, data):
+        payload = json.dumps(data).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(payload)
 
+    def do_GET(self):
+        if self.path == '/stats':
+            data = get_live_stats()
+            data['hw'] = HW_INFO
+            self._respond(data)
+        elif self.path == '/models':
+            self._respond(get_models())
+        elif self.path == '/gaia':
+            self._respond(get_gaia())
+        elif self.path == '/logs':
+            self._respond(get_logs())
+        elif self.path == '/api/agents':
+            self._respond(agent_status_all())
+        elif self.path == '/api/ssh':
+            self._respond(ssh_status())
+        elif self.path.startswith('/api/ssh/test/'):
+            name = self.path.split('/')[-1]
+            self._respond(ssh_test(name))
+        elif self.path == '/api/snapshots':
+            self._respond(snapshot_list())
+        elif self.path == '/api/update/preview':
+            self._respond(system_update())
+        elif self.path == '/api/models/detailed':
+            self._respond(model_list_detailed())
+        elif self.path.startswith('/exec'):
+            import urllib.parse
+            qs = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(qs)
+            cmd = params.get('cmd', [''])[0]
+            self._respond(run_safe_cmd(cmd))
+        else:
+            self.send_response(404)
+            self.end_headers()
+            return
+
+    def do_POST(self):
+        import urllib.parse
+        parts = urllib.parse.urlparse(self.path)
+        path = parts.path
+
+        if path == '/api/snapshots/create':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+            self._respond(snapshot_create(body.get('name', '')))
+        elif path.startswith('/api/agents/') and path.endswith('/start'):
+            name = path.split('/')[3]
+            self._respond(agent_start(name))
+        elif path.startswith('/api/agents/') and path.endswith('/stop'):
+            name = path.split('/')[3]
+            self._respond(agent_stop(name))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
     def log_message(self, format, *args):
         pass
 
 
 if __name__ == '__main__':
+    _autostart_agents()
     server = HTTPServer(('127.0.0.1', 5090), StatsHandler)
     print('Stats server on :5090')
     server.serve_forever()
