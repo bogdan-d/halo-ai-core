@@ -315,4 +315,35 @@ ssh bcloud@<new-ip> "sudo bash ~/mesh-bootstrap/bootstrap.sh"
 
 ---
 
+---
+
+## Future: Lemonade Nexus (deprecating manual SSH mesh)
+
+~~The SSH mesh above works and has been reliable.~~ But it doesn't scale. Adding a new machine means copying keys to every node, writing config files, testing connections. At 5 machines it's fine. At 20 it's a nightmare.
+
+**Lemonade Nexus** replaces all of that with a zero-trust WireGuard mesh VPN:
+
+- Machines auto-discover each other via gossip protocol
+- Ed25519 identity — no shared secrets, no key distribution
+- WireGuard tunnels establish automatically between all peers
+- STUN hole-punching for NAT traversal
+- Federated relays as fallback
+- Tier 1/Tier 2 trust with democratic governance
+
+```bash
+# On the root node (strixhalo)
+lemonade-nexus --bind-address 10.0.0.10
+
+# On any other machine — just point at the root
+lemonade-nexus --seed-peer 10.0.0.10:9102
+```
+
+That's it. The mesh builds itself.
+
+**Status:** Live on strixhalo, ryzen, and sliger as of 2026-04-12. SSH mesh remains as fallback. Full migration tracked in the [roadmap](Roadmap.md).
+
+*"The future is already here — it's just not evenly distributed." — William Gibson*
+
+---
+
 *"Designed and built by the architect."*
