@@ -146,7 +146,7 @@ check() {
 }
 
 # Core binaries
-check "llama-server exists" "[ -f /srv/ai/llama-cpp/build-hip/bin/llama-server ]"
+check "llama-server exists" "[ -f /srv/ai/llama-cpp/build/bin/llama-server ]"
 check "Python 3.12" "/opt/python312/bin/python3.12 --version"
 check "Python 3.13" "/opt/python313/bin/python3.13 --version"
 check "Node.js 24" "node --version | grep -q v24"
@@ -155,8 +155,7 @@ check "Go toolchain" "go version"
 
 # Services
 check "Caddy config" "[ -f /etc/caddy/Caddyfile ]"
-check "llama.cpp HIP build" "[ -d /srv/ai/llama-cpp/build-hip ]"
-check "llama.cpp Vulkan build" "[ -d /srv/ai/llama-cpp/build-vulkan ]"
+check "llama.cpp Vulkan build" "[ -d /srv/ai/llama-cpp/build ]"
 check "Lemonade" "[ -d /srv/ai/lemonade ]"
 check "Whisper.cpp" "[ -d /srv/ai/whisper-cpp/build ]"
 check "Qdrant" "[ -f /srv/ai/qdrant/target/release/qdrant ]"

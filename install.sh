@@ -64,8 +64,17 @@ fi
 STEP_CURRENT=0
 STEP_TOTAL=18
 
+STEP_START=0
 step() {
+    # Close out previous step with elapsed time
+    if [ "$STEP_CURRENT" -gt 0 ] && [ "$STEP_START" -gt 0 ]; then
+        local elapsed=$(( $(date +%s) - STEP_START ))
+        local mins=$((elapsed / 60))
+        local secs=$((elapsed % 60))
+        echo -e "  ${GREEN}✓${NC} ${DIM}completed in ${mins}m ${secs}s${NC}"
+    fi
     STEP_CURRENT=$((STEP_CURRENT + 1))
+    STEP_START=$(date +%s)
     echo ''
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BOLD}${CYAN}  [$STEP_CURRENT/$STEP_TOTAL]${NC} ${BOLD}$1${NC}"
@@ -73,10 +82,44 @@ step() {
 }
 
 info()  { echo -e "  ${BLUE}>>>${NC} $1"; }
-ok()    { echo -e "  ${GREEN} +${NC} $1"; }
-warn()  { echo -e "  ${YELLOW} !${NC} $1"; }
-fail()  { echo -e "  ${RED} x${NC} $1"; exit 1; }
-progress() { echo -e "  ${DIM}    ... $1${NC}"; }
+ok()    { echo -e "  ${GREEN} ✓${NC} $1"; }
+warn()  { echo -e "  ${YELLOW} ⚠${NC} $1"; }
+fail()  { echo -e "  ${RED} ✗${NC} $1"; exit 1; }
+progress() { echo -e "  ${DIM}    ⟳ $1${NC}"; }
+
+# Spinner — run a command with a spinning indicator, suppress output
+# Usage: spin "message" command arg1 arg2 ...
+spin() {
+    local msg="$1"; shift
+    local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local logfile="/tmp/halo-step-$$.log"
+    "$@" > "$logfile" 2>&1 &
+    local pid=$!
+    local i=0
+    local start=$(date +%s)
+    while kill -0 "$pid" 2>/dev/null; do
+        local elapsed=$(( $(date +%s) - start ))
+        local mins=$((elapsed / 60))
+        local secs=$((elapsed % 60))
+        printf "\r  ${CYAN}%s${NC} %s ${DIM}(%dm %ds)${NC}  " "${chars:i%${#chars}:1}" "$msg" "$mins" "$secs"
+        i=$((i + 1))
+        sleep 0.15 2>/dev/null || sleep 1
+    done
+    wait "$pid"
+    local rc=$?
+    local elapsed=$(( $(date +%s) - start ))
+    local mins=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    if [ $rc -eq 0 ]; then
+        printf "\r  ${GREEN}✓${NC} %s ${DIM}(%dm %ds)${NC}                    \n" "$msg" "$mins" "$secs"
+    else
+        printf "\r  ${RED}✗${NC} %s ${DIM}(failed after %dm %ds)${NC}         \n" "$msg" "$mins" "$secs"
+        echo -e "  ${DIM}    last 20 lines of build output:${NC}"
+        tail -20 "$logfile" | sed 's/^/    /'
+    fi
+    rm -f "$logfile"
+    return $rc
+}
 
 # ── Banner ─────────────────────────────────────────
 clear 2>/dev/null || true
@@ -530,8 +573,14 @@ for VER in 3.12.13 3.13.3; do
         ok "[DRY-RUN] Python $MAJOR would be compiled here"
         continue
     fi
-    ./configure --prefix="$PREFIX" --enable-optimizations -q
-    make -j"$(nproc)" -s && sudo make altinstall -s || fail "Python $VER build failed"
+    spin "Configuring Python $MAJOR" ./configure --prefix="$PREFIX" --enable-optimizations -q
+    if ! spin "Compiling Python $MAJOR (PGO)" make -j"$(nproc)" -s; then
+        warn "PGO build failed (known flaky test on Zen 5) — retrying without PGO"
+        make clean -s 2>/dev/null
+        spin "Configuring Python $MAJOR (no PGO)" ./configure --prefix="$PREFIX" -q
+        spin "Compiling Python $MAJOR" make -j"$(nproc)" -s || fail "Python $VER build failed"
+    fi
+    spin "Installing Python $MAJOR" sudo make altinstall -s || fail "Python $VER install failed"
     # Cleanup — non-fatal, cd out first
     cd /tmp
     rm -rf "$BUILD_DIR" 2>/dev/null || true
@@ -550,8 +599,9 @@ if ! node --version 2>/dev/null | grep -q "v24"; then
     if [ "$DRY_RUN" -eq 1 ]; then
         ok "[DRY-RUN] Node.js would be compiled here"
     else
-        /opt/python313/bin/python3.13 ./configure --prefix=/usr/local
-        make -j"$(nproc)" -s && sudo make install -s || fail "Node.js build failed"
+        spin "Configuring Node.js 24" /opt/python313/bin/python3.13 ./configure --prefix=/usr/local
+        spin "Compiling Node.js 24" make -j"$(nproc)" -s || fail "Node.js build failed"
+        spin "Installing Node.js 24" sudo make install -s || fail "Node.js install failed"
     fi
     sudo corepack enable
     sudo npm install -g --force yarn 2>/dev/null || true
@@ -612,57 +662,47 @@ done
 ok "Source audit complete"
 
 # ── Build everything ───────────────────────────────
-step "Building llama.cpp — HIP + Vulkan + OpenCL (~10 min)"
-source /etc/profile.d/rocm.sh 2>/dev/null || true
-export ROCBLAS_USE_HIPBLASLT=1
+step "Building llama.cpp — Vulkan (~5 min)"
 
-progress "Compiling HIP backend..."
 cd /srv/ai/llama-cpp
 if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/ggml-org/llama.cpp .; fi
-cmake -B build-hip -DGGML_HIP=ON -DAMDGPU_TARGETS="$GPU_TARGET" -DGGML_HIP_ROCWMMA_FATTN=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
-cmake --build build-hip -j$(nproc)
-cmake -B build-vulkan -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
-cmake --build build-vulkan -j$(nproc)
-cmake -B build-opencl -DGGML_OPENCL=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
-cmake --build build-opencl -j$(nproc)
-ok "llama.cpp built (HIP + Vulkan + OpenCL)"
+spin "Configuring llama.cpp Vulkan" cmake -B build -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release -G Ninja -Wno-dev .
+spin "Compiling llama.cpp Vulkan" cmake --build build -j$(nproc)
+ok "llama.cpp built (Vulkan)"
 
 step "Building Lemonade + Whisper + Pipepie + Goose (~15 min)"
-info "Building Lemonade (lemond)..."
 cd /srv/ai/lemonade
 if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/lemonade-sdk/lemonade .; fi
-rm -rf build && cmake --preset default && cmake --build --preset default -- -j$(nproc)
-ok "Lemonade v10.1.0 built (lemond)"
+rm -rf build
+spin "Compiling Lemonade (lemond)" bash -c 'cmake --preset default && cmake --build --preset default -- -j$(nproc)'
+ok "Lemonade built"
 
-info "Building Pipepie..."
 cd /tmp
 if [ ! -d pipepie ]; then git clone https://github.com/pipepie/pipepie; fi
 cd pipepie && git pull --ff-only 2>/dev/null || true
-make build
+spin "Compiling Pipepie" make build
 sudo cp pie /usr/local/bin/
-ok "Pipepie built and installed to /usr/local/bin/pie"
+ok "Pipepie installed"
 
-info "Building Goose..."
 cd /tmp
 if [ ! -d goose ]; then git clone https://github.com/block/goose; fi
 cd goose && git pull --ff-only 2>/dev/null || true
-BINDGEN_EXTRA_CLANG_ARGS="-I$(ls -d /usr/lib/clang/*/include /usr/lib/llvm*/lib/clang/*/include 2>/dev/null | head -1)" cargo build --release -p goose-cli
+CLANG_INCLUDE=$(ls -d /usr/lib/clang/*/include /usr/lib/llvm*/lib/clang/*/include 2>/dev/null | head -1)
+spin "Compiling Goose" env BINDGEN_EXTRA_CLANG_ARGS="-I$CLANG_INCLUDE" cargo build --release -p goose-cli
 sudo cp target/release/goose /usr/local/bin/
-ok "Goose built and installed to /usr/local/bin/goose"
+ok "Goose installed"
 
-info "Building whisper.cpp..."
 cd /srv/ai/whisper-cpp
 if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/ggerganov/whisper.cpp .; fi
-cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS="$GPU_TARGET" -DCMAKE_BUILD_TYPE=Release -G Ninja .
-cmake --build build -j$(nproc)
+spin "Configuring whisper.cpp" cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS="$GPU_TARGET" -DCMAKE_BUILD_TYPE=Release -G Ninja .
+spin "Compiling whisper.cpp" cmake --build build -j$(nproc)
 ok "whisper.cpp built"
 
 step "Building Qdrant + Caddy (~25 min — Rust compile)"
-info "Building Qdrant..."
 cd /srv/ai/qdrant
 source ~/.cargo/env
 if [ -d .git ]; then git pull --ff-only 2>/dev/null || true; else git clone https://github.com/qdrant/qdrant .; fi
-cargo build --release
+spin "Compiling Qdrant (Rust — this takes a while)" cargo build --release
 ok "Qdrant built"
 
 info "Installing Caddy..."
