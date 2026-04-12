@@ -144,13 +144,24 @@
  .ctrl-footer a:hover { text-decoration:underline; }
  /* ── Version Rows ── */
  .ver-row {
- display:flex;align-items:center;gap:.5rem;padding:.35rem 0;
- border-bottom:1px solid var(--line);font-size:.7rem;
+ display:flex;align-items:center;gap:.5rem;padding:.5rem .4rem;
+ border-bottom:1px solid var(--line);font-size:.75rem;cursor:pointer;
+ transition:background .15s;border-radius:4px;
  }
  .ver-row:last-child { border-bottom:none; }
- .ver-name { min-width:120px;color:var(--text-dim);font-weight:600; }
- .ver-value { color:var(--text);min-width:80px; }
+ .ver-row:hover { background:rgba(255,255,255,.03); }
+ .ver-name { min-width:120px;color:var(--text);font-weight:700; }
+ .ver-value { color:var(--accent);min-width:80px;font-weight:600; }
  .ver-status { margin-left:auto;display:flex;align-items:center;gap:.4rem; }
+ .ver-detail {
+ display:none;padding:.5rem .6rem;margin:0 0 .35rem;
+ background:var(--bg);border:1px solid var(--border);border-radius:6px;
+ font-size:.65rem;color:var(--text-dim);
+ }
+ .ver-detail.open { display:block; }
+ .ver-detail-row { display:flex;justify-content:space-between;padding:.2rem 0; }
+ .ver-detail-row span:first-child { color:var(--text-muted); }
+ .ver-detail-actions { display:flex;gap:.4rem;margin-top:.5rem;padding-top:.4rem;border-top:1px solid var(--line); }
  /* ── SSH Mesh ── */
  .ssh-node {
  display:flex;align-items:center;gap:.5rem;padding:.35rem 0;
@@ -596,26 +607,73 @@
  }
  }
  // ── Software Stack ──
+ let expandedVer = null
+ const COMPONENT_INFO = {
+ kernel: {desc:'Linux kernel — the foundation', actions:['wiki'], tips:'Managed by pacman. Bleeding edge: kernel 7.0-rc for NPU.'},
+ rocm: {desc:'AMD GPU compute stack — drivers, HIP, math libraries', actions:['wiki'], tips:'Used by vLLM, FLM (NPU), PyTorch. NOT used by llama.cpp.'},
+ lemonade: {desc:'Unified AI server — all models route through here', actions:['wiki','restart'], tips:'Restart: sudo systemctl restart lemonade-server'},
+ llamacpp_vulkan: {desc:'LLM inference backend — Vulkan (h/t u/Look_0ver_There)', actions:['wiki','reinstall'], tips:'Reinstall: lemonade backends install llamacpp:vulkan'},
+ llamacpp_rocm: {desc:'LLM inference backend — ROCm/HIP for MoE models', actions:['wiki','reinstall'], tips:'Reinstall: lemonade backends install llamacpp:rocm'},
+ python: {desc:'Python runtime via pyenv', actions:['wiki'], tips:'Managed by pyenv. Do not use system python.'},
+ caddy: {desc:'Reverse proxy — dashboard + API routing', actions:['wiki','restart'], tips:'Restart: sudo systemctl restart caddy'},
+ }
+ function toggleVerDetail(name) {
+ expandedVer = expandedVer === name ? null : name
+ renderVersions()
+ }
+ function renderVersions() {
+ const el = document.getElementById('version-list')
+ if (!el._data) return
+ const versions = el._data
+ let html = ''
+ for (const [name, info] of Object.entries(versions)) {
+ const version = (info.version || '--').replace(/^(lemonade version |Python )/i, '')
+ const wiki = info.wiki || '#'
+ const displayName = name.replace('_',':')
+ const expanded = expandedVer === name
+ const cinfo = COMPONENT_INFO[name] || {desc:'', actions:['wiki'], tips:''}
+ html += `<div class="ver-row" onclick="toggleVerDetail('${name}')">
+ <span class="ver-name">${displayName}</span>
+ <span class="ver-value">${version}</span>
+ <span class="ver-status">
+ <span class="pill green" style="font-size:.5rem;padding:.1rem .35rem;">current</span>
+ <a class="wiki-link" href="${wiki}" target="_blank" title="Wiki" onclick="event.stopPropagation()">?</a>
+ </span>
+ </div>
+ <div class="ver-detail ${expanded ? 'open' : ''}" id="ver-detail-${name}">
+ <div class="ver-detail-row"><span>component</span><span>${displayName}</span></div>
+ <div class="ver-detail-row"><span>version</span><span>${version}</span></div>
+ <div class="ver-detail-row"><span>description</span><span>${cinfo.desc}</span></div>
+ <div class="ver-detail-row"><span>notes</span><span>${cinfo.tips}</span></div>
+ <div class="ver-detail-actions">
+ <a class="gen-btn mono" href="${wiki}" target="_blank" style="font-size:.55rem;padding:.25rem .5rem;text-decoration:none;">Wiki</a>
+ ${cinfo.actions.includes('restart') ? `<button class="gen-btn mono" style="font-size:.55rem;padding:.25rem .5rem;" onclick="event.stopPropagation();restartService('${name}')">Restart</button>` : ''}
+ ${cinfo.actions.includes('reinstall') ? `<button class="gen-btn mono" style="font-size:.55rem;padding:.25rem .5rem;" onclick="event.stopPropagation();reinstallBackend('${name}')">Reinstall</button>` : ''}
+ </div>
+ </div>`
+ }
+ el.innerHTML = html
+ }
+ async function restartService(name) {
+ const svcMap = {lemonade:'lemonade-server', caddy:'caddy'}
+ const svc = svcMap[name]
+ if (!svc) return
+ alert('Run: sudo systemctl restart ' + svc)
+ }
+ async function reinstallBackend(name) {
+ const be = name.replace('_',':')
+ alert('Run: lemonade backends install ' + be)
+ }
  async function fetchVersions() {
  try {
- const r = await fetch('/api/software/versions', {signal: AbortSignal.timeout(5000)})
+ const r = await fetch('/api/software/versions')
  const raw = await r.json()
  const versions = raw.versions || raw || {}
  frozen = raw.frozen || false
  document.getElementById('freeze-btn').textContent = frozen ? 'Unfreeze' : 'Freeze'
  const el = document.getElementById('version-list')
- let html = ''
- for (const [name, info] of Object.entries(versions)) {
- const version = (info.version || '--').replace(/^(lemonade version |Python )/i, '')
- const wiki = info.wiki || '#'
- const pill = '<span class="pill green" style="font-size:.5rem;padding:.1rem .35rem;">current</span>'
- html += `<div class="ver-row">
- <span class="ver-name">${name.replace('_',':')}</span>
- <span class="ver-value">${version}</span>
- <span class="ver-status">${pill}<a class="wiki-link" href="${wiki}" target="_blank" title="Wiki: ${name}">?</a></span>
- </div>`
- }
- el.innerHTML = html
+ el._data = versions
+ renderVersions()
  } catch {
  document.getElementById('version-list').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:.6rem;">unavailable</div>'
  }
