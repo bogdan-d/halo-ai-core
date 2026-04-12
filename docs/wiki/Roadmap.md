@@ -2,10 +2,10 @@
 
 ## Current — v1.0.0 (Core)
 
-- [x] ROCm 7.2.1 with gfx1151 support
-- [x] Caddy reverse proxy with drop-in configs
-- [x] llama.cpp from source (ROCm + Vulkan)
-- [x] Lemonade SDK 9.x
+- [x] ROCm 7.13 with gfx1151 support (vLLM, whisper)
+- [x] Caddy reverse proxy with import pattern
+- [x] llama.cpp from source (Vulkan only — 13-21% faster than ROCm)
+- [x] Lemonade SDK 10.2.0
 - [x] Gaia SDK 0.17.x
 - [x] All systemd managed
 - [x] SSH-only security

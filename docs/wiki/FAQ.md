@@ -22,20 +22,20 @@ Attack surface. Every open port is a door. SSH is one door with a very good lock
 
 ## Can I use this on non-Strix Halo hardware?
 
-The script is built for gfx1151 (Strix Halo) but most of it works on any AMD GPU with ROCm support. Change `AMDGPU_TARGETS` in the llama.cpp build and `HSA_OVERRIDE_GFX_VERSION` in the ROCm env to match your GPU.
+The script is built for gfx1151 (Strix Halo) but most of it works on any AMD GPU with Vulkan support. llama.cpp uses Vulkan (not ROCm) so any GPU with Vulkan drivers will work. vLLM and whisper.cpp still use ROCm — change `HSA_OVERRIDE_GFX_VERSION` in the ROCm env to match your GPU.
 
 ## Can I use this without a GPU?
 
-Yes. Use `--skip-rocm` and llama.cpp will build with Vulkan/CPU only. Slower, but works.
+Yes. llama.cpp will fall back to CPU if no Vulkan GPU is detected. Slower, but works.
 
 ## How do I update llama.cpp?
 
 ```bash
-cd ~/llama.cpp
+cd /srv/ai/llama-cpp
 git pull
-cmake --build build --config Release -j$(nproc)
-sudo cp build/bin/llama-server /usr/local/bin/
-sudo systemctl restart llama-server
+cmake -B build -DGGML_VULKAN=ON -DCMAKE_BUILD_TYPE=Release -G Ninja .
+cmake --build build -j$(nproc)
+sudo systemctl restart halo-llama-server
 ```
 
 ## How do I update Lemonade/Gaia?

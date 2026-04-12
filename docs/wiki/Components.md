@@ -1,8 +1,8 @@
 # Components
 
-## ROCm 7.2.1
+## ROCm 7.13
 
-AMD's GPU compute stack. Gives llama.cpp and other tools access to the full 128GB unified memory on Strix Halo.
+AMD's GPU compute stack. Used by vLLM and whisper.cpp for HIP-accelerated inference. llama.cpp uses Vulkan instead (13-21% faster generation — see [VULKAN-PERFORMANCE.md](../VULKAN-PERFORMANCE.md)).
 
 - Package: `rocm-hip-sdk`, `rocm-opencl-sdk`
 - Path: `/opt/rocm/bin/`
@@ -39,13 +39,13 @@ sudo systemctl reload caddy
 
 ## llama.cpp
 
-LLM inference engine built from source with ROCm + Vulkan support.
+LLM inference engine built from source with **Vulkan only**. Benchmarks show 13-21% faster generation vs ROCm/HIP on Strix Halo.
 
-- Binary: `/usr/local/bin/llama-server`
-- Source: `~/llama.cpp/`
-- Service: `llama-server.service`
+- Binary: `/srv/ai/llama-cpp/build/bin/llama-server`
+- Source: `/srv/ai/llama-cpp/`
+- Service: `halo-llama-server.service`
 - API: OpenAI-compatible at `localhost:8080`
-- Build flags: `GGML_HIP=ON`, `GGML_VULKAN=ON`, `AMDGPU_TARGETS=gfx1151`
+- Build flags: `GGML_VULKAN=ON`, `-DCMAKE_BUILD_TYPE=Release`
 
 ### Loading a Model
 
@@ -72,7 +72,7 @@ AMD's unified AI backend. Wraps llama.cpp, whisper, kokoro TTS, and stable diffu
 
 ### Backends Available
 
-- `llamacpp` — LLM inference (Vulkan/ROCm/CPU)
+- `llamacpp` — LLM inference (Vulkan)
 - `whispercpp` — Speech to text
 - `sd-cpp` — Image generation
 - `kokoro` — Text to speech

@@ -8,9 +8,9 @@
 │            Reverse Proxy (:80)               │
 ├──────────┬──────────┬───────────┬───────────┤
 │ llama.cpp│ Lemonade │   Gaia    │  Future   │
-│  :8080   │  :13305  │  agents   │ services  │
+│ (Vulkan) │  :13305  │  agents   │ services  │
 ├──────────┴──────────┴───────────┴───────────┤
-│              ROCm 7.2.1 (gfx1151)           │
+│     Vulkan (llama.cpp) + ROCm (vLLM/whisper)│
 ├─────────────────────────────────────────────┤
 │         Arch Linux / systemd / btrfs        │
 └─────────────────────────────────────────────┘
