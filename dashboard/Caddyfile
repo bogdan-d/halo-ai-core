@@ -50,13 +50,10 @@
 		respond 403
 	}
 
-	# Lemonade web app — proxy on /lemonade path
-	handle /lemonade* {
+	# Lemonade web app link — redirect to dedicated port
+	handle /lemonade {
 		handle @local {
-			uri strip_prefix /lemonade
-			reverse_proxy 127.0.0.1:13305 {
-				header_down -Content-Security-Policy
-			}
+			redir http://{hostport}:13306 temporary
 		}
 		respond 403
 	}
@@ -64,6 +61,17 @@
 	# Dashboard (static files)
 	root * /srv/halo-dashboard
 	file_server
+}
+
+# Lemonade web app on :13306 — proxies to localhost:13305
+:13306 {
+	@local remote_ip 127.0.0.1 ::1 10.0.0.0/24 10.100.0.0/24 192.168.101.0/24
+	handle @local {
+		reverse_proxy 127.0.0.1:13305 {
+			header_down -Content-Security-Policy
+		}
+	}
+	respond 403
 }
 
 import /etc/caddy/conf.d/*.caddy
