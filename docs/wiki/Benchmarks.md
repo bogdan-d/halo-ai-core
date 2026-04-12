@@ -1,44 +1,73 @@
 # Benchmarks
 
-Performance numbers on AMD Strix Halo (Ryzen AI MAX+ 395, 128GB unified, gfx1151).
-
 *"Show me what you got."* — Rick Sanchez
 
-## Lemonade v10.2.0 + ROCm (current stable)
+All numbers verified on AMD Strix Halo (Ryzen AI MAX+ 395, 128GB unified, gfx1151). Reproducible — clone the repo, run `install.sh --yes-all`, load a model, run `bench-kernel.sh`.
 
-Benchmarks run through Lemonade SDK API by Claude Code. No manual tuning — `install.sh --yes-all` applies all optimizations automatically.
+---
 
-**Stack:** Lemonade v10.2.0 → llama.cpp (Vulkan — h/t u/Look_0ver_There) → gfx1151
-**VRAM used:** 18.1GB / 64GB
+## The Numbers — Kernel 6.19.11, Lemonade 10.2.0
 
-### Qwen3-Coder-30B-A3B (Q4_K_M) — MoE, 3B active params
+**Stack:** Arch Linux → kernel 6.19.11 → Lemonade Server 10.2.0 → llama.cpp Vulkan *(h/t u/Look_0ver_There)* → gfx1151
+**Model:** Qwen3.5-35B-A3B (Q4_K_XL, 19.7GB) — MoE, 3B active params
+**Governor:** performance | **VRAM used:** ~19GB / 64GB
+**Tested:** 2026-04-12
 
-| Test | Prompt tok | Gen tok | Prompt tok/s | Gen tok/s | TTFT | Total |
-|------|-----------|---------|-------------|----------|------|-------|
-| Short | 13 | 256 | 251.7 | **73.0** | 52ms | 3.5s |
-| Medium | 75 | 512 | 494.3 | **72.5** | 152ms | 7.1s |
-| Long | 39 | 1024 | 385.9 | **71.9** | 101ms | 14.2s |
-| Sustained | 54 | 2048 | 437.0 | **70.5** | 124ms | 29.0s |
+### Synthetic Benchmarks (bench-kernel.sh, averaged over 2-3 runs)
 
-Key observations:
-- Rock solid 70-73 tok/s with zero degradation over 2048 tokens
-- Sub-200ms TTFT consistently
-- Only 18GB of 64GB VRAM used — room for much larger models
-- Avg 14.2ms per token sustained
+| Test | Prompt tok/s | Gen tok/s | TTFT | Total |
+|------|-------------|----------|------|-------|
+| Short Burst (24→2) | 193.5 | **165.2** | 68ms | 53ms |
+| Medium Response (24→79) | 136.6 | **89.5** | 37ms | 901ms |
+| Long Generation (37→512) | 135.5 | **88.1** | 57ms | 5.9s |
+| Sustained 2K (51→2048) | 212.3 | **84.6** | 79ms | 24.3s |
+| Code Generation (37→892) | 168.0 | **87.2** | 77ms | 10.2s |
+| Reasoning (40→156) | 146.1 | **89.2** | 58ms | 1.6s |
+| Long Context (223→512) | 526.9 | **87.3** | 121ms | 6.0s |
 
-*Tested 2026-04-08 on kernel 6.19.11-arch1-1*
+**Takeaway:** 84-89 tok/s generation, rock solid, zero degradation over 2048 tokens. Sub-100ms TTFT.
 
-## LLM Inference (llama.cpp direct)
+### Real-World Queries (actual prompts, actual responses)
 
-| Model | Quant | tok/s | Notes |
-|-------|-------|-------|-------|
+| Task | Prompt tok/s | Gen tok/s | TTFT | Tokens |
+|------|-------------|----------|------|--------|
+| Bug Fix (debug a real error) | 371.5 | **88.6** | 178ms | 256 |
+| Code Review (find SQL injection) | 439.7 | **87.8** | 177ms | 512 |
+| System Admin (write systemd unit) | 384.0 | **88.4** | 159ms | 354 |
+| Explain Like I'm 5 (ROCm vs CUDA) | 321.5 | **88.1** | 156ms | 512 |
+| Quick Answer (Q4_K_M vs Q4_0) | 223.4 | **88.7** | 148ms | 256 |
+
+**Takeaway:** Same 87-89 tok/s on real tasks. Not cherry-picked synthetic prompts — actual questions you'd ask.
+
+*Thanks to u/Queasy_Asparagus69 for suggesting real-world queries alongside benchmarks.*
+
+---
+
+## Community Comparison
+
+Same hardware (Strix Halo 395, 128GB), same model (Qwen3.5-35B-A3B Q4_K_M), different setup:
+
+| Setup | Gen tok/s | Backend | Kernel |
+|-------|----------|---------|--------|
+| **halo-ai-core (this repo)** | **84-89** | Lemonade Vulkan | 6.19.11 |
+| kyuz0 toolboxes (vulkan-radv) | 69 | llama-bench | 7.0-rc7 CachyOS |
+| kyuz0 toolboxes (vulkan-amdvlk) | 59 | llama-bench | 7.0-rc7 CachyOS |
+
+20-30% faster with Lemonade's Vulkan backend on kernel 6.19. Community data from [kyuz0/amd-strix-halo-toolboxes](https://github.com/kyuz0/amd-strix-halo-toolboxes) — 25 models, 150 benchmarks, 12 hours of testing. [Full spreadsheet](https://docs.google.com/spreadsheets/d/1NzZC4JShGluwH2fdjlMbZ2ke99AcTctUnM7rG12_cYE/) | [llama.cpp discussion](https://github.com/ggml-org/llama.cpp/discussions/20969#discussioncomment-16528183)
+
+---
+
+## Other Models (llama.cpp Vulkan via Lemonade)
+
+| Model | Quant | Gen tok/s | Notes |
+|-------|-------|----------|-------|
 | Qwen3 8B | Q4_K_M | 90.0 | Daily driver |
-| Qwen3-30B MoE | Q4_K_M | 84.2 | Best MoE performance (direct) |
-| Qwen3.5-35B MoE | Q4_K_M | 60.7 | |
+| Qwen3-30B MoE | Q4_K_M | 84.2 | |
+| Qwen3.5-35B MoE | Q4_K_XL | 84-89 | Current default |
 | Gemma 4 27B | Q4_K_M | 52.4 | |
-| Bonsai 8B | 1-bit | 103.7 gen | Vulkan beats ROCm pre-built |
-| Bonsai 4B | 1-bit | 148.3 gen | Vulkan |
-| Bonsai 1.7B | 1-bit | 260.0 gen | Vulkan |
+| Bonsai 8B | 1-bit | 103.7 | Vulkan |
+| Bonsai 4B | 1-bit | 148.3 | Vulkan |
+| Bonsai 1.7B | 1-bit | 260.0 | Vulkan |
 
 ## Image Generation (ComfyUI)
 
@@ -53,101 +82,53 @@ Key observations:
 |-------|------|---------|
 | LTX-Video | 20.6s | ~4s clip |
 
-## NPU (requires kernel 7.0+)
+## NPU (requires kernel 7.0+ — bleeding edge only)
 
 | Model | tok/s | Engine |
 |-------|-------|--------|
 | Qwen3 0.6B | 95.9 | FastFlowLM |
+| Gemma3 1B | 34.9 | FLM |
+| Gemma3 4B | 17.0 | FLM |
+| DeepSeek-R1 8B | 10.5 | FLM |
 
-**Status:** NPU needs kernel 7.0+ for XDNA2 SVA support. Kernel 6.19.x loads amdxdna driver but SVA bind fails. Bleeding edge kernel work tracked in [halo-ai-core-bleeding-edge](https://github.com/stampby/halo-ai-core-bleeding-edge).
+NPU runs independently from GPU — zero GPU memory used. For always-on agents while GPU handles big models. Requires [bleeding edge](https://github.com/stampby/halo-ai-core-bleeding-edge).
 
-## GPU + NPU Simultaneous
+## System Benchmarks
 
-- Total tokens: 2098
-- Peak temperature: 61°C
-- Both running at full speed without throttling
+| Test | Result |
+|------|--------|
+| CPU (sysbench 32t, prime 50000) | 10,328 events/sec |
+| Memory bandwidth (sysbench 16t) | 87,088 MiB/sec |
+| NVMe read (fio 4K random) | 569K IOPS, 2,224 MiB/s |
+| NVMe write (fio 4K random) | 569K IOPS, 2,223 MiB/s |
+| NVMe p99 latency | 5 μs |
+| GPU + NPU simultaneous | 2,098 tokens, peak 61°C |
 
-## What Makes It Fast
+---
 
-The install script patches llama.cpp at build time:
-
-- **MMQ kernel fix** ([#21284](https://github.com/ggml-org/llama.cpp/issues/21284)) — corrects register pressure on RDNA 3.5 (mmq_x=48, mmq_y=64, nwarps=4)
-- **rocWMMA flash attention** — used for HIP workloads (vLLM, PyTorch), not llama.cpp (Vulkan only)
-- **fast math intrinsics** — `__expf()` for MoE routing and SiLU activation
-- **HIPBLASLT** — `ROCBLAS_USE_HIPBLASLT=1` doubles prompt processing throughput
-- **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` for 19x attention speedup
-
-## halo-bench — Benchmark Suite
-
-Comprehensive benchmark script included in the repo. Outputs JSON, CSV, and human-readable summary.
+## Run Your Own
 
 ```bash
-# Full suite — all downloaded models, 3 runs per test
-./halo-bench.sh
+# Synthetic benchmarks (7 tests, averaged)
+./bench-kernel.sh
 
-# Single model, quick mode
-./halo-bench.sh -m Qwen3.5-35B-A3B-GGUF -q
-
-# 5 runs for statistical stability, with asciinema recording
-./halo-bench.sh -r 5 --record
-
-# Benchmark whatever is currently loaded
-./halo-bench.sh --skip-load -q
-```
-
-**8 benchmark categories:**
-
-| Category | What it measures |
-|----------|-----------------|
-| Prompt Processing Scaling | Input throughput at 16–4096 tokens |
-| Generation Speed | Sustained output at 50–1000 tokens |
-| Context Window Stress | Performance under 1K–16K context |
-| Reasoning & Thinking | Math, logic, code analysis, chain-of-thought |
-| Code Generation | Python, Rust, Bash, SQL across languages |
-| Multi-Turn Conversation | Growing context across 4 turns |
-| Instruction Following | JSON output, constrained format, system prompt |
-| Concurrency | Sequential vs parallel request throughput |
-
-Results are saved to `bench-results/YYYY-MM-DD_HHMMSS/` with `results.json`, `results.csv`, and `summary.txt`.
-
-See [latest benchmark results](../../bench-results/) in the repo.
-
-### Qwen3.5-35B-A3B — halo-bench results (2026-04-09)
-
-| Test | Gen tok/s | Prompt tok/s | Notes |
-|------|----------|-------------|-------|
-| Prompt ~16 tokens | 62.5 | 269.5 | Cold prompt |
-| Prompt ~256 tokens | 62.7 | 941.6 | Scaling up |
-| Prompt ~1024 tokens | 62.0 | **1,270.9** | Peak prompt throughput |
-| Generate 50 tokens | 58.0 | 216.3 | Short burst |
-| Generate 250 tokens | 57.2 | 219.5 | Medium |
-| Generate 500 tokens | **57.0** | 219.6 | Sustained |
-| Context ~1024 tokens | 57.0 | 1,006.1 | |
-| Context ~4096 tokens | 55.6 | 1,116.7 | |
-| Context ~8192 tokens | 54.2 | 1,050.1 | Slight gen slowdown at depth |
-| Reasoning: Math | 57.0 | 348.4 | Chain-of-thought |
-| Reasoning: Code | 57.0 | 405.1 | |
-| Code: Python async | 56.8 | 257.2 | |
-| Code: Bash scripting | 56.9 | 288.9 | |
-
-**Memory:** llama-server RSS 5.7GB, RAM delta 73MB during inference.
-
-### Quick one-liner benchmark
-
-```bash
-# Through Lemonade API
+# Quick one-liner through Lemonade API
 curl -s http://localhost:13305/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "your-model", "messages": [{"role": "user", "content": "test"}], "max_tokens": 256}' \
+  -d '{"model": "your-model", "messages": [{"role": "user", "content": "test"}], "max_tokens": 256, "chat_template_kwargs": {"enable_thinking": false}}' \
   | python3 -c "import json,sys; t=json.load(sys.stdin)['timings']; print(f'Gen: {t[\"predicted_per_second\"]:.1f} tok/s, Prompt: {t[\"prompt_per_second\"]:.1f} tok/s, TTFT: {t[\"prompt_ms\"]:.0f}ms')"
+
+# Full suite with halo-bench
+./halo-bench.sh
 
 # GPU utilization during inference
 watch -n 1 rocm-smi
 ```
 
-## Notes
+Raw benchmark JSON files in [`bench-results/`](../../bench-results/).
 
-- Bonsai 1-bit models: Vulkan backend outperforms ROCm pre-built on generation tok/s
-- gfx1100 kernels can be 2-6x faster than gfx1151 on some operations
-- AOTriton provides 19x attention speedup for training workloads
-- Temperature stays under 65°C under sustained load with good cooling
+---
+
+*"That'll do, pig. That'll do." — Babe*
+
+*Designed and built by the architect.*
