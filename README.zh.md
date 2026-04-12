@@ -51,7 +51,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.2.1 — gfx1151上完整的128gb统一内存 |
-| **推理** | llama.cpp — 从源码编译，hip + vulkan |
+| **推理** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
 | **后端** | lemonade sdk 9.x — llm、whisper、kokoro、stable diffusion |
 | **智能体** | gaia sdk 0.17.x — 构建100%本地运行的ai智能体 |
 | **网关** | caddy 2.x — 反向代理，即插即用配置，自动路由 |

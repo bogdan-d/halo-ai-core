@@ -51,7 +51,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.2.1 — memória unificada completa de 128gb em gfx1151 |
-| **inferência** | llama.cpp — compilado a partir do código-fonte, hip + vulkan |
+| **inferência** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
 | **backend** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
 | **agentes** | gaia sdk 0.17.x — construa agentes de ia que funcionam 100% localmente |
 | **gateway** | caddy 2.x — proxy reverso, configuração drop-in, roteamento automático |

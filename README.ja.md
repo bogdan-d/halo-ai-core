@@ -51,7 +51,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.2.1 — gfx1151で128gbフルユニファイドメモリ |
-| **推論** | llama.cpp — ソースからコンパイル、hip + vulkan |
+| **推論** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
 | **バックエンド** | lemonade sdk 9.x — llm、whisper、kokoro、stable diffusion |
 | **エージェント** | gaia sdk 0.17.x — 100%ローカルで動作するaiエージェントを構築 |
 | **ゲートウェイ** | caddy 2.x — リバースプロキシ、ドロップイン設定、自動ルーティング |

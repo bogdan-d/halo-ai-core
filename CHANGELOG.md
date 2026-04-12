@@ -9,7 +9,7 @@ All notable changes to Halo AI Core.
 ### Core Services
 - ROCm 7.2.1 from Arch repos (gfx1151 + NPU detected)
 - Caddy 2.11.2 reverse proxy with drop-in config pattern
-- llama.cpp built from source (Vulkan only, gfx1151)
+- llama.cpp Vulkan only (h/t u/Look_0ver_There)
 - Lemonade SDK 9.1.4 with web UI
 - Gaia SDK 0.17.1 with Agent UI
 - Python 3.13.4 via pyenv (Arch ships 3.14, SDKs need 3.13)

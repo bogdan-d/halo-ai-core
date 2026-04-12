@@ -14,7 +14,7 @@ I'm a 54-year-old power engineer. Last time I posted benchmarks, u/Hector_Rvkp t
     NPU Driver:  amdxdna 0.6 (built from source)
     XRT:         v2.23.0 (built from source)
     FastFlowLM:  v0.9.38 (built from source)
-    GPU Backend: llama.cpp Vulkan (built from source)
+    GPU Backend: llama.cpp Vulkan (h/t u/Look_0ver_There)
     Image Gen:   stable-diffusion.cpp ROCm (built from source)
     TTS:         Kokoro v1
     STT:         whisper.cpp Vulkan

@@ -2,7 +2,7 @@
 
 ## Decision
 
-As of v10.2.0, halo-ai-core builds llama.cpp with **Vulkan only**. ROCm/HIP and OpenCL backends were removed from the installer.
+As of v10.2.0, halo-ai-core builds llama.cpp with **Vulkan only** (h/t u/Look_0ver_There). ROCm/HIP and OpenCL backends were removed from the installer.
 
 ## Benchmark Results (Strix Halo — AMD Ryzen AI MAX+ 395)
 

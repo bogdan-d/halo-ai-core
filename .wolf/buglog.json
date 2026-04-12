@@ -1,0 +1,51 @@
+[
+  {
+    "date": "2026-04-10",
+    "error_message": "install.sh: line 710: USER: unbound variable",
+    "root_cause": "set -u kills script when $USER is unset in Podman containers (podman exec doesn't set USER)",
+    "fix": "Added USER=\"${USER:-$(whoami)}\" near top of script",
+    "tags": ["install.sh", "container", "set-u", "podman"]
+  },
+  {
+    "date": "2026-04-10",
+    "error_message": "Script dies silently after WireGuard step — sysctl -w fails in containers",
+    "root_cause": "sudo sysctl -w net.ipv4.ip_forward=1 returns non-zero in containers (no /proc/sys write access), set -e kills script",
+    "fix": "Added || true to sysctl and wg-quick systemctl lines",
+    "tags": ["install.sh", "wireguard", "set-e", "container"]
+  },
+  {
+    "date": "2026-04-10",
+    "error_message": "systemctl --user daemon-reload fails in containers",
+    "root_cause": "No user session bus available in Podman containers",
+    "fix": "Added 2>/dev/null || true to systemctl --user daemon-reload",
+    "tags": ["install.sh", "systemd", "container"]
+  },
+  {
+    "date": "2026-04-10",
+    "error_message": "Dashboard Caddyfile exposes API endpoints to all IPs",
+    "root_cause": ":80 block had no @local IP restriction, allowing /api/exec, /v1/*, /api/transcribe from any IP",
+    "fix": "Added @local remote_ip matcher wrapping all proxy handles in dashboard/Caddyfile",
+    "tags": ["security", "caddy", "dashboard", "network-exposure"]
+  },
+  {
+    "date": "2026-04-10",
+    "error_message": "IP leaked to ifconfig.me during WireGuard setup",
+    "root_cause": "curl https://ifconfig.me sends public IP to third-party service, violates privacy preference",
+    "fix": "Removed ifconfig.me call, default to LAN IP, warn user to manually set public IP for remote access",
+    "tags": ["security", "privacy", "wireguard"]
+  },
+  {
+    "date": "2026-04-10",
+    "error_message": "Gaia .env created world-readable despite install -m 600",
+    "root_cause": "install -m 600 /dev/null then cat > reopens file with default umask (644)",
+    "fix": "Replaced with (umask 077; cat > file << EOF ... EOF) subshell",
+    "tags": ["security", "permissions", "gaia"]
+  },
+  {
+    "date": "2026-04-10",
+    "error_message": "Temp dirs not cleaned on script failure",
+    "root_cause": "VLLM_TMP, YAY_TMPDIR, WG_KEY_DIR not included in EXIT trap",
+    "fix": "Added all temp vars to the trap cleanup line",
+    "tags": ["install.sh", "temp-files", "cleanup"]
+  }
+]

@@ -51,7 +51,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.2.1 — gfx1151 पर पूर्ण 128gb एकीकृत मेमोरी |
-| **इन्फरेंस** | llama.cpp — सोर्स से कंपाइल, hip + vulkan |
+| **इन्फरेंस** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
 | **बैकएंड** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
 | **एजेंट** | gaia sdk 0.17.x — 100% लोकल ai एजेंट बनाएँ |
 | **गेटवे** | caddy 2.x — रिवर्स प्रॉक्सी, ड्रॉप-इन कॉन्फिग, ऑटो-रूटिंग |

@@ -21,7 +21,7 @@ CPU:      Ryzen AI MAX+ 395 (32c Zen 5)
 GPU:      Radeon 8060S (RDNA 3.5, gfx1151)
 Memory:   128GB unified DDR5
 OS:       Arch Linux 6.19.11
-Stack:    Lemonade 10.2.0 → llama.cpp (Vulkan)
+Stack:    Lemonade 10.2.0 → llama.cpp (Vulkan — h/t u/Look_0ver_There)
 ```
 
 128GB unified = CPU and GPU share the same pool. no "VRAM limit." load models that would need a $2000 discrete GPU.
@@ -124,7 +124,7 @@ cd halo-ai-core
 one script installs:
 
 - **Lemonade SDK** — model management + OpenAI API
-- **llama.cpp** — from source, Vulkan only
+- **llama.cpp** — Vulkan only (h/t u/Look_0ver_There)
 - **Gaia SDK** — local AI agents
 - **Caddy** — reverse proxy
 - **WireGuard** — phone VPN with QR code

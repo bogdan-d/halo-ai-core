@@ -51,7 +51,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.2.1 — gfx1151에서 128gb 통합 메모리 전체 지원 |
-| **추론** | llama.cpp — 소스에서 컴파일, hip + vulkan |
+| **추론** | llama.cpp (Vulkan) — via Lemonade. *(h/t u/Look_0ver_There)* |
 | **백엔드** | lemonade sdk 9.x — llm, whisper, kokoro, stable diffusion |
 | **에이전트** | gaia sdk 0.17.x — 100% 로컬에서 실행되는 ai 에이전트 구축 |
 | **게이트웨이** | caddy 2.x — 리버스 프록시, 드롭인 설정, 자동 라우팅 |
