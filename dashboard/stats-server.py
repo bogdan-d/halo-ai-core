@@ -608,6 +608,79 @@ def get_software_versions():
     return {'versions': versions, 'frozen': frozen}
 
 
+def check_updates():
+    """Check for available updates across all stack components."""
+    updates = {'packages': [], 'total': 0, 'frozen': os.path.exists(FREEZE_FILE)}
+
+    if updates['frozen']:
+        return updates
+
+    # System packages via pacman
+    try:
+        r = subprocess.run(
+            ['pacman', '-Qu'], capture_output=True, text=True, timeout=15
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            for line in r.stdout.strip().split('\n'):
+                parts = line.split()
+                if len(parts) >= 4:
+                    updates['packages'].append({
+                        'name': parts[0],
+                        'current': parts[1],
+                        'available': parts[3],
+                        'source': 'pacman'
+                    })
+                elif len(parts) >= 2:
+                    updates['packages'].append({
+                        'name': parts[0],
+                        'current': parts[1] if len(parts) > 1 else '',
+                        'available': 'update available',
+                        'source': 'pacman'
+                    })
+    except Exception:
+        pass
+
+    # Lemonade SDK — check GitHub releases
+    try:
+        req = urllib.request.Request(
+            'https://api.github.com/repos/lemonade-sdk/lemonade/releases/latest',
+            headers={'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'halo-ai-core'}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            release = json.loads(resp.read())
+            latest_ver = release.get('tag_name', '').lstrip('v')
+            changelog = release.get('body', '')[:500]
+            current = ''
+            try:
+                cr = subprocess.run(['lemonade', '--version'], capture_output=True, text=True, timeout=5)
+                current = cr.stdout.strip().replace('lemonade version ', '')
+            except Exception:
+                pass
+            if latest_ver and current and latest_ver != current:
+                updates['packages'].append({
+                    'name': 'lemonade-server',
+                    'current': current,
+                    'available': latest_ver,
+                    'source': 'github',
+                    'changelog': changelog
+                })
+    except Exception:
+        pass
+
+    # llama.cpp backends — check Lemonade for newer builds
+    try:
+        be = get_lemonade_backends()
+        for b in be.get('backends', []):
+            if b['recipe'] == 'llamacpp' and b['status'] == 'installed' and b['version']:
+                # Can't easily check for newer without a registry, just report current
+                pass
+    except Exception:
+        pass
+
+    updates['total'] = len(updates['packages'])
+    return updates
+
+
 # ── LLM Live Stats ───────────────────────────────────────────
 _last_llm_stats = {'model': '', 'prompt_tps': 0, 'gen_tps': 0, 'ttft_ms': 0, 'ctx_used': 0, 'ctx_max': 0, 'backend': ''}
 
@@ -700,6 +773,8 @@ class StatsHandler(BaseHTTPRequestHandler):
         elif self.path == '/api/llm/stats':
             self._respond(get_llm_stats())
         # Software stack
+        elif self.path == '/api/software/update-check':
+            self._respond(check_updates())
         elif self.path == '/api/software/versions':
             self._respond(get_software_versions())
         elif self.path.startswith('/exec'):
@@ -731,6 +806,25 @@ class StatsHandler(BaseHTTPRequestHandler):
             ))
         elif path == '/api/lemonade/unload':
             self._respond(lemonade_unload())
+        elif path == '/api/software/apply-updates':
+            if os.path.exists(FREEZE_FILE):
+                self._respond({'status': 'error', 'output': 'Stack is frozen. Unfreeze first.'})
+            else:
+                try:
+                    r = subprocess.run(
+                        ['sudo', 'pacman', '-Syu', '--noconfirm'],
+                        capture_output=True, text=True, timeout=300
+                    )
+                    updated = r.stdout.count('upgrading ')
+                    self._respond({
+                        'status': 'ok' if r.returncode == 0 else 'error',
+                        'updated': updated,
+                        'output': (r.stdout + r.stderr)[-500:]
+                    })
+                except subprocess.TimeoutExpired:
+                    self._respond({'status': 'error', 'output': 'Update timed out (5 min)'})
+                except Exception as e:
+                    self._respond({'status': 'error', 'output': str(e)})
         elif path == '/api/software/freeze':
             with open(FREEZE_FILE, 'w') as f:
                 json.dump({'frozen': True, 'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')}, f)

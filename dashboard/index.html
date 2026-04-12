@@ -150,6 +150,12 @@
  }
  .ver-row:last-child { border-bottom:none; }
  .ver-row:hover { background:rgba(255,255,255,.03); }
+ .ver-row.has-update { animation: pulse-update 2s ease-in-out infinite; }
+ .ver-row.has-update .ver-name { color:var(--orange); }
+ @keyframes pulse-update {
+ 0%, 100% { border-left:3px solid transparent; }
+ 50% { border-left:3px solid var(--orange); background:rgba(251,146,60,.04); }
+ }
  .ver-name { min-width:120px;color:var(--text);font-weight:700; }
  .ver-value { color:var(--accent);min-width:80px;font-weight:600; }
  .ver-status { margin-left:auto;display:flex;align-items:center;gap:.4rem; }
@@ -608,6 +614,7 @@
  }
  // ── Software Stack ──
  let expandedVer = null
+ let componentUpdates = {}
  const COMPONENT_INFO = {
  kernel: {desc:'Linux kernel — the foundation', actions:['wiki'], tips:'Managed by pacman. Bleeding edge: kernel 7.0-rc for NPU.'},
  rocm: {desc:'AMD GPU compute stack — drivers, HIP, math libraries', actions:['wiki'], tips:'Used by vLLM, FLM (NPU), PyTorch. NOT used by llama.cpp.'},
@@ -632,11 +639,16 @@
  const displayName = name.replace('_',':')
  const expanded = expandedVer === name
  const cinfo = COMPONENT_INFO[name] || {desc:'', actions:['wiki'], tips:''}
- html += `<div class="ver-row" onclick="toggleVerDetail('${name}')">
+ const upd = componentUpdates[name]
+ const hasUpdate = !!upd
+ const pill = hasUpdate
+ ? `<span class="pill orange" style="font-size:.5rem;padding:.1rem .35rem;">update</span>`
+ : `<span class="pill green" style="font-size:.5rem;padding:.1rem .35rem;">current</span>`
+ html += `<div class="ver-row ${hasUpdate ? 'has-update' : ''}" onclick="toggleVerDetail('${name}')">
  <span class="ver-name">${displayName}</span>
  <span class="ver-value">${version}</span>
  <span class="ver-status">
- <span class="pill green" style="font-size:.5rem;padding:.1rem .35rem;">current</span>
+ ${pill}
  <a class="wiki-link" href="${wiki}" target="_blank" title="Wiki" onclick="event.stopPropagation()">?</a>
  </span>
  </div>
@@ -644,11 +656,14 @@
  <div class="ver-detail-row"><span>component</span><span>${displayName}</span></div>
  <div class="ver-detail-row"><span>version</span><span>${version}</span></div>
  <div class="ver-detail-row"><span>description</span><span>${cinfo.desc}</span></div>
+ ${hasUpdate ? `<div class="ver-detail-row" style="color:var(--orange);"><span>update</span><span>${upd.current} → ${upd.available}</span></div>` : ''}
+ ${hasUpdate && upd.changelog ? `<div style="margin-top:.3rem;padding:.3rem;background:var(--surface);border-radius:4px;font-size:.55rem;color:var(--text-muted);max-height:80px;overflow-y:auto;white-space:pre-wrap;">${upd.changelog.substring(0,300)}</div>` : ''}
  <div class="ver-detail-row"><span>notes</span><span>${cinfo.tips}</span></div>
  <div class="ver-detail-actions">
  <a class="gen-btn mono" href="${wiki}" target="_blank" style="font-size:.55rem;padding:.25rem .5rem;text-decoration:none;">Wiki</a>
  ${cinfo.actions.includes('restart') ? `<button class="gen-btn mono" style="font-size:.55rem;padding:.25rem .5rem;" onclick="event.stopPropagation();restartService('${name}')">Restart</button>` : ''}
  ${cinfo.actions.includes('reinstall') ? `<button class="gen-btn mono" style="font-size:.55rem;padding:.25rem .5rem;" onclick="event.stopPropagation();reinstallBackend('${name}')">Reinstall</button>` : ''}
+ ${hasUpdate ? `<button class="gen-btn accent mono" style="font-size:.55rem;padding:.25rem .5rem;" onclick="event.stopPropagation();alert('Run: sudo pacman -Syu')">Update</button>` : ''}
  </div>
  </div>`
  }
@@ -681,17 +696,67 @@
  async function checkUpdates() {
  const el = document.getElementById('software-status')
  el.textContent = 'Checking for updates...'
+ el.style.color = 'var(--text-dim)'
  try {
- const r = await fetch('/api/software/update-check', {signal: AbortSignal.timeout(30000)})
+ const r = await fetch('/api/software/update-check')
  const data = await r.json()
- if (data.packages !== undefined) {
- el.textContent = data.packages === 0 ? 'System is up to date' : `${data.packages} packages available`
- } else {
- el.textContent = data.error || 'Check complete'
+ if (data.frozen) {
+ el.innerHTML = '<span style="color:var(--orange);">Stack frozen — updates disabled</span>'
+ return
  }
- fetchVersions()
+ const pkgs = data.packages || []
+ // Map pacman packages to our component names
+ componentUpdates = {}
+ const pkgMap = {linux:'kernel', 'rocm-hip-sdk':'rocm', 'lemonade-server':'lemonade', python:'python', caddy:'caddy'}
+ pkgs.forEach(p => {
+ const mapped = pkgMap[p.name]
+ if (mapped) componentUpdates[mapped] = p
+ // Also check for lemonade from github
+ if (p.source === 'github' && p.name === 'lemonade-server') componentUpdates['lemonade'] = p
+ })
+ renderVersions()
+ if (pkgs.length === 0) {
+ el.innerHTML = '<span style="color:var(--green);">All components up to date</span>'
+ return
+ }
+ // Build update list
+ let html = `<div style="color:var(--orange);margin-bottom:.4rem;">${pkgs.length} update${pkgs.length>1?'s':''} available:</div>`
+ html += '<div style="max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:.3rem;">'
+ pkgs.forEach(p => {
+ html += `<div style="display:flex;justify-content:space-between;padding:.2rem .3rem;border-bottom:1px solid var(--line);font-size:.6rem;">`
+ html += `<span style="font-weight:600;">${p.name}</span>`
+ html += `<span>${p.current} → <span style="color:var(--accent);">${p.available}</span></span>`
+ html += `</div>`
+ if (p.changelog) {
+ html += `<div style="padding:.2rem .3rem;font-size:.55rem;color:var(--text-muted);max-height:60px;overflow-y:auto;">${p.changelog.substring(0,200)}...</div>`
+ }
+ })
+ html += '</div>'
+ html += `<div style="display:flex;gap:.4rem;margin-top:.5rem;">
+ <button class="gen-btn accent mono" style="flex:1;font-size:.6rem;padding:.35rem;" onclick="applyUpdates()">Apply ${pkgs.length} Updates</button>
+ <button class="gen-btn muted mono" style="font-size:.6rem;padding:.35rem;" onclick="document.getElementById('software-status').textContent='Dismissed'">Dismiss</button>
+ </div>`
+ el.innerHTML = html
  } catch (e) {
- el.textContent = 'Update check failed: ' + e.message
+ el.innerHTML = '<span style="color:var(--red);">Update check failed: ' + e.message + '</span>'
+ }
+ }
+ async function applyUpdates() {
+ if (!confirm('Apply system updates? This will run pacman -Syu. Make sure you have a snapshot.')) return
+ const el = document.getElementById('software-status')
+ el.innerHTML = '<span style="color:var(--orange);">Applying updates... this may take a few minutes</span>'
+ try {
+ const r = await fetch('/api/software/apply-updates', {method: 'POST'})
+ const data = await r.json()
+ if (data.status === 'ok') {
+ el.innerHTML = `<span style="color:var(--green);">Updates applied. ${data.updated || 0} packages updated.</span>`
+ componentUpdates = {}
+ fetchVersions()
+ } else {
+ el.innerHTML = `<span style="color:var(--red);">Update failed: ${data.output || data.error}</span>`
+ }
+ } catch (e) {
+ el.innerHTML = '<span style="color:var(--red);">Update failed: ' + e.message + '</span>'
  }
  }
  async function recompile() {
