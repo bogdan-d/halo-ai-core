@@ -1,0 +1,77 @@
+{
+  "kernel": "6.19.11-arch1-1",
+  "timestamp": "2026-04-12T13:49:54-03:00",
+  "model": "Qwen3-30B-A3B-GGUF",
+  "benchmarks": [
+    {
+      "name": "Short Burst",
+      "prompt_tps": 18.1,
+      "gen_tps": -2139.9,
+      "ttft_ms": 44294,
+      "total_ms": 44291,
+      "prompt_tokens": 20,
+      "gen_tokens": 32,
+      "runs": 3
+    },
+    {
+      "name": "Medium Response",
+      "prompt_tps": 3.7,
+      "gen_tps": 6955.3,
+      "ttft_ms": 19339,
+      "total_ms": 19342,
+      "prompt_tokens": 20,
+      "gen_tokens": 256,
+      "runs": 3
+    },
+    {
+      "name": "Long Generation",
+      "prompt_tps": 5.6,
+      "gen_tps": 121467.3,
+      "ttft_ms": 5901,
+      "total_ms": 5905,
+      "prompt_tokens": 33,
+      "gen_tokens": 512,
+      "runs": 3
+    },
+    {
+      "name": "Sustained 2K",
+      "prompt_tps": 1.6,
+      "gen_tps": 2605616.6,
+      "ttft_ms": 31275,
+      "total_ms": 31277,
+      "prompt_tokens": 47,
+      "gen_tokens": 2048,
+      "runs": 2
+    },
+    {
+      "name": "Code Gen",
+      "prompt_tps": 2.5,
+      "gen_tps": 419458.3,
+      "ttft_ms": 16757,
+      "total_ms": 16761,
+      "prompt_tokens": 38,
+      "gen_tokens": 1024,
+      "runs": 2
+    },
+    {
+      "name": "Reasoning",
+      "prompt_tps": 8.0,
+      "gen_tps": 68105.0,
+      "ttft_ms": 6862,
+      "total_ms": 6867,
+      "prompt_tokens": 39,
+      "gen_tokens": 256,
+      "runs": 3
+    },
+    {
+      "name": "Long Context",
+      "prompt_tps": 37.5,
+      "gen_tps": 116909.3,
+      "ttft_ms": 6023,
+      "total_ms": 6028,
+      "prompt_tokens": 226,
+      "gen_tokens": 512,
+      "runs": 2
+    }
+  ]
+}

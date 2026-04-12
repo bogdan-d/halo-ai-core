@@ -36,7 +36,7 @@ bash scripts/halo-test-cycle.sh --yes-all
 | Rust | Toolchain installed |
 | Go | Toolchain installed |
 | Caddy | Caddyfile exists |
-| llama.cpp | HIP + Vulkan builds |
+| llama.cpp | Vulkan build |
 | Lemonade | Repo and build present |
 | Whisper.cpp | Build present |
 | Qdrant | Release binary built |

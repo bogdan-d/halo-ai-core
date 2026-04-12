@@ -1,0 +1,61 @@
+{
+  "kernel": "6.19.11-arch1-1",
+  "model": "Qwen3-30B-A3B-GGUF",
+  "tests": [
+    {
+      "name": "Bug Fix (real debug)",
+      "prompt": "I'm getting 'libwebsockets.so.20: cannot open shared object file' after updating Arch Linux. The binary was compiled against libwebsockets 4.5.x but Arch updated to a newer version. How do I fix this without recompiling?",
+      "response": "You're encountering a **shared library version mismatch** after updating Arch Linux. The error:\n\n```\nlibwebsockets.so.20: cannot open shared object file\n```\n\nmeans that your binary was compiled against **libwebsockets version 4.5.x**, but the system now has a **newer version** (e.g., 4.6.x or 4.7.x), and the shared library name has changed (e.g., `libwebsockets.so.20` is no longer available, and the new version is `libwebsockets.so.21` or similar).\n\n### Why This Happens\n\nWhen a library is updated, its **shared library version number** (e.g., `libwebsockets.so.20`) may change. This is part of the **libtool versioning** system. If your binary was compiled against an older version, it will look for the old version of the shared library, which may no longer exist.\n\n---\n\n## \u2705 Solution: Install the Older Version of `libwebsockets`\n\nYou can install the older version of `libwebsockets` that your binary was compiled against, **without recompiling** the binary.\n\n### Step-by-step:\n\n1. **Find the version of `",
+      "prompt_tps": 371.5,
+      "gen_tps": 88.6,
+      "ttft_ms": 178,
+      "gen_ms": 2890,
+      "prompt_tokens": 66,
+      "gen_tokens": 256
+    },
+    {
+      "name": "Code Review (real code)",
+      "prompt": "Review this Python function for issues:\n\ndef process_users(db):\n    users = db.query('SELECT * FROM users WHERE active = ' + str(1))\n    for u in users:\n        if u['email'] != None:\n            send_email(u['email'], 'Hello ' + u['name'])\n    return len(users)",
+      "response": "Your Python function `process_users` has a **critical security issue** and a **potential bug**. Let's break it down:\n\n---\n\n### \ud83d\udd12 **Security Issue: SQL Injection Vulnerability**\n\n```python\nusers = db.query('SELECT * FROM users WHERE active = ' + str(1))\n```\n\nThis line is **dangerous** because it **constructs the SQL query as a string** using string concatenation. If `db.query()` is not properly parameterized, this opens the door for **SQL injection attacks**.\n\n#### Example of a vulnerability:\nIf someone could somehow manipulate the `db` object or the `str(1)` part, they could inject malicious SQL.\n\n---\n\n### \u2705 **Fix: Use Parameterized Queries**\n\nYou should **never** build SQL queries by concatenating user input or even hardcoded values like `1`. Instead, use **parameterized queries**.\n\nAssuming `db.query()` supports parameterized queries (like with `?` placeholders), you should rewrite it like this:\n\n```python\nusers = db.query('SELECT * FROM users WHERE active = ?', (1,))\n```\n\nOr, if `db.query()` uses named parameters:\n\n```python\nusers = db.query('SELECT * FROM users WHERE active = :active', {'active': 1})\n```\n\nThis prevents SQL injection and is the **correct and safe way** to write SQL queries.\n\n---\n\n### \ud83d\udc1e **Potential Bug: `u['email']` Might Be a String or `None`**\n\n```python\nif u['email'] != None:\n    send_email(u['email'], 'Hello ' + u['name'])\n```\n\nThis is **not a bug per se**, but it's **not very Pythonic**. You can simplify it to:\n\n```python\nif u['email']:\n    send_email(u['email'], f'Hello {u[\"name\"]}')\n```\n\nThis will work as long as `u['email']` is a **truthy** value (i.e., not `None`, `False`, `0`, `''`, etc.). If you want to be more explicit, you can check:\n\n```python\nif u['email'] is not None:\n    send_email(u['email'], f'Hello {u[\"name\"]}')\n```\n\n---\n\n### \ud83d\udccc Summary of Issues\n\n| Issue | Description |\n|-------|-------------|\n| \u2705 **SQL Injection Vulnerability** | Using string concatenation to build SQL queries. |\n| \u2705 **Not Pythonic",
+      "prompt_tps": 439.7,
+      "gen_tps": 87.8,
+      "ttft_ms": 177,
+      "gen_ms": 5829,
+      "prompt_tokens": 78,
+      "gen_tokens": 512
+    },
+    {
+      "name": "System Admin (real task)",
+      "prompt": "Write a systemd service file for a llama.cpp server that starts after network is up, runs as user 'bcloud', restarts on failure with 5 second delay, uses GPU 0, and serves on port 8080.",
+      "response": "Here's a `systemd` service file for running a `llama.cpp` server. This service:\n\n- Starts after the network is up\n- Runs as user `bcloud`\n- Restarts on failure with a 5-second delay\n- Uses GPU 0\n- Listens on port 8080\n\nSave this file as `/etc/systemd/system/llama-server.service`:\n\n```ini\n[Unit]\nDescription=Llama.cpp Server\nAfter=network.target\n\n[Service]\nUser=bcloud\nGroup=bcloud\nWorkingDirectory=/home/bcloud/llama.cpp\nExecStart=/home/bcloud/llama.cpp/llama-server --n_gpu_layers 32 --port 8080 --device cuda:0\nRestart=on-failure\nRestartSec=5s\nEnvironment=\"CUDA_VISIBLE_DEVICES=0\"\n\n[Install]\nWantedBy=multi-user.target\n```\n\n### Notes:\n\n- Make sure the `ExecStart` path matches the actual location of your `llama-server` binary.\n- The `--n_gpu_layers` argument is optional and depends on your model and GPU memory. You can adjust it as needed.\n- `--device cuda:0` specifies using GPU 0. If you're using a different backend (e.g., `cpu`), change this accordingly.\n- The `Environment=\"CUDA_VISIBLE_DEVICES=0\"` ensures the process uses GPU 0 even if multiple GPUs are available.\n\n### To enable and start the service:\n\n```bash\nsudo systemctl daemon-reload\nsudo systemctl enable llama-server\nsudo systemctl start llama-server\n```\n\nLet me know if you want to add logging or configure it to run as a systemd user service instead of system-wide.",
+      "prompt_tps": 384.0,
+      "gen_tps": 88.4,
+      "ttft_ms": 159,
+      "gen_ms": 4003,
+      "prompt_tokens": 61,
+      "gen_tokens": 354
+    },
+    {
+      "name": "Explain Like I'm 5",
+      "prompt": "Explain how ROCm works on AMD GPUs compared to CUDA on NVIDIA. I'm switching from an RTX 4090 to an AMD Radeon 8060S.",
+      "response": "Switching from an **NVIDIA RTX 4090** (which uses **CUDA**) to an **AMD Radeon 8060S** (which uses **ROCm**) involves understanding the differences between these two ecosystems. Here's a detailed explanation of how **ROCm** works on AMD GPUs compared to **CUDA** on NVIDIA GPUs, and what you need to know as you make the switch.\n\n---\n\n## \ud83d\udd0d **What is ROCm?**\n\n**ROCm** stands for **Radeon Open Compute**. It's AMD's open-source software stack for GPU computing, similar to NVIDIA's **CUDA**. It provides a programming model and tools for developing and running parallel applications on AMD GPUs.\n\n### Key Components of ROCm:\n- **HIP (Heterogeneous-Compute Interface for Portability)**: A C++-based programming model that allows developers to write code that can run on both AMD and NVIDIA GPUs (with some porting effort).\n- **ROCm Runtime**: Manages GPU execution, memory, and scheduling.\n- **ROCm Drivers**: Provide low-level access to the GPU hardware.\n- **ROCm Libraries**: Includes optimized libraries like **MIOpen** (for deep learning), **ROCT-Tool** (for profiling), and **HIP-Clang** (for compiling HIP code).\n\n---\n\n## \ud83d\ude80 **How ROCm Works on AMD GPUs**\n\n1. **Architecture Support**:\n   - ROCm supports **AMD GPUs** based on the **GCN (Graphics Core Next)** and **CDNA (Compute DNA)** architectures.\n   - The **Radeon 8060S** is based on the **RDNA 3** architecture (used in the Ryzen 7000 series APUs), which is supported by ROCm.\n\n2. **Programming Model**:\n   - ROCm uses **HIP** as the primary programming model, which is similar to CUDA in syntax and functionality.\n   - HIP allows developers to write code that can be compiled for both AMD and NVIDIA GPUs, though porting is required.\n\n3. **Execution Model**:\n   - ROCm uses a **kernel launch model** similar to CUDA, where the host (CPU) launches kernels on the GPU.\n   - The ROCm runtime manages memory, synchronization, and execution.\n\n4. **Performance and Optimization**:\n   - AMD has been improving ROCm performance over time, especially with the release of **ROCm 5.0+** and **ROCm 6.",
+      "prompt_tps": 321.5,
+      "gen_tps": 88.1,
+      "ttft_ms": 156,
+      "gen_ms": 5814,
+      "prompt_tokens": 50,
+      "gen_tokens": 512
+    },
+    {
+      "name": "Quick Answer",
+      "prompt": "What's the difference between Q4_K_M and Q4_0 quantization in GGUF models?",
+      "response": "In the context of GGUF (GPT-4 Quantized Universal Format) models, the terms **Q4_K_M** and **Q4_0** refer to different **quantization schemes** used to reduce the model's size and memory usage while maintaining performance. Here's a breakdown of the differences:\n\n---\n\n### \ud83d\udd39 **Q4_0 (Quantized to 4 bits, 0 groups)**\n\n- **Quantization Type**: 4-bit integer quantization.\n- **Grouping**: No grouping (i.e., 0 groups).\n- **Precision**: Each weight is stored as a 4-bit integer.\n- **Speed**: Fast inference, as no grouping is used.\n- **Accuracy**: Slightly lower than more advanced quantization schemes.\n- **Use Case**: Best for systems with limited memory or when speed is more important than accuracy.\n\n---\n\n### \ud83d\udd39 **Q4_K_M (Quantized to 4 bits, with K-Means clustering and group size M)**\n\n- **Quantization Type**: 4-bit integer quantization.\n- **Grouping**: Uses **K-Means clustering** to group weights into blocks (typically 32 or 64 weights per group).\n- **Precision**: Each group is quant",
+      "prompt_tps": 223.4,
+      "gen_tps": 88.7,
+      "ttft_ms": 148,
+      "gen_ms": 2887,
+      "prompt_tokens": 33,
+      "gen_tokens": 256
+    }
+  ]
+}

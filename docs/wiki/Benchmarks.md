@@ -72,7 +72,7 @@ Key observations:
 The install script patches llama.cpp at build time:
 
 - **MMQ kernel fix** ([#21284](https://github.com/ggml-org/llama.cpp/issues/21284)) — corrects register pressure on RDNA 3.5 (mmq_x=48, mmq_y=64, nwarps=4)
-- **rocWMMA flash attention** — `-DGGML_HIP_ROCWMMA_FATTN=ON` for hardware-accelerated matrix multiply
+- **rocWMMA flash attention** — used for HIP workloads (vLLM, PyTorch), not llama.cpp (Vulkan only)
 - **fast math intrinsics** — `__expf()` for MoE routing and SiLU activation
 - **HIPBLASLT** — `ROCBLAS_USE_HIPBLASLT=1` doubles prompt processing throughput
 - **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` for 19x attention speedup

@@ -1,0 +1,86 @@
+{
+  "kernel": "6.19.11-arch1-1",
+  "timestamp": "2026-04-12T15:46:09-03:00",
+  "model": "Qwen3-30B-A3B-GGUF",
+  "system": {
+    "cpu": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "cores": 32,
+    "ram": "124Gi",
+    "gpu": "Radeon 8060S Graphics",
+    "rocm": "7.2.1",
+    "governor": "performance",
+    "lemonade": "lemonade version 10.2.0"
+  },
+  "benchmarks": [
+    {
+      "name": "Short Burst",
+      "prompt_tps": 133.7,
+      "gen_tps": 165.2,
+      "ttft_ms": 41,
+      "total_ms": 53,
+      "prompt_tokens": 24,
+      "gen_tokens": 2,
+      "runs": 3
+    },
+    {
+      "name": "Medium Response",
+      "prompt_tps": 137.5,
+      "gen_tps": 89.7,
+      "ttft_ms": 37,
+      "total_ms": 899,
+      "prompt_tokens": 24,
+      "gen_tokens": 79,
+      "runs": 3
+    },
+    {
+      "name": "Long Generation",
+      "prompt_tps": 136.3,
+      "gen_tps": 88.1,
+      "ttft_ms": 57,
+      "total_ms": 5869,
+      "prompt_tokens": 37,
+      "gen_tokens": 512,
+      "runs": 3
+    },
+    {
+      "name": "Sustained 2K",
+      "prompt_tps": 347.2,
+      "gen_tps": 84.7,
+      "ttft_ms": 147,
+      "total_ms": 24327,
+      "prompt_tokens": 51,
+      "gen_tokens": 2048,
+      "runs": 2
+    },
+    {
+      "name": "Code Gen",
+      "prompt_tps": 168.0,
+      "gen_tps": 87.2,
+      "ttft_ms": 77,
+      "total_ms": 10186,
+      "prompt_tokens": 37,
+      "gen_tokens": 892,
+      "runs": 2
+    },
+    {
+      "name": "Reasoning",
+      "prompt_tps": 144.9,
+      "gen_tps": 89.2,
+      "ttft_ms": 59,
+      "total_ms": 1631,
+      "prompt_tokens": 40,
+      "gen_tokens": 133,
+      "runs": 3
+    },
+    {
+      "name": "Long Context",
+      "prompt_tps": 520.5,
+      "gen_tps": 87.2,
+      "ttft_ms": 122,
+      "total_ms": 5997,
+      "prompt_tokens": 223,
+      "gen_tokens": 512,
+      "runs": 2
+    }
+  ]
+}

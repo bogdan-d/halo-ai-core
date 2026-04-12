@@ -9,7 +9,7 @@ All notable changes to Halo AI Core.
 ### Core Services
 - ROCm 7.2.1 from Arch repos (gfx1151 + NPU detected)
 - Caddy 2.11.2 reverse proxy with drop-in config pattern
-- llama.cpp built from source (ROCm HIP + Vulkan, gfx1151)
+- llama.cpp built from source (Vulkan only, gfx1151)
 - Lemonade SDK 9.1.4 with web UI
 - Gaia SDK 0.17.1 with Agent UI
 - Python 3.13.4 via pyenv (Arch ships 3.14, SDKs need 3.13)
@@ -38,7 +38,7 @@ The install script patches llama.cpp at build time. No manual tuning required.
 
 **How we got here:**
 - **MMQ kernel fix** ([ggml-org/llama.cpp#21284](https://github.com/ggml-org/llama.cpp/issues/21284)) — stock llama.cpp has suboptimal MMQ launch parameters that exceed the 256 VGPR register limit on RDNA 3.5. We patch `mmq_x=48`, `mmq_y=64`, `nwarps=4` at build time. This alone gives ~20% prefill improvement.
-- **rocWMMA flash attention** — built with `-DGGML_HIP_ROCWMMA_FATTN=ON` using the `rocwmma` package for hardware-accelerated matrix multiply. 60% better long-context performance.
+- **rocWMMA flash attention** — used for HIP-based workloads (vLLM, PyTorch), not llama.cpp which runs on Vulkan.
 - **Fast math intrinsics** — replaced `expf()` with `__expf()` in MoE routing and SiLU activation for measurable speedup with negligible quality loss.
 - **HIPBLASLT** — `ROCBLAS_USE_HIPBLASLT=1` environment variable doubles prompt processing throughput. Set in `/etc/profile.d/rocm.sh` and all systemd services.
 - **AOTriton** — `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` enables a 19x attention speedup on AMD that was never documented in official ROCm docs. Found via [ROCm/ROCm#6034](https://github.com/ROCm/ROCm/issues/6034).

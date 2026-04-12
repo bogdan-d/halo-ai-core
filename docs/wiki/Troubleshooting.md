@@ -33,15 +33,16 @@ Arch ships Python 3.14. Lemonade and Gaia need 3.13. The install script handles 
 ~/.pyenv/versions/3.13.4/bin/python3 -m venv ~/my-env
 ```
 
-## llama.cpp Build Fails — HIP Not Found
+## llama.cpp Build Fails — Vulkan Not Found
+
+llama.cpp uses Vulkan only (no HIP). Make sure the Vulkan SDK is installed:
 
 ```bash
-export PATH=$PATH:/opt/rocm/bin
-export HIP_PATH=/opt/rocm
-export ROCM_PATH=/opt/rocm
+sudo pacman -S vulkan-radeon vulkan-headers vulkan-tools
+vulkaninfo --summary   # verify GPU is detected
 ```
 
-Then rebuild with `-DCMAKE_HIP_COMPILER=/opt/rocm/bin/amdclang++`
+Then rebuild with `-DGGML_VULKAN=ON`.
 
 ## Caddy Config Error
 

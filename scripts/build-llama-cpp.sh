@@ -1,22 +1,28 @@
 #!/bin/bash
+# Build llama.cpp — Vulkan only
+# "You talkin' to me?" — Travis Bickle
+# ROCm/HIP is for vLLM, FLM, PyTorch — not llama.cpp
 set -euo pipefail
-source /srv/ai/configs/rocm.env
 
-SRC=/srv/ai/llama-cpp
-cd "$SRC"
+SRC="${1:-/srv/ai/llama-cpp}"
 
-if [ ! -d .git ]; then
-    git clone https://github.com/ggml-org/llama.cpp .
-else
-    git pull
+if [ ! -d "$SRC/.git" ]; then
+    git clone https://github.com/ggml-org/llama.cpp "$SRC"
 fi
 
-# HIP (ROCm) build
-cmake -B build-hip -S .     -DGGML_HIP=ON     -DAMDGPU_TARGETS="gfx1151"     -DGGML_HIP_ROCWMMA_FATTN=ON     -DCMAKE_BUILD_TYPE=Release     -G Ninja
-cmake --build build-hip --config Release -j$(nproc)
+cd "$SRC"
+git pull
 
-# Vulkan build
-cmake -B build-vulkan -S .     -DGGML_VULKAN=ON     -DCMAKE_BUILD_TYPE=Release     -G Ninja
-cmake --build build-vulkan --config Release -j$(nproc)
+# Vulkan-only build — no HIP, no ROCm
+cmake -B build -S . \
+    -DGGML_VULKAN=ON \
+    -DGGML_HIP=OFF \
+    -DGGML_CUDA=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLAMA_CURL=ON \
+    -G Ninja
 
-echo 'llama.cpp: HIP + Vulkan builds complete'
+cmake --build build --config Release -j$(nproc)
+
+echo "llama.cpp: Vulkan build complete"
+echo "Binary: $SRC/build/bin/llama-server"

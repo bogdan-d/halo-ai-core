@@ -6,7 +6,8 @@
 # "I know kung fu." — Neo, The Matrix
 #
 # Core services for AMD Strix Halo bare-metal AI platform
-# Components: ROCm, Caddy, Lemonade (lemond), Claude Code
+# Components: ROCm (GPU drivers), Caddy, Lemonade (lemond), Claude Code
+# llama.cpp runs Vulkan only — ROCm/HIP is for vLLM, FLM (NPU), PyTorch
 # All services route through lemond's built-in router on :13305
 # ============================================================
 set -euo pipefail
@@ -412,7 +413,7 @@ if ! $SKIP_LEMONADE; then
 
     if $DRY_RUN; then
         info "Would install lemonade-server from AUR"
-        info "Would install backends: llamacpp:rocm, whispercpp:vulkan, kokoro:cpu"
+        info "Would install backends: llamacpp:vulkan, whispercpp:vulkan, kokoro:cpu"
         info "All API routing handled by lemond's built-in router on :13305"
     else
         if command -v lemonade &>/dev/null; then
@@ -451,8 +452,8 @@ if ! $SKIP_LEMONADE; then
         if lemonade status --json > /dev/null 2>&1; then
             log "Installing backends through lemond..."
 
-            lemonade backends install llamacpp:rocm >> "$LOG_FILE" 2>&1 &
-            spinner $! "Installing llamacpp:rocm backend..."
+            lemonade backends install llamacpp:vulkan >> "$LOG_FILE" 2>&1 &
+            spinner $! "Installing llamacpp:vulkan backend..."
 
             lemonade backends install kokoro:cpu >> "$LOG_FILE" 2>&1 &
             spinner $! "Installing Kokoro TTS backend..."
@@ -478,7 +479,7 @@ if ! $SKIP_LEMONADE; then
             log "Backends installed — all routing through lemond on :13305"
         else
             warn "lemond not responding — backends will need manual install after reboot"
-            warn "Run: lemonade backends install llamacpp:rocm && lemonade backends install kokoro:cpu && lemonade backends install whispercpp:vulkan"
+            warn "Run: lemonade backends install llamacpp:vulkan && lemonade backends install kokoro:cpu && lemonade backends install whispercpp:vulkan"
         fi
 
         VER=$(lemonade --version 2>/dev/null || echo "installed")

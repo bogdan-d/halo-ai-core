@@ -124,7 +124,7 @@ cd halo-ai-core
 one script installs:
 
 - **Lemonade SDK** — model management + OpenAI API
-- **llama.cpp** — from source, HIP + Vulkan
+- **llama.cpp** — from source, Vulkan only
 - **Gaia SDK** — local AI agents
 - **Caddy** — reverse proxy
 - **WireGuard** — phone VPN with QR code

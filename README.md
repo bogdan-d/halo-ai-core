@@ -58,7 +58,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.12.0 — full 128gb unified memory on gfx1151 |
-| **inference** | llama.cpp (ROCm + Vulkan) — via lemonade's llamacpp backend. no compile. |
+| **inference** | llama.cpp (Vulkan) — via lemonade's llamacpp backend. no compile. |
 | **backend** | lemonade server 10.2.0 — unified router on :13305. openai + anthropic + ollama compatible |
 | **voice** | kokoro tts (cpu) + whisper.cpp (vulkan) — speech-to-text and text-to-speech |
 | **coding** | claude code — local ai coding agent, launched through lemonade |
@@ -74,7 +74,7 @@ cd halo-ai-core
 │     unified router — all apis, all backends      │
 ├────────────┬─────────────┬───────────────────────┤
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
-│  (ROCm)    │  (Vulkan)    │  (CPU)               │
+│  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
 │  Claude Code  │  Dashboard (:5090)  │ WireGuard  │
 ├───────────────┴─────────────────────┴────────────┤
@@ -102,7 +102,7 @@ these numbers come from a clean `install.sh --yes-all` on strix halo hardware. n
 ### what makes it fast
 
 - **lemonade server** — unified router on :13305. openai, anthropic, and ollama compatible. one endpoint for everything.
-- **llama.cpp (ROCm)** — HIP + Vulkan + ROCWMMA + hipblaslt + aotriton. install.sh patches and builds it automatically.
+- **llama.cpp (Vulkan)** — pre-built Vulkan backend via Lemonade. no compile, no patching. runs on any Vulkan GPU.
 - **kokoro tts** — fast cpu-based text-to-speech. 9 languages.
 - **whisper.cpp (Vulkan)** — speech-to-text with gpu acceleration.
 - **gfx1151 optimized** — every binary targets your exact silicon. no generic builds.

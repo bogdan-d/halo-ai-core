@@ -138,7 +138,7 @@ pause
 echo ""
 services=(
     "ROCm 7.13 (GPU runtime)"
-    "llama.cpp (LLM inference — Vulkan + HIP)"
+    "llama.cpp (LLM inference — Vulkan)"
     "Lemonade (Unified AI API gateway)"
     "whisper.cpp (Speech-to-text)"
     "Kokoro (Text-to-speech — 54 voices)"

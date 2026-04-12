@@ -49,11 +49,8 @@ git clone https://github.com/ggerganov/llama.cpp.git
 cd llama.cpp
 
 cmake -B build \
-    -DGGML_HIP=ON \
     -DGGML_VULKAN=ON \
-    -DAMDGPU_TARGETS=gfx1151 \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_HIP_COMPILER=/opt/rocm/bin/amdclang++
+    -DCMAKE_BUILD_TYPE=Release
 
 cmake --build build --config Release -j$(nproc)
 
