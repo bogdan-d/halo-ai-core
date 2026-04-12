@@ -58,7 +58,7 @@ cd halo-ai-core
 | | |
 |---|---|
 | **gpu** | rocm 7.12.0 — full 128gb unified memory on gfx1151 |
-| **inference** | llama.cpp (Vulkan) — via lemonade's llamacpp backend. no compile. |
+| **inference** | llama.cpp (Vulkan) — via lemonade's llamacpp backend. no compile. *(thank you u/Look_0ver_There)* |
 | **backend** | lemonade server 10.2.0 — unified router on :13305. openai + anthropic + ollama compatible |
 | **voice** | kokoro tts (cpu) + whisper.cpp (vulkan) — speech-to-text and text-to-speech |
 | **coding** | claude code — local ai coding agent, launched through lemonade |
