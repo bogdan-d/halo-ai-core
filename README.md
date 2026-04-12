@@ -10,7 +10,7 @@
 
 ### the bare-metal ai foundation for amd strix halo
 
-**8 core services · 128gb unified · lemonade + llama.cpp + kokoro tts · zero cloud · lego blocks**
+**12 core services · 128gb unified · lemonade + llama.cpp + arcade + nexus · zero cloud · lego blocks**
 
 *stamped by the architect*
 
@@ -62,9 +62,13 @@ cd halo-ai-core
 | **backend** | lemonade server 10.2.0 — unified router on :13305. openai + anthropic + ollama compatible |
 | **voice** | kokoro tts (cpu) + whisper.cpp (vulkan) — speech-to-text and text-to-speech |
 | **coding** | claude code — local ai coding agent, launched through lemonade |
-| **gateway** | caddy 2.x — dashboard on :80 |
+| **games** | infinity arcade — ai game generation from text prompts |
+| **interview** | interviewer — ai-powered interview practice sessions |
+| **benchmarks** | lemonade eval — automated benchmarking and accuracy analysis |
+| **mesh vpn** | lemonade nexus — zero-trust wireguard mesh with cryptographic governance |
+| **gateway** | caddy 2.x — dashboard + service proxy on :80 |
 | **vpn** | wireguard — scan a qr code, access your stack from your phone |
-| **dashboard** | stats server on :5090 — gpu, ram, services, auto-load on boot |
+| **dashboard** | glass control panel — model loading, backend picker, live stats, agent management |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,7 +80,7 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  Dashboard (:5090)  │ WireGuard  │
+│ Claude Code │ Arcade │ Interviewer │ Nexus VPN  │
 ├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤

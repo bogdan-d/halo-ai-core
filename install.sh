@@ -814,10 +814,30 @@ Environment=LEMONADE_PORT=13305
 WantedBy=default.target
 INTSVC
 
+    # Lemonade Nexus — zero-trust WireGuard mesh VPN (built from source)
+    if [ ! -d "$SERVICES_DIR/lemonade-nexus" ]; then
+        git clone https://github.com/stampby/lemonade-nexus.git "$SERVICES_DIR/lemonade-nexus" >> "$LOG_FILE" 2>&1 &
+        spinner $! "Cloning Lemonade Nexus..."
+    else
+        (cd "$SERVICES_DIR/lemonade-nexus" && git pull >> "$LOG_FILE" 2>&1) &
+        spinner $! "Updating Lemonade Nexus..."
+    fi
+
+    if [ ! -f /usr/local/bin/lemonade-nexus ]; then
+        (cd "$SERVICES_DIR/lemonade-nexus" && \
+         cmake -B build -DCMAKE_BUILD_TYPE=Release >> "$LOG_FILE" 2>&1 && \
+         cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1 && \
+         sudo cp build/projects/LemonadeNexus/lemonade-nexus /usr/local/bin/) &
+        spinner $! "Building Lemonade Nexus (C++20 + Rust — this takes a minute)..."
+    else
+        log "Lemonade Nexus already installed"
+    fi
+
     systemctl --user daemon-reload 2>/dev/null || true
     log "Infinity Arcade installed — AI game generation on :8190"
     log "Interviewer installed — AI interview practice on :8191"
     log "Lemonade Eval installed — benchmarking: lemonade-eval run"
+    log "Lemonade Nexus installed — zero-trust mesh VPN: lemonade-nexus --help"
 
     # Add Caddy routes for services
     sudo tee /etc/caddy/conf.d/halo-services.caddy > /dev/null << 'SVCCADDY'
@@ -922,6 +942,7 @@ echo ""
 echo "  Infinity Arcade:  http://localhost:8190  (AI game generation)"
 echo "  Interviewer:      http://localhost:8191  (AI interview practice)"
 echo "  Lemonade Eval:    lemonade-eval run      (benchmarking)"
+echo "  Lemonade Nexus:   lemonade-nexus          (zero-trust mesh VPN)"
 echo ""
 echo "  Start services:"
 echo "    systemctl --user start infinity-arcade"

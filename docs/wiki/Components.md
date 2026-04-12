@@ -80,13 +80,41 @@ AMD's unified AI backend. Wraps llama.cpp, whisper, kokoro TTS, and stable diffu
 - `oga-load` — ONNX GenAI
 - `flm-load` — FastFlowLM (NPU)
 
-## Gaia SDK 0.17.x
+## Lemonade Services
 
-AMD's agent framework. Build AI agents that run 100% locally.
+Additional services from the Lemonade ecosystem, all installed by `install.sh`:
 
-- Venv: `~/gaia-env/`
-- CLI: `~/gaia-env/bin/gaia`
-- Source: `~/gaia/`
-- Service: `gaia.service`
+### Infinity Arcade
 
-Gaia includes its own web UI for agent management.
+AI game generation — describe a game, the LLM creates it, play in the browser.
+
+- Source: `~/.local/share/halo-services/infinity-arcade/`
+- Port: 8190
+- Service: `infinity-arcade.service` (user)
+- Repo: [stampby/infinity-arcade](https://github.com/stampby/infinity-arcade)
+
+### Interviewer
+
+AI-powered interview practice — practice technical and behavioral interviews with LLM feedback.
+
+- Source: `~/.local/share/halo-services/interviewer/`
+- Port: 8191
+- Service: `interviewer.service` (user)
+- Repo: [stampby/interviewer](https://github.com/stampby/interviewer)
+
+### Lemonade Eval
+
+Benchmarking and accuracy analysis client for Lemonade Server.
+
+- Source: `~/.local/share/halo-services/lemonade-eval/`
+- CLI: `lemonade-eval run`
+- Repo: [stampby/lemonade-eval](https://github.com/stampby/lemonade-eval)
+
+### Lemonade Nexus
+
+Zero-trust WireGuard mesh VPN with cryptographic governance. Ed25519 identity, Shamir's Secret Sharing, gossip protocol, STUN hole-punching, federated relays.
+
+- Binary: `/usr/local/bin/lemonade-nexus`
+- Built from source (C++20 + Rust)
+- Ports: 9100 (HTTP), 51940 (WireGuard), 9102 (gossip), 3478 (STUN)
+- Repo: [stampby/lemonade-nexus](https://github.com/stampby/lemonade-nexus)
