@@ -62,7 +62,7 @@ usage() {
 # Step count calculated dynamically based on skip flags
 CURRENT_STEP=0
 calculate_steps() {
-    TOTAL_STEPS=4  # base + python + wireguard + dashboard (always run)
+    TOTAL_STEPS=5  # base + python + wireguard + dashboard + services (always run)
     $SKIP_ROCM     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
     $SKIP_CADDY    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
     $SKIP_LEMONADE || TOTAL_STEPS=$((TOTAL_STEPS + 1))
@@ -729,6 +729,125 @@ SVCUNIT
 fi
 
 # ============================================================
+# 9. LEMONADE SERVICES (Infinity Arcade, Interviewer, Eval)
+# ============================================================
+step "Lemonade Services"
+if $DRY_RUN; then
+    info "Would install: Infinity Arcade, Interviewer, Lemonade Eval"
+else
+    SERVICES_DIR="${HOME}/.local/share/halo-services"
+    mkdir -p "$SERVICES_DIR"
+
+    # Infinity Arcade — AI game generation
+    if [ ! -d "$SERVICES_DIR/infinity-arcade" ]; then
+        git clone https://github.com/stampby/infinity-arcade.git "$SERVICES_DIR/infinity-arcade" >> "$LOG_FILE" 2>&1 &
+        spinner $! "Cloning Infinity Arcade..."
+    else
+        (cd "$SERVICES_DIR/infinity-arcade" && git pull >> "$LOG_FILE" 2>&1) &
+        spinner $! "Updating Infinity Arcade..."
+    fi
+
+    # Interviewer — AI interview practice
+    if [ ! -d "$SERVICES_DIR/interviewer" ]; then
+        git clone https://github.com/stampby/interviewer.git "$SERVICES_DIR/interviewer" >> "$LOG_FILE" 2>&1 &
+        spinner $! "Cloning Interviewer..."
+    else
+        (cd "$SERVICES_DIR/interviewer" && git pull >> "$LOG_FILE" 2>&1) &
+        spinner $! "Updating Interviewer..."
+    fi
+
+    # Lemonade Eval — benchmarking client
+    if [ ! -d "$SERVICES_DIR/lemonade-eval" ]; then
+        git clone https://github.com/stampby/lemonade-eval.git "$SERVICES_DIR/lemonade-eval" >> "$LOG_FILE" 2>&1 &
+        spinner $! "Cloning Lemonade Eval..."
+    else
+        (cd "$SERVICES_DIR/lemonade-eval" && git pull >> "$LOG_FILE" 2>&1) &
+        spinner $! "Updating Lemonade Eval..."
+    fi
+
+    # Install Python deps in a shared venv
+    SVCENV="${HOME}/.local/share/halo-services-env"
+    if [ ! -d "$SVCENV" ]; then
+        python3 -m venv "$SVCENV" >> "$LOG_FILE" 2>&1
+    fi
+
+    "$SVCENV/bin/pip" install --quiet \
+        -e "$SERVICES_DIR/infinity-arcade" \
+        -e "$SERVICES_DIR/interviewer" \
+        -e "$SERVICES_DIR/lemonade-eval" \
+        >> "$LOG_FILE" 2>&1 &
+    spinner $! "Installing service dependencies..."
+
+    # Create systemd user service for Infinity Arcade
+    cat > "$HOME/.config/systemd/user/infinity-arcade.service" << ARCADESVC
+[Unit]
+Description=Infinity Arcade — AI Game Generation
+After=lemonade-server.service
+
+[Service]
+Type=simple
+ExecStart=${SVCENV}/bin/infinity-arcade serve --host 127.0.0.1 --port 8190
+Restart=on-failure
+RestartSec=5
+Environment=LEMONADE_HOST=127.0.0.1
+Environment=LEMONADE_PORT=13305
+
+[Install]
+WantedBy=default.target
+ARCADESVC
+
+    # Create systemd user service for Interviewer
+    cat > "$HOME/.config/systemd/user/interviewer.service" << INTSVC
+[Unit]
+Description=AI Interviewer — Practice Sessions
+After=lemonade-server.service
+
+[Service]
+Type=simple
+ExecStart=${SVCENV}/bin/python -m interviewer.server --host 127.0.0.1 --port 8191
+Restart=on-failure
+RestartSec=5
+Environment=LEMONADE_HOST=127.0.0.1
+Environment=LEMONADE_PORT=13305
+
+[Install]
+WantedBy=default.target
+INTSVC
+
+    systemctl --user daemon-reload 2>/dev/null || true
+    log "Infinity Arcade installed — AI game generation on :8190"
+    log "Interviewer installed — AI interview practice on :8191"
+    log "Lemonade Eval installed — benchmarking: lemonade-eval run"
+
+    # Add Caddy routes for services
+    sudo tee /etc/caddy/conf.d/halo-services.caddy > /dev/null << 'SVCCADDY'
+# Halo AI Core — Lemonade Services
+# "I love it when a plan comes together." — Hannibal
+
+:80 {
+    @local remote_ip 127.0.0.1 ::1 10.0.0.0/24 10.100.0.0/24
+
+    handle /arcade* {
+        handle @local {
+            uri strip_prefix /arcade
+            reverse_proxy 127.0.0.1:8190
+        }
+        respond 403
+    }
+
+    handle /interviewer* {
+        handle @local {
+            uri strip_prefix /interviewer
+            reverse_proxy 127.0.0.1:8191
+        }
+        respond 403
+    }
+}
+SVCCADDY
+    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || true
+fi
+
+# ============================================================
 # CLEANUP — remove stale services from previous installs
 # ============================================================
 if ! $DRY_RUN; then
@@ -798,12 +917,23 @@ echo ""
 echo "  Services are enabled and will start automatically on boot."
 echo "  They will NOT run until you reboot."
 echo ""
+echo "  ── SERVICES ──────────────────────────────────"
+echo ""
+echo "  Infinity Arcade:  http://localhost:8190  (AI game generation)"
+echo "  Interviewer:      http://localhost:8191  (AI interview practice)"
+echo "  Lemonade Eval:    lemonade-eval run      (benchmarking)"
+echo ""
+echo "  Start services:"
+echo "    systemctl --user start infinity-arcade"
+echo "    systemctl --user start interviewer"
+echo ""
 echo "  ── NEXT STEPS (after reboot) ──────────────────"
 echo ""
-echo "  1. Open http://localhost:13305 — load a model, start chatting"
-echo "  2. Launch Claude Code with local models:"
+echo "  1. Open http://localhost:80 — dashboard with all controls"
+echo "  2. Open http://localhost:13305 — load a model, start chatting"
+echo "  3. Launch Claude Code with local models:"
 echo "     lemonade launch claude -m <model-name>"
-echo "  3. Check status:"
+echo "  4. Check status:"
 echo "     ./install.sh --status"
 echo ""
 
