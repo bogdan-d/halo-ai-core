@@ -10,7 +10,7 @@
 
 ### la base de ia bare-metal para amd strix halo
 
-**8 servicios esenciales · 128 gb de memoria unificada · lemonade + llama.cpp + kokoro tts · cero nube · bloques lego**
+**13 servicios principales · 128 gb de memoria unificada · lemonade + llama.cpp + nexus · cero cloud · bloques lego**
 
 *sellado por el arquitecto*
 
@@ -62,9 +62,14 @@ cd halo-ai-core
 | **backend** | lemonade server 10.2.0 — router unificado en :13305. compatible con openai + anthropic + ollama |
 | **voz** | kokoro tts (cpu) + whisper.cpp (vulkan) — reconocimiento y síntesis de voz |
 | **código** | claude code — agente de codificación ia local, lanzado a través de lemonade |
-| **pasarela** | caddy 2.x — panel de control en :80 |
-| **vpn** | wireguard — escanea un código qr, accede a tu pila desde tu teléfono |
-| **panel** | servidor de estadísticas en :5090 — gpu, ram, servicios, carga automática al arranque |
+| **juegos** | Minecraft + LinuxGSM — gestión de servidores de juegos |
+| **interview** | interviewer — sesiones de práctica de entrevistas impulsadas por ia |
+| **benchmarks** | lemonade eval — benchmarking automatizado y análisis de precisión |
+| **mesh vpn** | lemonade nexus — mesh wireguard de confianza cero con gobernanza criptográfica |
+| **gateway** | caddy 2.x — panel de control + proxy de servicios en :80 |
+| **vpn** | wireguard — escanea un código qr, accede a tu stack desde tu teléfono |
+| **dashboard** | panel de control glass — carga de modelos, estadísticas en vivo, gestión de agentes |
+| **pkg manager** | gestor de paquetes — estado de servicios, seguimiento de versiones, disparadores de compilación en :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,8 +81,9 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  Panel (:5090)  │ WireGuard      │
-├───────────────┴─────────────────┴────────────────┤
+│ Claude Code │ Juegos  │ Interviewer │ Nexus VPN  │
+│ Pkg Manager (:3010)                              │
+├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤
 │          Arch Linux / systemd / btrfs            │

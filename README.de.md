@@ -10,7 +10,7 @@
 
 ### das bare-metal-ki-fundament für amd strix halo
 
-**8 Kerndienste · 128 GB vereinheitlichter Speicher · lemonade + llama.cpp + kokoro tts · null Cloud · Lego-Bausteine**
+**13 Kerndienste · 128 GB vereinheitlichter Speicher · Lemonade + llama.cpp + Nexus · Zero Cloud · Legosteine**
 
 *gestempelt vom Architekten*
 
@@ -62,9 +62,14 @@ cd halo-ai-core
 | **Backend** | lemonade server 10.2.0 — einheitlicher Router auf :13305. openai + anthropic + ollama kompatibel |
 | **Sprache** | kokoro tts (cpu) + whisper.cpp (vulkan) — Sprache-zu-Text und Text-zu-Sprache |
 | **Coding** | claude code — lokaler KI-Coding-Agent, gestartet über lemonade |
-| **Gateway** | caddy 2.x — Dashboard auf :80 |
-| **VPN** | wireguard — QR-Code scannen, auf deinen Stack vom Handy zugreifen |
-| **Dashboard** | Stats-Server auf :5090 — GPU, RAM, Dienste, automatisches Laden beim Start |
+| **Spiele** | Minecraft + LinuxGSM — Spielserver-Verwaltung |
+| **Interview** | Interviewer — KI-gestützte Interview-Übungssitzungen |
+| **Benchmarks** | Lemonade Eval — automatisiertes Benchmarking und Genauigkeitsanalyse |
+| **Mesh-VPN** | Lemonade Nexus — Zero-Trust WireGuard-Mesh mit kryptographischer Governance |
+| **Gateway** | Caddy 2.x — Dashboard + Service-Proxy auf :80 |
+| **VPN** | WireGuard — QR-Code scannen, Stack vom Handy aus nutzen |
+| **Dashboard** | Glass Control Panel — Modellverwaltung, Live-Statistiken, Agentensteuerung |
+| **Pkg Manager** | Paketmanager — Dienststatus, Versionsverfolgung, Build-Trigger auf :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,7 +81,8 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  Dashboard (:5090)  │ WireGuard  │
+│ Claude Code │ Spiele  │ Interviewer │ Nexus VPN  │
+│ Pkg Manager (:3010)                              │
 ├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤

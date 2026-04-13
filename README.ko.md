@@ -10,7 +10,7 @@
 
 ### amd strix halo를 위한 베어메탈 ai 기반
 
-**8개 핵심 서비스 · 128gb 통합 메모리 · lemonade + llama.cpp + kokoro tts · 클라우드 제로 · 레고 블록**
+**13 코어 서비스 · 128GB 통합 메모리 · Lemonade + llama.cpp + Nexus · 제로 클라우드 · 레고 블록**
 
 *아키텍트가 찍은 도장*
 
@@ -62,9 +62,14 @@ cd halo-ai-core
 | **백엔드** | lemonade server 10.2.0 — :13305의 통합 라우터. openai + anthropic + ollama 호환 |
 | **음성** | kokoro tts (cpu) + whisper.cpp (vulkan) — 음성 인식 및 음성 합성 |
 | **코딩** | claude code — 로컬 ai 코딩 에이전트, lemonade를 통해 실행 |
-| **게이트웨이** | caddy 2.x — :80의 대시보드 |
-| **vpn** | wireguard — qr 코드를 스캔하여 휴대폰에서 스택에 접근 |
-| **대시보드** | :5090의 통계 서버 — gpu, 램, 서비스, 부팅 시 자동 로드 |
+| **게임** | Minecraft + LinuxGSM — 게임 서버 관리 |
+| **면접** | interviewer — AI 기반 면접 연습 세션 |
+| **벤치마크** | lemonade eval — 자동화된 벤치마킹 및 정확도 분석 |
+| **메시 VPN** | lemonade nexus — 암호화 거버넌스를 갖춘 제로 트러스트 WireGuard 메시 |
+| **게이트웨이** | caddy 2.x — 대시보드 + 서비스 프록시 :80 |
+| **VPN** | wireguard — QR 코드 스캔, 폰에서 스택 접속 |
+| **대시보드** | glass 제어 패널 — 모델 관리, 실시간 통계, 에이전트 관리 |
+| **패키지 관리** | 패키지 매니저 — 서비스 상태, 버전 추적, 빌드 트리거 :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,8 +81,9 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  대시보드 (:5090)  │ WireGuard   │
-├───────────────┴────────────────────┴─────────────┤
+│ Claude Code │ Games  │ Interviewer │ Nexus VPN  │
+│ Pkg Manager (:3010)                              │
+├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤
 │          Arch Linux / systemd / btrfs            │
@@ -180,7 +186,7 @@ ai 산업은 당신이 다른 사람의 컴퓨터를 빌려 쓰길 원합니다.
 | **음성 파이프라인** | whisper + kokoro tts | [가이드 →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | 채팅 프론트엔드 | 계획됨 |
 | **comfyui** | 이미지/비디오 생성 | 계획됨 |
-| **게임 서버** | 아케이드 관리 | 계획됨 |
+| **게임 서버** | Minecraft + LinuxGSM | 활성 |
 | **glusterfs** | 분산 스토리지 | 계획됨 |
 | **디스코드 봇** | 디스코드 내 ai 에이전트 | 계획됨 |
 

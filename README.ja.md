@@ -10,7 +10,7 @@
 
 ### amd strix halo向けベアメタルai基盤
 
-**8つのコアサービス · 128gbユニファイドメモリ · lemonade + llama.cpp + kokoro tts · クラウドゼロ · レゴブロック**
+**13 コアサービス · 128GB ユニファイドメモリ · Lemonade + llama.cpp + Nexus · ゼロクラウド · レゴブロック**
 
 *アーキテクトが刻印*
 
@@ -62,9 +62,14 @@ cd halo-ai-core
 | **バックエンド** | lemonade server 10.2.0 — :13305の統合ルーター。openai + anthropic + ollama互換 |
 | **音声** | kokoro tts (cpu) + whisper.cpp (vulkan) — 音声認識とテキスト読み上げ |
 | **コーディング** | claude code — ローカルaiコーディングエージェント、lemonade経由で起動 |
-| **ゲートウェイ** | caddy 2.x — :80のダッシュボード |
-| **vpn** | wireguard — qrコードをスキャンして、スマホからスタックにアクセス |
-| **ダッシュボード** | :5090のステータスサーバー — gpu、ram、サービス、起動時自動読み込み |
+| **ゲーム** | Minecraft + LinuxGSM — ゲームサーバー管理 |
+| **面接** | interviewer — AI搭載面接練習セッション |
+| **ベンチマーク** | lemonade eval — 自動ベンチマークと精度分析 |
+| **メッシュVPN** | lemonade nexus — 暗号化ガバナンス付きゼロトラストWireGuardメッシュ |
+| **ゲートウェイ** | caddy 2.x — ダッシュボード + サービスプロキシ :80 |
+| **VPN** | wireguard — QRコードスキャン、スマホからスタックにアクセス |
+| **ダッシュボード** | glassコントロールパネル — モデル管理、ライブ統計、エージェント管理 |
+| **パッケージ管理** | パッケージマネージャー — サービス状態、バージョン追跡、ビルドトリガー :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,7 +81,8 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  ダッシュボード (:5090)  │ WireGuard  │
+│ Claude Code │ Games  │ Interviewer │ Nexus VPN  │
+│ Pkg Manager (:3010)                              │
 ├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤
@@ -180,7 +186,7 @@ coreが基盤。必要なものをスナップオン：
 | **音声パイプライン** | whisper + kokoro tts | [ガイド →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | チャットフロントエンド | 計画中 |
 | **comfyui** | 画像/動画生成 | 計画中 |
-| **ゲームサーバー** | アーケード管理 | 計画中 |
+| **ゲームサーバー** | Minecraft + LinuxGSM | アクティブ |
 | **glusterfs** | 分散ストレージ | 計画中 |
 | **discord ボット** | discordのaiエージェント | 計画中 |
 

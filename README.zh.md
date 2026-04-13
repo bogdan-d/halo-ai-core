@@ -10,7 +10,7 @@
 
 ### 面向amd strix halo的裸机ai基础平台
 
-**8个核心服务 · 128gb统一内存 · lemonade + llama.cpp + kokoro tts · 零云端 · 乐高积木**
+**13 核心服务 · 128GB 统一内存 · Lemonade + llama.cpp + Nexus · 零云端 · 乐高积木**
 
 *由架构师盖章*
 
@@ -62,9 +62,14 @@ cd halo-ai-core
 | **后端** | lemonade server 10.2.0 — :13305上的统一路由器。兼容openai + anthropic + ollama |
 | **语音** | kokoro tts (cpu) + whisper.cpp (vulkan) — 语音识别和语音合成 |
 | **编程** | claude code — 本地ai编程代理，通过lemonade启动 |
-| **网关** | caddy 2.x — :80上的仪表板 |
-| **vpn** | wireguard — 扫描二维码，从手机访问你的技术栈 |
-| **仪表板** | :5090上的状态服务器 — gpu、内存、服务、开机自动加载 |
+| **游戏** | Minecraft + LinuxGSM — 游戏服务器管理 |
+| **面试** | interviewer — AI驱动的面试练习会话 |
+| **基准测试** | lemonade eval — 自动化基准测试和准确性分析 |
+| **网状VPN** | lemonade nexus — 零信任WireGuard网状网络，配备加密治理 |
+| **网关** | caddy 2.x — 仪表板 + 服务代理 :80 |
+| **VPN** | wireguard — 扫描二维码，从手机访问您的堆栈 |
+| **仪表板** | glass控制面板 — 模型加载、实时统计、代理管理 |
+| **包管理器** | 包管理器仪表板 — 服务状态、版本跟踪、构建触发器 :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,8 +81,9 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  仪表板 (:5090)  │ WireGuard     │
-├───────────────┴──────────────────┴───────────────┤
+│ Claude Code │ Games  │ Interviewer │ Nexus VPN  │
+│ Pkg Manager (:3010)                              │
+├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤
 │          Arch Linux / systemd / btrfs            │
@@ -180,7 +186,7 @@ core是基础。按需拼接：
 | **语音流水线** | whisper + kokoro tts | [指南 →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | 聊天前端 | 计划中 |
 | **comfyui** | 图像/视频生成 | 计划中 |
-| **游戏服务器** | 游戏厅管理 | 计划中 |
+| **游戏服务器** | Minecraft + LinuxGSM | 活跃 |
 | **glusterfs** | 分布式存储 | 计划中 |
 | **discord 机器人** | discord中的ai智能体 | 计划中 |
 

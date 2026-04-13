@@ -10,7 +10,7 @@
 
 ### a fundação bare-metal de ia para amd strix halo
 
-**8 serviços principais · 128gb de memória unificada · lemonade + llama.cpp + kokoro tts · zero nuvem · blocos de lego**
+**13 serviços principais · 128 gb de memória unificada · lemonade + llama.cpp + nexus · zero cloud · blocos lego**
 
 *carimbado pelo arquiteto*
 
@@ -62,9 +62,14 @@ cd halo-ai-core
 | **backend** | lemonade server 10.2.0 — router unificado em :13305. compatível com openai + anthropic + ollama |
 | **voz** | kokoro tts (cpu) + whisper.cpp (vulkan) — fala-para-texto e texto-para-fala |
 | **código** | claude code — agente de programação ia local, lançado via lemonade |
-| **gateway** | caddy 2.x — painel de controlo em :80 |
-| **vpn** | wireguard — leia um código qr, aceda à sua pilha a partir do telemóvel |
-| **painel** | servidor de estatísticas em :5090 — gpu, ram, serviços, carregamento automático no arranque |
+| **jogos** | Minecraft + LinuxGSM — gestão de servidores de jogos |
+| **entrevista** | interviewer — sessões de prática de entrevista alimentadas por ia |
+| **benchmarks** | lemonade eval — benchmarking automatizado e análise de precisão |
+| **mesh vpn** | lemonade nexus — mesh wireguard zero-trust com governança criptográfica |
+| **gateway** | caddy 2.x — painel de controle + proxy de serviços na :80 |
+| **vpn** | wireguard — escaneie um código qr, acesse sua stack do seu celular |
+| **dashboard** | painel de controle glass — carregamento de modelos, estatísticas ao vivo, gerenciamento de agentes |
+| **pkg manager** | gerenciador de pacotes — status de serviços, rastreamento de versões, gatilhos de build na :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -76,7 +81,8 @@ cd halo-ai-core
 │ llama.cpp  │  whisper.cpp │  kokoro tts          │
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
-│  Claude Code  │  Painel (:5090)  │ WireGuard     │
+│ Claude Code │ Jogos  │ Interviewer │ Nexus VPN   │
+│ Pkg Manager (:3010)                              │
 ├───────────────┴──────────────────┴───────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤
