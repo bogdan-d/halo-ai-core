@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -181,7 +181,7 @@ vpn wireguard. зашифрованный туннель. ваш телефон 
 
 | блок | что делает | статус |
 |------|-----------|--------|
-| **ssh mesh** | многомашинная сеть (по умолчанию, работает везде) | [руководство →](docs/wiki/SSH-Mesh.md) |
+| **nexus vpn** | zero-trust WireGuard mesh (замена SSH mesh) | [руководство →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | изоляция сети 802.1Q (требуется управляемый коммутатор) | [руководство →](docs/wiki/Network-Layout.md) |
 | **голосовой пайплайн** | whisper + kokoro tts | [руководство →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | чат-интерфейс | планируется |
@@ -204,7 +204,7 @@ vpn wireguard. зашифрованный туннель. ваш телефон 
 |-------|--------|
 | **sentinel** | безопасность — сканирует, мониторит, не доверяет ничему |
 | **meek** | аудитор — ежедневный аудит из 17 проверок, цепочка поставок |
-| **shadow** | целостность — ssh-ключи, хеши файлов, здоровье меша |
+| **shadow** | целостность — nexus-ключи, хеши файлов, здоровье меша |
 | **pulse** | мониторинг — температура gpu, озу, диск, состояние сервисов |
 | **bounty** | баги — ловит ошибки, автоматически создаёт потоки исправлений |
 
@@ -212,14 +212,20 @@ vpn wireguard. зашифрованный туннель. ваш телефон 
 
 ## безопасность
 
-только ssh-ключи. никаких паролей. никаких открытых портов. никаких исключений. все сервисы на 127.0.0.1. *"you shall not pass."* *(ты не пройдёшь.)*
+**Lemonade Nexus** — zero-trust WireGuard mesh VPN. ~~SSH mixer устарел и удалён.~~ Nexus — замена.
 
-```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
-```
+| | SSH mesh (старый) | Nexus (сейчас) |
+|---|---|---|
+| управление ключами | вручную на каждой машине | Ed25519 авто-генерация для каждого сервера |
+| шифрование | только SSH | WireGuard ChaCha20-Poly1305 туннели |
+| обнаружение пиров | нет | UDP gossip протокол, автоматически |
+| ротация ключей | вручную | автоматическая еженедельная с Shamir |
+| управление | плоское доверие | демократическое — голосование большинства Tier 1 |
+| NAT traversal | нет | STUN hole-punching + relay |
 
-[полное руководство по безопасности →](docs/SECURITY.md)
+все сервисы привязаны к 127.0.0.1. Nexus обеспечивает зашифрованный туннель. *"ты не пройдёшь."*
+
+[руководство Nexus VPN →](docs/wiki/Nexus-VPN.md) · [усиление безопасности →](docs/SECURITY.md)
 
 ## конфиденциальность
 

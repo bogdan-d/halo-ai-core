@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -181,7 +181,7 @@ vpn wireguard. نفق مشفر. هاتفك يتحدث مباشرة مع مكدس
 
 | القطعة | ماذا تفعل | الحالة |
 |--------|----------|--------|
-| **ssh mesh** | شبكات متعددة الأجهزة (افتراضي، يعمل في أي مكان) | [الدليل →](docs/wiki/SSH-Mesh.md) |
+| **nexus vpn** | شبكة WireGuard بدون ثقة (بديل لشبكة SSH) | [الدليل →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | عزل شبكة 802.1Q (يتطلب مبدّل مُدار) | [الدليل →](docs/wiki/Network-Layout.md) |
 | **خط الصوت** | whisper + kokoro tts | [الدليل →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | واجهة دردشة | مخطط |
@@ -204,7 +204,7 @@ vpn wireguard. نفق مشفر. هاتفك يتحدث مباشرة مع مكدس
 |--------|--------|
 | **sentinel** | الأمان — يفحص، يراقب، لا يثق بشيء |
 | **meek** | المدقق — تدقيق يومي من 17 فحصاً، سلسلة التوريد |
-| **shadow** | السلامة — مفاتيح ssh، تجزئات الملفات، صحة الشبكة |
+| **shadow** | السلامة — مفاتيح nexus، تجزئات الملفات، صحة الشبكة |
 | **pulse** | المراقب — حرارة gpu، الذاكرة، القرص، صحة الخدمات |
 | **bounty** | الأخطاء — يلتقط الأخطاء، ينشئ سلاسل إصلاح تلقائياً |
 
@@ -212,14 +212,20 @@ vpn wireguard. نفق مشفر. هاتفك يتحدث مباشرة مع مكدس
 
 ## الأمان
 
-مفاتيح ssh فقط. لا كلمات مرور. لا منافذ مفتوحة. لا استثناءات. جميع الخدمات على 127.0.0.1. *"you shall not pass."* *(لن تمر.)*
+**Lemonade Nexus** — شبكة VPN WireGuard بدون ثقة. ~~تم إيقاف SSH mixer وإزالته.~~ Nexus هو البديل.
 
-```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
-```
+| | شبكة SSH (القديمة) | Nexus (الآن) |
+|---|---|---|
+| إدارة المفاتيح | يدوية على كل جهاز | Ed25519 يتم إنشاؤه تلقائيًا لكل خادم |
+| التشفير | SSH فقط | أنفاق WireGuard ChaCha20-Poly1305 |
+| اكتشاف الأقران | لا يوجد | بروتوكول gossip UDP، تلقائي |
+| تدوير المفاتيح | يدوي | أسبوعي تلقائي مع Shamir |
+| الحوكمة | ثقة مسطحة | ديمقراطية — تصويت أغلبية Tier 1 |
+| اجتياز NAT | لا يوجد | STUN hole-punching + relay |
 
-[دليل الأمان الكامل →](docs/SECURITY.md)
+جميع الخدمات مرتبطة بـ 127.0.0.1. يوفر Nexus النفق المشفر. *"لن تمر."*
+
+[دليل Nexus VPN →](docs/wiki/Nexus-VPN.md) · [تقوية الأمان →](docs/SECURITY.md)
 
 ## الخصوصية
 

@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_páginas-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-artículos-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-tutoriales-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Seguridad-solo_SSH-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Auto_alojado-100%25_local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -181,7 +181,7 @@ el núcleo es la base. añade lo que necesites:
 
 | bloque | para qué sirve | estado |
 |--------|----------------|--------|
-| **ssh mesh** | red multi-máquinas (por defecto, funciona en cualquier lugar) | [guía →](docs/wiki/SSH-Mesh.md) |
+| **nexus vpn** | mesh wireguard de confianza cero con gobernanza criptográfica (reemplaza ssh mesh) | [guide →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | aislamiento de red 802.1Q (requiere switch gestionado) | [guía →](docs/wiki/Network-Layout.md) |
 | **pipeline de voz** | whisper + kokoro tts | [guía →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | interfaz de chat | planificado |
@@ -204,7 +204,7 @@ el núcleo funciona sin agentes. pero estos cinco vigilarán tu pila cuando no e
 |--------|-------|
 | **sentinel** | seguridad — escanea, monitoriza, no confía en nada |
 | **meek** | auditor — auditoría diaria de 17 puntos, cadena de suministro |
-| **shadow** | integridad — claves ssh, hashes de archivos, salud del mesh |
+| **shadow** | integridad — claves nexus, hashes de archivos, salud del mesh |
 | **pulse** | monitorización — temperaturas gpu, ram, disco, salud de servicios |
 | **bounty** | bugs — atrapa errores, crea hilos de corrección automáticamente |
 
@@ -212,14 +212,20 @@ son una recomendación, no un requisito. [guía de agentes principales →](docs
 
 ## seguridad
 
-solo claves ssh. sin contraseñas. sin puertos abiertos. sin excepciones. todos los servicios en 127.0.0.1. *"you shall not pass."* *(no pasarás.)*
+**lemonade nexus** — vpn mesh wireguard de confianza cero. ~~ssh mixer está obsoleto y eliminado.~~ nexus es el reemplazo.
 
-```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
-```
+| | ssh mesh (antiguo) | nexus (ahora) |
+|---|---|---|
+| gestión de claves | manual en cada máquina | ed25519 auto-generado por servidor |
+| cifrado | solo ssh | túneles wireguard chacha20-poly1305 |
+| descubrimiento de pares | ninguno | protocolo gossip udp, automático |
+| rotación de claves | manual | automática semanal con shamir |
+| gobernanza | confianza plana | democrática — voto mayoritario tier 1 |
+| traversal nat | ninguno | stun hole-punching + relay |
 
-[guía de seguridad completa →](docs/SECURITY.md)
+todos los servicios escuchan en 127.0.0.1. nexus proporciona el túnel cifrado. *"no pasarás."*
+
+[guía nexus vpn →](docs/wiki/Nexus-VPN.md) · [endurecimiento de seguridad →](docs/SECURITY.md)
 
 ## privacidad
 

@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_Seiten-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-Artikel-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-Tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Sicherheit-nur_SSH-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Selbst_gehostet-100%25_lokal-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -181,7 +181,7 @@ der Kern ist das Fundament. steck an, was du brauchst:
 
 | Baustein | was er tut | Status |
 |----------|-----------|--------|
-| **SSH Mesh** | Multi-Maschinen-Netzwerk (Standard, funktioniert überall) | [Anleitung →](docs/wiki/SSH-Mesh.md) |
+| **Nexus VPN** | Zero-Trust WireGuard-Mesh mit kryptographischer Governance (ersetzt SSH-Mesh) | [Guide →](docs/wiki/Nexus-VPN.md) |
 | **VLAN Tagging** | 802.1Q Netzwerk-Isolation (erfordert Managed Switch) | [Anleitung →](docs/wiki/Network-Layout.md) |
 | **Sprach-Pipeline** | whisper + kokoro tts | [Anleitung →](docs/wiki/Voice-Pipeline.md) |
 | **Open WebUI** | Chat-Oberfläche | geplant |
@@ -204,7 +204,7 @@ der Kern läuft ohne Agenten. aber diese fünf überwachen deinen Stack, wenn du
 |-------|---------|
 | **sentinel** | Sicherheit — scannt, überwacht, vertraut nichts |
 | **meek** | Prüfer — tägliche 17-Punkte-Prüfung, Lieferkette |
-| **shadow** | Integrität — SSH-Schlüssel, Datei-Hashes, Mesh-Gesundheit |
+| **shadow** | Integrität — Nexus-Schlüssel, Datei-Hashes, Mesh-Gesundheit |
 | **pulse** | Überwachung — GPU-Temperaturen, RAM, Festplatte, Dienst-Gesundheit |
 | **bounty** | Bugs — fängt Fehler, erstellt automatisch Fix-Threads |
 
@@ -212,14 +212,20 @@ sie sind eine Empfehlung, keine Voraussetzung. [Kern-Agenten-Anleitung →](docs
 
 ## Sicherheit
 
-nur SSH-Schlüssel. keine Passwörter. keine offenen Ports. keine Ausnahmen. alle Dienste auf 127.0.0.1. *"you shall not pass."* *(du kommst hier nicht vorbei.)*
+**Lemonade Nexus** — Zero-Trust WireGuard-Mesh-VPN. ~~SSH Mixer ist veraltet und entfernt.~~ Nexus ist der Ersatz.
 
-```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
-```
+| | SSH-Mesh (alt) | Nexus (jetzt) |
+|---|---|---|
+| Schlüsselverwaltung | manuell auf jeder Maschine | Ed25519 auto-generiert pro Server |
+| Verschlüsselung | nur SSH | WireGuard ChaCha20-Poly1305 Tunnel |
+| Peer-Erkennung | keine | UDP-Gossip-Protokoll, automatisch |
+| Schlüsselrotation | manuell | automatisch wöchentlich mit Shamir |
+| Governance | flaches Vertrauen | demokratisch — Tier-1-Mehrheitsvotum |
+| NAT-Traversal | keines | STUN Hole-Punching + Relay |
 
-[vollständige Sicherheitsanleitung →](docs/SECURITY.md)
+alle Dienste binden an 127.0.0.1. Nexus stellt den verschlüsselten Tunnel bereit. *"du kommst hier nicht vorbei."*
+
+[Nexus-VPN-Anleitung →](docs/wiki/Nexus-VPN.md) · [Sicherheitshärtung →](docs/SECURITY.md)
 
 ## Datenschutz
 

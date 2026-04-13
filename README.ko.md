@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -181,7 +181,7 @@ ai 산업은 당신이 다른 사람의 컴퓨터를 빌려 쓰길 원합니다.
 
 | 블록 | 기능 | 상태 |
 |------|------|------|
-| **ssh mesh** | 다중 머신 네트워킹 (기본, 어디서나 작동) | [가이드 →](docs/wiki/SSH-Mesh.md) |
+| **nexus vpn** | 제로 트러스트 WireGuard 메시 (SSH 메시 대체) | [가이드 →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | 802.1Q 네트워크 격리 (관리형 스위치 필요) | [가이드 →](docs/wiki/Network-Layout.md) |
 | **음성 파이프라인** | whisper + kokoro tts | [가이드 →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | 채팅 프론트엔드 | 계획됨 |
@@ -204,7 +204,7 @@ ai 산업은 당신이 다른 사람의 컴퓨터를 빌려 쓰길 원합니다.
 |----------|------|
 | **sentinel** | 보안 — 스캔, 모니터링, 아무것도 신뢰하지 않음 |
 | **meek** | 감사관 — 17항목 일일 감사, 공급망 |
-| **shadow** | 무결성 — ssh 키, 파일 해시, 메시 상태 |
+| **shadow** | 무결성 — nexus 키, 파일 해시, 메시 상태 |
 | **pulse** | 모니터 — gpu 온도, 램, 디스크, 서비스 상태 |
 | **bounty** | 버그 — 오류 포착, 자동 수정 스레드 생성 |
 
@@ -212,14 +212,20 @@ ai 산업은 당신이 다른 사람의 컴퓨터를 빌려 쓰길 원합니다.
 
 ## 보안
 
-ssh 키만. 비밀번호 없음. 열린 포트 없음. 예외 없음. 모든 서비스 127.0.0.1에서 실행. *"you shall not pass."* *(너는 지나갈 수 없다.)*
+**Lemonade Nexus** — 제로 트러스트 WireGuard 메시 VPN. ~~SSH 믹서는 더 이상 사용되지 않으며 제거되었습니다.~~ Nexus가 대체합니다.
 
-```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
-```
+| | SSH 메시 (이전) | Nexus (현재) |
+|---|---|---|
+| 키 관리 | 각 머신에서 수동 | Ed25519 서버별 자동 생성 |
+| 암호화 | SSH만 | WireGuard ChaCha20-Poly1305 터널 |
+| 피어 발견 | 없음 | UDP 가십 프로토콜, 자동 |
+| 키 순환 | 수동 | Shamir로 자동 주간 순환 |
+| 거버넌스 | 플랫 신뢰 | 민주적 — Tier 1 과반수 투표 |
+| NAT 통과 | 없음 | STUN 홀 펀칭 + 릴레이 |
 
-[전체 보안 가이드 →](docs/SECURITY.md)
+모든 서비스는 127.0.0.1에 바인딩. Nexus가 암호화된 터널을 제공합니다. *"여기는 지나갈 수 없다."*
+
+[Nexus VPN 가이드 →](docs/wiki/Nexus-VPN.md) · [보안 강화 →](docs/SECURITY.md)
 
 ## 프라이버시
 

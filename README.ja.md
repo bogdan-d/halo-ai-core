@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -181,7 +181,7 @@ coreが基盤。必要なものをスナップオン：
 
 | ブロック | 機能 | 状態 |
 |---------|------|------|
-| **ssh mesh** | マルチマシンネットワーキング（デフォルト、どこでも動作） | [ガイド →](docs/wiki/SSH-Mesh.md) |
+| **nexus vpn** | ゼロトラストWireGuardメッシュ（SSHメッシュに代わる） | [ガイド →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | 802.1Qネットワーク分離（マネージドスイッチ必要） | [ガイド →](docs/wiki/Network-Layout.md) |
 | **音声パイプライン** | whisper + kokoro tts | [ガイド →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | チャットフロントエンド | 計画中 |
@@ -204,7 +204,7 @@ coreはエージェントなしでも動作する。しかしこの5つは、あ
 |-------------|------|
 | **sentinel** | セキュリティ — スキャン、監視、何も信頼しない |
 | **meek** | 監査人 — 17項目の日次監査、サプライチェーン |
-| **shadow** | 整合性 — sshキー、ファイルハッシュ、メッシュの健全性 |
+| **shadow** | 整合性 — nexusキー、ファイルハッシュ、メッシュの健全性 |
 | **pulse** | モニター — gpu温度、ram、ディスク、サービスの健全性 |
 | **bounty** | バグ — エラーを捕捉、修正スレッドを自動作成 |
 
@@ -212,14 +212,20 @@ coreはエージェントなしでも動作する。しかしこの5つは、あ
 
 ## セキュリティ
 
-sshキーのみ。パスワードなし。開放ポートなし。例外なし。すべてのサービスは127.0.0.1上。*"you shall not pass."* *(ここは通さぬ。)*
+**Lemonade Nexus** — ゼロトラストWireGuardメッシュVPN。~~SSHミキサーは非推奨で削除されました。~~ Nexusが後継です。
 
-```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
-```
+| | SSHメッシュ（旧） | Nexus（現在） |
+|---|---|---|
+| 鍵管理 | 各マシンで手動 | Ed25519サーバーごとに自動生成 |
+| 暗号化 | SSHのみ | WireGuard ChaCha20-Poly1305トンネル |
+| ピア発見 | なし | UDPゴシッププロトコル、自動 |
+| 鍵ローテーション | 手動 | Shamirによる自動週次ローテーション |
+| ガバナンス | フラットな信頼 | 民主的 — Tier 1多数決 |
+| NATトラバーサル | なし | STUNホールパンチング + リレー |
 
-[完全なセキュリティガイド →](docs/SECURITY.md)
+すべてのサービスは127.0.0.1にバインド。Nexusが暗号化トンネルを提供。*「ここは通さん。」*
+
+[Nexus VPNガイド →](docs/wiki/Nexus-VPN.md) · [セキュリティ強化 →](docs/SECURITY.md)
 
 ## プライバシー
 
