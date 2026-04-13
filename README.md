@@ -25,7 +25,7 @@
 [![Wiki](https://img.shields.io/badge/Wiki-24_pages-00d4ff?style=flat&logo=github&logoColor=white)](docs/wiki/Home.md)
 [![Medium](https://img.shields.io/badge/Medium-articles-000000?style=flat&logo=medium&logoColor=white)](https://medium.com/@stampby)
 [![YouTube](https://img.shields.io/badge/YouTube-tutorials-FF0000?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@halo-ai.studio)
-[![SSH Only](https://img.shields.io/badge/Security-SSH_Only-red?style=flat)](docs/SECURITY.md)
+[![Nexus VPN](https://img.shields.io/badge/Security-Nexus_Zero_Trust-red?style=flat)](docs/wiki/Nexus-VPN.md)
 [![Self Hosted](https://img.shields.io/badge/Self_Hosted-100%25_Local-purple?style=flat)](https://github.com/stampby/halo-ai-core)
 [![Bleeding Edge](https://img.shields.io/badge/⚠_Bleeding_Edge-kernel_7.0_+_NPU-ff4444?style=flat)](https://github.com/stampby/halo-ai-core-bleeding-edge)
 
@@ -39,7 +39,7 @@
 
 ## what is this
 
-the foundation layer for running local ai on your own hardware. one script installs everything. eight steps, all systemd, all auto-restart, everything routes through lemonade server on :13305. ssh only. *"i know kung fu."*
+the foundation layer for running local ai on your own hardware. one script installs everything. all systemd, all auto-restart, everything routes through lemonade server on :13305. secured by nexus zero-trust vpn. *"i know kung fu."*
 
 ## install
 
@@ -181,7 +181,7 @@ core is the foundation. snap on what you need:
 
 | block | what it does | status |
 |-------|-------------|--------|
-| **ssh mesh** | multi-machine networking (default, works anywhere) | [guide →](docs/wiki/SSH-Mesh.md) |
+| **nexus vpn** | zero-trust wireguard mesh with cryptographic governance (replaces ssh mesh) | [guide →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | 802.1Q network isolation (requires managed switch) | [guide →](docs/wiki/Network-Layout.md) |
 | **voice pipeline** | whisper + kokoro tts | [guide →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | chat frontend | planned |
@@ -204,7 +204,7 @@ core runs without agents. but these five will watch your stack when you're not a
 |-------|-----|
 | **sentinel** | security — scans, monitors, trusts nothing |
 | **meek** | auditor — 17-check daily audit, supply chain |
-| **shadow** | integrity — ssh keys, file hashes, mesh health |
+| **shadow** | integrity — nexus keys, file hashes, mesh health |
 | **pulse** | monitor — gpu temps, ram, disk, service health |
 | **bounty** | bugs — catches errors, auto-creates fix threads |
 
@@ -212,14 +212,29 @@ they're a recommendation, not a requirement. [core agents guide →](docs/wiki/C
 
 ## security
 
-ssh keys only. no passwords. no open ports. no exceptions. all services on 127.0.0.1. *"you shall not pass."*
+**lemonade nexus** — zero-trust wireguard mesh vpn. ~~ssh mixer is deprecated and removed.~~ nexus is the replacement and it's not even close.
+
+| | ssh mesh (old) | nexus (now) |
+|---|---|---|
+| key management | manual on every machine | ed25519 auto-generated per server |
+| encryption | ssh only | wireguard chacha20-poly1305 tunnels |
+| peer discovery | none — manual config | udp gossip protocol, automatic |
+| key rotation | manual | automatic weekly with shamir's secret sharing |
+| governance | flat trust | democratic — tier 1 majority vote |
+| nat traversal | none | stun hole-punching + relay fallback |
+| health monitoring | none | peer health gating, ≥90% uptime for tier 1 |
+| trust model | everyone equal | 5-layer: ed25519 → wireguard → zero-trust → tee attestation → governance |
+
+all services bind to 127.0.0.1. nexus provides the encrypted tunnel. no open ports. no passwords. *"you shall not pass."*
 
 ```bash
-ssh-keygen -t ed25519
-ssh-copy-id bcloud@10.0.0.10
+# nexus is already installed by install.sh
+# verify it's running:
+systemctl status lemonade-nexus
+curl -s http://127.0.0.1:9100/api/health
 ```
 
-[full security guide →](docs/SECURITY.md)
+[nexus vpn guide →](docs/wiki/Nexus-VPN.md) · [security hardening →](docs/SECURITY.md)
 
 ## privacy
 
