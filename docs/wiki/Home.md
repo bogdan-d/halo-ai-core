@@ -6,6 +6,7 @@ Welcome to the Halo AI Core knowledge base. Everything you need to run a local A
 
 ## Latest
 
+- **[Bonsai 1-Bit — 359 tok/s on 231 MB](Blog-2026-04-13-Bonsai-1bit-Benchmarks.md)** *(Apr 13, 2026)* — PrismML Bonsai Q1_0 benchmarks, stock llama.cpp Vulkan crushes Prism fork by 70x
 - **[The Bleeding Edge Is Live — NPU, Nexus, and a Package Manager](Blog-2026-04-13-Bleeding-Edge-Is-Live.md)** *(Apr 13, 2026)* — CachyOS 7.0-rc3, NPU inference running, Nexus replaces SSH Mixer, custom package manager deployed
 
 ## Getting Started
