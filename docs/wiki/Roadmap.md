@@ -28,7 +28,7 @@
 - [ ] ComfyUI for image/video
 - [ ] Voice pipeline (Whisper + Kokoro)
 - [ ] SearXNG private search
-- [ ] Game server management (Arcade)
+- [x] Game servers (Minecraft + LinuxGSM)
 - [ ] Discord bot framework
 
 ## Long Term

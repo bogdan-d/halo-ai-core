@@ -53,8 +53,8 @@ The landing page is where everything lives after core is installed. It's the con
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
 │                                                             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │ Arcade   │ │GlusterFS │ │ SearXNG  │ │ Discord  │      │
-│  │  games   │ │ storage  │ │  search  │ │   bots   │      │
+│  │  Games   │ │GlusterFS │ │ SearXNG  │ │ Discord  │      │
+│  │Minecraft │ │ storage  │ │  search  │ │   bots   │      │
 │  │ [install]│ │ [install]│ │ [install]│ │ [install]│      │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
 │                                                             │

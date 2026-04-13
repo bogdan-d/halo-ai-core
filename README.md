@@ -184,7 +184,7 @@ core is the foundation. snap on what you need:
 | **voice pipeline** | whisper + kokoro tts | [guide →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | chat frontend | planned |
 | **comfyui** | image/video generation | planned |
-| **game servers** | arcade management | planned |
+| **game servers** | Minecraft + LinuxGSM | active |
 | **glusterfs** | distributed storage | planned |
 | **discord bots** | ai agents in discord | planned |
 

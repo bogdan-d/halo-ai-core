@@ -180,7 +180,7 @@ o core é a fundação. encaixe o que precisar:
 | **pipeline de voz** | whisper + kokoro tts | [guia →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | frontend de chat | planeado |
 | **comfyui** | geração de imagem/vídeo | planeado |
-| **servidores de jogos** | gestão de arcade | planeado |
+| **servidores de jogos** | Minecraft + LinuxGSM | ativo |
 | **glusterfs** | armazenamento distribuído | planeado |
 | **bots discord** | agentes ia no discord | planeado |
 

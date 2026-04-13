@@ -25,7 +25,7 @@ Halo AI Core is the foundation. These are blocks you can snap on top. Each one i
 ### Applications
 | Block | What It Does | Status |
 |-------|-------------|--------|
-| Arcade | Game server management | Planned |
+| Game Servers | Minecraft + LinuxGSM | Active |
 | Discord Bots | AI agent bots | Planned |
 | Voice Pipeline | Full voice in/out | Planned |
 | Landing Page | Web dashboard | Planned |

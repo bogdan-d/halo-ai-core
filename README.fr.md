@@ -180,7 +180,7 @@ le noyau est la fondation. ajoutez ce dont vous avez besoin :
 | **pipeline vocal** | whisper + kokoro tts | [guide →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | interface de chat | planifié |
 | **comfyui** | génération d'images/vidéos | planifié |
-| **serveurs de jeux** | gestion arcade | planifié |
+| **serveurs de jeux** | Minecraft + LinuxGSM | actif |
 | **glusterfs** | stockage distribué | planifié |
 | **bots discord** | agents ia dans discord | planifié |
 

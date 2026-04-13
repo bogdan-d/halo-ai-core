@@ -180,7 +180,7 @@ der Kern ist das Fundament. steck an, was du brauchst:
 | **Sprach-Pipeline** | whisper + kokoro tts | [Anleitung →](docs/wiki/Voice-Pipeline.md) |
 | **Open WebUI** | Chat-Oberfläche | geplant |
 | **ComfyUI** | Bild-/Videogenerierung | geplant |
-| **Spieleserver** | Arcade-Verwaltung | geplant |
+| **Spieleserver** | Minecraft + LinuxGSM | aktiv |
 | **GlusterFS** | verteilter Speicher | geplant |
 | **Discord-Bots** | KI-Agenten in Discord | geplant |
 

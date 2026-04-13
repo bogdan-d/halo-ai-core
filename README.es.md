@@ -180,7 +180,7 @@ el núcleo es la base. añade lo que necesites:
 | **pipeline de voz** | whisper + kokoro tts | [guía →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | interfaz de chat | planificado |
 | **comfyui** | generación de imágenes/vídeo | planificado |
-| **servidores de juegos** | gestión arcade | planificado |
+| **servidores de juegos** | Minecraft + LinuxGSM | activo |
 | **glusterfs** | almacenamiento distribuido | planificado |
 | **bots discord** | agentes ia en discord | planificado |
 
