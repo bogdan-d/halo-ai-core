@@ -2,7 +2,7 @@
 
 *"Show me what you got."* — Rick Sanchez
 
-All numbers verified on AMD Strix Halo (Ryzen AI MAX+ 395, 128GB unified, gfx1151). Reproducible — clone the repo, run `install.sh --yes-all`, load a model, run `bench-kernel.sh`.
+All numbers verified on AMD Strix Halo (Ryzen AI MAX+ 395, 128GB unified, gfx1151). Reproducible — clone the repo, run `install.sh --yes-all`, load an LLM model in Lemonade, run `bench-kernel.sh`.
 
 ---
 
