@@ -1,8 +1,8 @@
-# Reddit Post — Nexus Update + Methodology Changes + Benchmarks
+# Reddit Post — Kansas City Shuffle → Nexus Update
 
 **Subreddit:** r/AMDStrixHalo
 
-**Title:** 24 hours of community feedback — NPU is live, SSH Mixer is dead, new benchmarks methodology. Full changelog.
+**Title:** Update: SSH Mixer deprecated — replaced by Lemonade Nexus. New benchmarks methodology. NPU is live.
 
 ---
 
@@ -10,131 +10,83 @@
 
 ---
 
-~~the kansas city shuffle — ssh mixer was our multi-machine networking solution. manual key exchange, ~/.ssh/config on every box, full mesh. it worked but it didn't scale.~~
+~~the kansas city shuffle — ssh mixer was our multi-machine networking solution. manual key exchange, ~/.ssh/config on every box, full mesh.~~
 
-~~deprecated. gone. replaced.~~
+~~it worked. but it didn't scale. every new machine meant touching every existing machine.~~
 
-~~if you set it up from our old guide, it still works. but there's something better now.~~
+~~deprecated. if you set it up, it still runs. but there's something better now.~~
 
 ---
 
 ## what replaced it
 
-**Lemonade Nexus** — zero-trust WireGuard mesh VPN with cryptographic governance. built from source on Strix Halo in under 2 minutes.
+**Lemonade Nexus** — zero-trust WireGuard mesh VPN with cryptographic governance. part of the Lemonade SDK.
 
 - Ed25519 identity for every machine
 - Shamir's Secret Sharing for root key distribution
-- automatic WireGuard tunnel establishment
+- automatic WireGuard tunnel establishment with STUN hole-punching
+- democratic governance — protocol changes need Tier 1 majority vote
 - no database — signed JSON on disk
-- democratic governance for protocol changes
+- 5-layer security model (Ed25519 → WireGuard → Zero-Trust → TEE Attestation → Democratic Governance)
 
-it's running right now. full details on how to set it up:
+built from source on Strix Halo in under 2 minutes. running right now.
 
-**→ [Nexus VPN Wiki Page](https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Nexus-VPN.md)**
+**our guide (customized for halo-ai-core):**
 
----
+→ https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Nexus-VPN.md
 
-## methodology changes — thank you
+**original Lemonade Nexus documentation:**
 
-the last 24 hours changed how we do things. some of you called us out and you were right. credit where it's due.
-
-**what changed:**
-
-1. **benchmarking context** — we now test across multiple context depths (1K, 4K, 8K) instead of just short prompts. shows real-world degradation. previous numbers were valid but didn't tell the full story.
-
-2. **LLM stack clarity** — no more confusion about what runs where. the stack is now cleanly separated:
-
-```
-FLM (NPU)         → small models, whisper STT
-llama.cpp Vulkan   → GPU inference
-llama.cpp ROCm     → GPU inference, ROCm-optimized
-vLLM               → high-throughput serving
-```
-
-all compiled separately. all sit side by side. no wrappers.
-
-3. **package management** — we built our own package manager. 16 packages tracked. independent from Arch's rolling updates. one `pacman -Syu` can't break our stack anymore.
-
-4. **wiki-first** — no more long reddit posts with every detail. this is the teaser. full details are on the wiki. always.
+→ https://github.com/lemonade-sdk/lemonade-nexus
 
 ---
 
-## NPU is live
+## what else changed in 24 hours
 
-the XDNA2 NPU on Strix Halo is running inference. not "detected." running models.
+based on community feedback we changed how we benchmark and how the stack works. credit where it's due — you made this better.
 
-- Llama 3.2 3B on NPU
-- Qwen3 8B on NPU (with reasoning)
-- Whisper v3 Turbo on NPU
+**1. NPU is live.** the XDNA2 on Strix Halo is running inference. Llama 3.2 3B, Qwen3 8B, Whisper v3 Turbo. all on the NPU. took three kernel builds to get there.
 
-firmware 1.1.2.65, CachyOS 7.0-rc3 kernel with BORE + LTO + native Zen 5.
+**2. new benchmarks methodology.** we now test across multiple context depths. previous numbers were valid but didn't tell the full story.
 
-took three kernel builds to get there. the stock 6.19 kernel detects the NPU fine but the inference stack needs 7.0+ for the right firmware path. we documented everything.
+**3. clean inference stack.** FLM on NPU. llama.cpp Vulkan and ROCm on GPU. vLLM for serving. all separate. no wrappers.
 
-**→ [NPU Acceleration Wiki Page](https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/NPU-Acceleration.md)**
+**4. custom package manager.** 16 packages tracked. independent from Arch rolling updates. web dashboard.
 
----
+full details on all of this:
 
-## halo-ai-core benchmarks
-
-the numbers from the stable stack. `install.sh --yes-all` on Strix Halo hardware. no manual tuning.
-
-```
-Model                   Backend    Gen tok/s
-─────                   ───────    ─────────
-Qwen3-Coder-30B-A3B    Vulkan        73.0
-Qwen3.5-35B-A3B        Vulkan        57.0
-Qwen3 8B               Vulkan        90.0
-Gemma 4 27B            Vulkan        52.4
-Bonsai 1.7B (1-bit)    Vulkan       260.0
-```
-
-full benchmark tables with context depth, prompt processing, TTFT, memory usage:
-
-**→ [Benchmarks Wiki Page](https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Benchmarks.md)**
+→ https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Blog-2026-04-13-Bleeding-Edge-Is-Live.md
 
 ---
 
-## bleeding edge benchmarks (NPU)
+## benchmarks
 
-these are from the CachyOS 7.0-rc3 kernel with FastFlowLM on the XDNA2 NPU. separate from the stable benchmarks above.
-
-```
-Model              Backend    Notes
-─────              ───────    ─────
-Llama 3.2 3B       NPU        Q4_1, 2.7GB footprint
-Qwen3 8B           NPU        Q4_1, 5.6GB, reasoning mode
-Whisper v3 Turbo   NPU        Q4_1, 0.62GB, speech-to-text
-```
-
-NPU runs alongside GPU. dedicated low-power inference while the GPU handles the heavy models. 8 compute columns. firmware 1.1.2.65.
-
-full NPU numbers and the kernel build process:
-
-**→ [Bleeding Edge Wiki Page](https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Blog-2026-04-13-Bleeding-Edge-Is-Live.md)**
-
----
-
-## changelog — last 24 hours
+**stable stack (halo-ai-core):**
 
 ```
-+ CachyOS 7.0-rc3 kernel (BORE + LTO + native Zen 5)
-+ NPU inference live (3 models confirmed)
-+ Lemonade Nexus replaces SSH Mixer
-+ Custom package manager (16 packages, web dashboard)
-+ Gaia agent framework rebuilt
-+ 10 README translations updated (11 languages total)
-- SSH Mixer deprecated
-- Medium articles deprecated (wiki only)
+Qwen3-Coder-30B-A3B    73.0 tok/s
+Qwen3.5-35B-A3B        57.0 tok/s
+Qwen3 8B               90.0 tok/s
+Gemma 4 27B            52.4 tok/s
 ```
+
+→ https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Benchmarks.md
+
+**bleeding edge (NPU — CachyOS 7.0-rc3):**
+
+```
+Llama 3.2 3B     NPU    Q4_1
+Qwen3 8B         NPU    Q4_1 (reasoning mode)
+Whisper v3       NPU    Q4_1 (speech-to-text)
+```
+
+→ https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Blog-2026-04-13-Bleeding-Edge-Is-Live.md
 
 ---
 
 repo: https://github.com/stampby/halo-ai-core
 
 wiki: https://github.com/stampby/halo-ai-core/blob/main/docs/wiki/Home.md
-
-bleeding edge: https://github.com/stampby/halo-ai-core-bleeding-edge
 
 discord: https://discord.gg/dSyV646eBs
 
