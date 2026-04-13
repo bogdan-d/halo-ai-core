@@ -10,7 +10,7 @@
 
 ### the bare-metal ai foundation for amd strix halo
 
-**12 core services · 128gb unified · lemonade + llama.cpp + nexus · zero cloud · lego blocks**
+**13 core services · 128gb unified · lemonade + llama.cpp + nexus · zero cloud · lego blocks**
 
 *stamped by the architect*
 
@@ -69,6 +69,7 @@ cd halo-ai-core
 | **gateway** | caddy 2.x — dashboard + service proxy on :80 |
 | **vpn** | wireguard — scan a qr code, access your stack from your phone |
 | **dashboard** | glass control panel — model loading, backend picker, live stats, agent management |
+| **pkg manager** | package manager dashboard — service status, version tracking, build triggers on :3010 |
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -81,6 +82,7 @@ cd halo-ai-core
 │  (Vulkan)  │  (Vulkan)    │  (CPU)               │
 ├────────────┴─────────────┴───────────────────────┤
 │ Claude Code │ Games  │ Interviewer │ Nexus VPN  │
+│ Pkg Manager (:3010)                              │
 ├───────────────┴─────────────────────┴────────────┤
 │              ROCm 7.12.0 (gfx1151)               │
 ├──────────────────────────────────────────────────┤

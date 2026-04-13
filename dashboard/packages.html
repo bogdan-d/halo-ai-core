@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-glass="frosted">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>>> halo-ai_ PKG</title>
+<style>
+[data-theme="dark"] {
+--bg:#0d1117;--surface:#161b22;--border:#21262d;--text:#e6edf3;--text-dim:#8b949e;--text-muted:#484f58;
+--accent:#00d4ff;--green:#3fb950;--line:rgba(230,237,243,0.08);
+--glass-frosted:rgba(22,27,34,0.7);--glass-clear:rgba(22,27,34,0.3);
+--glow-border:rgba(0,212,255,0.3);--glow-shadow:rgba(0,212,255,0.1);--dot-green:rgba(63,185,80,0.5);
+--npu:#3fb950;--gpu:#00d4ff;--img:#e879f9;--aud:#fb923c;
+--orange:#fb923c;--red:#f85149;--btn-bg:#21262d;--btn-active:#00d4ff;
+}
+[data-theme="midnight"] {
+--bg:#020817;--surface:#0a1628;--border:#1a2744;--text:#c8d6e5;--text-dim:#6b7fa3;--text-muted:#3a4f6f;
+--accent:#4facfe;--green:#00f5a0;--line:rgba(200,214,229,0.06);
+--glass-frosted:rgba(10,22,40,0.7);--glass-clear:rgba(10,22,40,0.3);
+--glow-border:rgba(79,172,254,0.3);--glow-shadow:rgba(79,172,254,0.1);--dot-green:rgba(0,245,160,0.5);
+--npu:#00f5a0;--gpu:#4facfe;--img:#c084fc;--aud:#fdba74;
+--orange:#fdba74;--red:#f87171;--btn-bg:#132040;--btn-active:#4facfe;
+}
+[data-theme="ember"] {
+--bg:#1a0a0a;--surface:#2a1215;--border:#4a2025;--text:#f0d0c0;--text-dim:#a08070;--text-muted:#604540;
+--accent:#ff6b35;--green:#ffd700;--line:rgba(240,208,192,0.06);
+--glass-frosted:rgba(42,18,21,0.7);--glass-clear:rgba(42,18,21,0.3);
+--glow-border:rgba(255,107,53,0.3);--glow-shadow:rgba(255,107,53,0.1);--dot-green:rgba(255,215,0,0.5);
+--npu:#ffd700;--gpu:#ff6b35;--img:#f472b6;--aud:#fbbf24;
+--orange:#fbbf24;--red:#ef4444;--btn-bg:#3a1a20;--btn-active:#ff6b35;
+}
+[data-glass="frosted"] .pkg-card { background:var(--glass-frosted);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px); }
+* { margin:0;padding:0;box-sizing:border-box; }
+body { background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh; }
+.mono { font-family:'SF Mono','Cascadia Code','Fira Code',Consolas,monospace; }
+
+/* ── Header ── */
+.header { padding:1.5rem 2rem 0;text-align:center; }
+.logo { font-size:1.4rem;font-weight:700;letter-spacing:.05em;margin-bottom:.5rem; }
+.logo .chevron { color:var(--accent); }
+.logo .name { color:var(--accent); }
+.logo .pkg { color:var(--text);font-weight:900;letter-spacing:.1em; }
+.subtitle { font-size:.65rem;color:var(--text-muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.5rem; }
+.back-link { font-size:.7rem;color:var(--accent);text-decoration:none;display:inline-block;margin-bottom:.5rem; }
+.back-link:hover { text-decoration:underline; }
+.divider { width:100%;height:1px;background:var(--line);margin:.75rem 0; }
+
+/* ── Summary Bar ── */
+.summary { display:flex;justify-content:center;gap:2rem;padding:.75rem 2rem;flex-wrap:wrap; }
+.sum-item { text-align:center; }
+.sum-value { font-size:1.8rem;font-weight:800;line-height:1; }
+.sum-value.active { color:var(--green); }
+.sum-value.failed { color:var(--red); }
+.sum-value.total { color:var(--accent); }
+.sum-label { font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.12em;margin-top:.2rem; }
+
+/* ── Filters ── */
+.filters { display:flex;justify-content:center;gap:.4rem;padding:0 2rem .75rem;flex-wrap:wrap; }
+.filter-btn {
+  padding:.3rem .7rem;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--text-muted);font-size:.65rem;cursor:pointer;
+  font-family:inherit;transition:all .2s;text-transform:uppercase;letter-spacing:.06em;
+}
+.filter-btn:hover { border-color:var(--accent);color:var(--text); }
+.filter-btn.active { background:var(--btn-active);color:#fff;border-color:var(--btn-active); }
+
+/* ── Package Grid ── */
+.pkg-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;padding:0 2rem 2rem;max-width:1400px;margin:0 auto; }
+.pkg-card {
+  border:1px solid var(--border);border-radius:10px;padding:1rem;
+  transition:all .3s;position:relative;overflow:hidden;
+}
+.pkg-card:hover { border-color:var(--glow-border);box-shadow:0 6px 24px rgba(0,0,0,.3); }
+.pkg-card.status-active { border-left:3px solid var(--green); }
+.pkg-card.status-failed { border-left:3px solid var(--red); }
+.pkg-card.status-inactive { border-left:3px solid var(--text-muted); }
+
+.pkg-header { display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem; }
+.pkg-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.pkg-dot.active { background:var(--green);box-shadow:0 0 8px var(--dot-green); }
+.pkg-dot.failed { background:var(--red);box-shadow:0 0 8px rgba(248,81,73,.4); }
+.pkg-dot.inactive { background:var(--text-muted); }
+.pkg-dot.na { background:var(--text-muted);opacity:.4; }
+.pkg-name { font-size:.9rem;font-weight:700;flex:1; }
+.pkg-version { font-size:.6rem;color:var(--accent);font-weight:600; }
+
+.pkg-desc { font-size:.65rem;color:var(--text-dim);margin-bottom:.6rem; }
+
+.pkg-meta { display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.6rem; }
+.pkg-pill {
+  font-size:.55rem;padding:.15rem .4rem;border-radius:3px;
+  border:1px solid var(--border);color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.06em;
+}
+.pkg-pill.cat-llm { border-color:var(--gpu);color:var(--gpu); }
+.pkg-pill.cat-npu { border-color:var(--npu);color:var(--npu); }
+.pkg-pill.cat-media { border-color:var(--img);color:var(--img); }
+.pkg-pill.cat-agents { border-color:var(--accent);color:var(--accent); }
+.pkg-pill.cat-network { border-color:var(--green);color:var(--green); }
+.pkg-pill.cat-data { border-color:var(--orange);color:var(--orange); }
+.pkg-pill.port { border-color:var(--text-muted);color:var(--text-dim); }
+
+.pkg-actions { display:flex;gap:.3rem;flex-wrap:wrap; }
+.act-btn {
+  padding:.3rem .6rem;border-radius:5px;border:1px solid var(--border);
+  background:transparent;color:var(--text-muted);font-size:.6rem;cursor:pointer;
+  font-family:inherit;transition:all .2s;
+}
+.act-btn:hover { border-color:var(--accent);color:var(--accent); }
+.act-btn.start { border-color:var(--green);color:var(--green); }
+.act-btn.start:hover { background:var(--green);color:#fff; }
+.act-btn.stop { border-color:var(--red);color:var(--red); }
+.act-btn.stop:hover { background:var(--red);color:#fff; }
+.act-btn.restart { border-color:var(--orange);color:var(--orange); }
+.act-btn.restart:hover { background:var(--orange);color:#fff; }
+.act-btn.build { border-color:var(--accent);color:var(--accent); }
+.act-btn.build:hover { background:var(--accent);color:#fff; }
+.act-btn:disabled { opacity:.3;cursor:not-allowed; }
+
+/* ── Toast ── */
+.toast {
+  position:fixed;bottom:2rem;right:2rem;padding:.6rem 1rem;border-radius:8px;
+  background:var(--surface);border:1px solid var(--accent);color:var(--text);
+  font-size:.75rem;z-index:999;opacity:0;transform:translateY(10px);
+  transition:all .3s;pointer-events:none;
+}
+.toast.show { opacity:1;transform:translateY(0); }
+
+/* ── Footer ── */
+.footer { text-align:center;padding:1rem 2rem 2rem;font-size:.6rem;color:var(--text-muted); }
+
+@media (max-width:750px) {
+  .pkg-grid { grid-template-columns:1fr;padding:0 1rem 1rem; }
+  .header { padding:1rem 1rem 0; }
+  .summary { gap:1rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/" class="back-link">&larr; back to dashboard</a>
+  <div class="logo mono">
+    <span class="chevron">&gt;&gt;</span>
+    <span class="name"> halo-ai_</span>
+    <span class="pkg"> PKG</span>
+  </div>
+  <div class="subtitle">Package Manager — Designed and built by the architect</div>
+  <div class="divider"></div>
+</div>
+
+<div class="summary" id="summary">
+  <div class="sum-item"><div class="sum-value total" id="s-total">—</div><div class="sum-label">Packages</div></div>
+  <div class="sum-item"><div class="sum-value active" id="s-active">—</div><div class="sum-label">Active</div></div>
+  <div class="sum-item"><div class="sum-value failed" id="s-failed">—</div><div class="sum-label">Failed</div></div>
+  <div class="sum-item"><div class="sum-value" style="color:var(--text-muted)" id="s-inactive">—</div><div class="sum-label">Inactive</div></div>
+</div>
+
+<div class="filters" id="filters">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="llm">LLM</button>
+  <button class="filter-btn" data-filter="npu">NPU</button>
+  <button class="filter-btn" data-filter="media">Media</button>
+  <button class="filter-btn" data-filter="agents">Agents</button>
+  <button class="filter-btn" data-filter="network">Network</button>
+  <button class="filter-btn" data-filter="data">Data</button>
+</div>
+
+<div class="pkg-grid" id="grid"></div>
+
+<div class="toast" id="toast"></div>
+
+<div class="footer mono">
+  halo-ai-core pkg-manager v0.1.0 — part of the Lemonade stack<br>
+  "I'll be back." — T-800
+</div>
+
+<script>
+const API = window.location.origin;
+let allPkgs = [];
+let currentFilter = 'all';
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function fetchPkgs() {
+  try {
+    const r = await fetch(API + '/api/packages');
+    allPkgs = await r.json();
+    render();
+  } catch (e) {
+    console.error('Failed to fetch packages:', e);
+  }
+}
+
+async function fetchSummary() {
+  try {
+    const r = await fetch(API + '/api/summary');
+    const s = await r.json();
+    document.getElementById('s-total').textContent = s.total;
+    document.getElementById('s-active').textContent = s.active;
+    document.getElementById('s-failed').textContent = s.failed;
+    document.getElementById('s-inactive').textContent = s.inactive;
+  } catch (e) {}
+}
+
+async function svcAction(service, action) {
+  toast(`${action}ing ${service}...`);
+  try {
+    const r = await fetch(API + '/api/service', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({service, action})
+    });
+    const data = await r.json();
+    toast(`${service}: ${data.status}`);
+    setTimeout(() => { fetchPkgs(); fetchSummary(); }, 1000);
+  } catch (e) {
+    toast(`Error: ${e.message}`);
+  }
+}
+
+async function buildPkg(name) {
+  toast(`Building ${name}...`);
+  try {
+    const r = await fetch(API + '/api/build', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({package: name})
+    });
+    const data = await r.json();
+    toast(`${name}: build started — log: ${data.log}`);
+  } catch (e) {
+    toast(`Build error: ${e.message}`);
+  }
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  const filtered = currentFilter === 'all' ? allPkgs : allPkgs.filter(p => p.category === currentFilter);
+
+  grid.innerHTML = filtered.map(p => {
+    const st = p.status === 'n/a' ? 'na' : p.status;
+    const ports = (p.ports || []).map(port => `<span class="pkg-pill port">:${port}</span>`).join('');
+    const hasSvc = !!p.service;
+    const hasBuild = !!p.build_cmd;
+
+    return `
+    <div class="pkg-card status-${st}">
+      <div class="pkg-header">
+        <div class="pkg-dot ${st}"></div>
+        <div class="pkg-name mono">${p.name}</div>
+        <div class="pkg-version mono">${p.version}</div>
+      </div>
+      <div class="pkg-desc">${p.description}</div>
+      <div class="pkg-meta">
+        <span class="pkg-pill cat-${p.category}">${p.category}</span>
+        ${p.source ? `<span class="pkg-pill">${p.source.split(':')[0]}</span>` : ''}
+        ${ports}
+      </div>
+      <div class="pkg-actions">
+        ${hasSvc && st !== 'active' ? `<button class="act-btn start" onclick="svcAction('${p.service}','start')">Start</button>` : ''}
+        ${hasSvc && st === 'active' ? `<button class="act-btn stop" onclick="svcAction('${p.service}','stop')">Stop</button>` : ''}
+        ${hasSvc ? `<button class="act-btn restart" onclick="svcAction('${p.service}','restart')">Restart</button>` : ''}
+        ${hasBuild ? `<button class="act-btn build" onclick="buildPkg('${p.name}')">Build</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Filter buttons
+document.getElementById('filters').addEventListener('click', e => {
+  if (!e.target.classList.contains('filter-btn')) return;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  currentFilter = e.target.dataset.filter;
+  render();
+});
+
+// Theme sync — read from parent if in iframe, else localStorage
+const savedTheme = localStorage.getItem('halo-theme') || 'dark';
+const savedGlass = localStorage.getItem('halo-glass') || 'frosted';
+document.documentElement.setAttribute('data-theme', savedTheme);
+document.documentElement.setAttribute('data-glass', savedGlass);
+
+// Initial load
+fetchPkgs();
+fetchSummary();
+
+// Auto-refresh every 10s
+setInterval(() => { fetchPkgs(); fetchSummary(); }, 10000);
+</script>
+</body>
+</html>
