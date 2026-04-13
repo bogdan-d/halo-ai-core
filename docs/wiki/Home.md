@@ -4,6 +4,10 @@
 
 Welcome to the Halo AI Core knowledge base. Everything you need to run a local AI platform on AMD hardware and build on top of it.
 
+## Latest
+
+- **[The Bleeding Edge Is Live — NPU, Nexus, and a Package Manager](Blog-2026-04-13-Bleeding-Edge-Is-Live.md)** *(Apr 13, 2026)* — CachyOS 7.0-rc3, NPU inference running, Nexus replaces SSH Mixer, custom package manager deployed
+
 ## Getting Started
 
 - [Getting Started](Getting-Started.md) — Clone, install, verify in 5 minutes
