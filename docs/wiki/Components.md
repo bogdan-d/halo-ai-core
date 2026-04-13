@@ -84,15 +84,6 @@ AMD's unified AI backend. Wraps llama.cpp, whisper, kokoro TTS, and stable diffu
 
 Additional services from the Lemonade ecosystem, all installed by `install.sh`:
 
-### Infinity Arcade
-
-AI game generation — describe a game, the LLM creates it, play in the browser.
-
-- Source: `~/.local/share/halo-services/infinity-arcade/`
-- Port: 8190
-- Service: `infinity-arcade.service` (user)
-- Repo: [stampby/infinity-arcade](https://github.com/stampby/infinity-arcade)
-
 ### Interviewer
 
 AI-powered interview practice — practice technical and behavioral interviews with LLM feedback.

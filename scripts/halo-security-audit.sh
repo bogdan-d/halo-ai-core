@@ -57,7 +57,7 @@ done
 ssh_nocheck=$(count_grep "grep -rn --include='*.py' --include='*.sh' 'StrictHostKeyChecking=no' '$REPO_DIR' | grep -v venv | grep -v __pycache__")
 
 unauth_apps=0
-for f in "$REPO_DIR"/man-cave/cave.py "$REPO_DIR"/arcade/api/server.py; do
+for f in "$REPO_DIR"/man-cave/cave.py; do
     if [ -f "$f" ]; then
         if ! grep -qE 'Depends.*auth|Bearer|api_key|basicauth' "$f" 2>/dev/null; then
             unauth_apps=$((unauth_apps + 1))

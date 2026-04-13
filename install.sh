@@ -729,23 +729,14 @@ SVCUNIT
 fi
 
 # ============================================================
-# 9. LEMONADE SERVICES (Infinity Arcade, Interviewer, Eval)
+# 9. LEMONADE SERVICES (Interviewer, Eval, Nexus)
 # ============================================================
 step "Lemonade Services"
 if $DRY_RUN; then
-    info "Would install: Infinity Arcade, Interviewer, Lemonade Eval"
+    info "Would install: Interviewer, Lemonade Eval, Lemonade Nexus"
 else
     SERVICES_DIR="${HOME}/.local/share/halo-services"
     mkdir -p "$SERVICES_DIR"
-
-    # Infinity Arcade — AI game generation
-    if [ ! -d "$SERVICES_DIR/infinity-arcade" ]; then
-        git clone https://github.com/stampby/infinity-arcade.git "$SERVICES_DIR/infinity-arcade" >> "$LOG_FILE" 2>&1 &
-        spinner $! "Cloning Infinity Arcade..."
-    else
-        (cd "$SERVICES_DIR/infinity-arcade" && git pull >> "$LOG_FILE" 2>&1) &
-        spinner $! "Updating Infinity Arcade..."
-    fi
 
     # Interviewer — AI interview practice
     if [ ! -d "$SERVICES_DIR/interviewer" ]; then
@@ -772,29 +763,10 @@ else
     fi
 
     "$SVCENV/bin/pip" install --quiet \
-        -e "$SERVICES_DIR/infinity-arcade" \
         -e "$SERVICES_DIR/interviewer" \
         -e "$SERVICES_DIR/lemonade-eval" \
         >> "$LOG_FILE" 2>&1 &
     spinner $! "Installing service dependencies..."
-
-    # Create systemd user service for Infinity Arcade
-    cat > "$HOME/.config/systemd/user/infinity-arcade.service" << ARCADESVC
-[Unit]
-Description=Infinity Arcade — AI Game Generation
-After=lemonade-server.service
-
-[Service]
-Type=simple
-ExecStart=${SVCENV}/bin/infinity-arcade serve --host 127.0.0.1 --port 8190
-Restart=on-failure
-RestartSec=5
-Environment=LEMONADE_HOST=127.0.0.1
-Environment=LEMONADE_PORT=13305
-
-[Install]
-WantedBy=default.target
-ARCADESVC
 
     # Create systemd user service for Interviewer
     cat > "$HOME/.config/systemd/user/interviewer.service" << INTSVC
@@ -834,7 +806,6 @@ INTSVC
     fi
 
     systemctl --user daemon-reload 2>/dev/null || true
-    log "Infinity Arcade installed — AI game generation on :8190"
     log "Interviewer installed — AI interview practice on :8191"
     log "Lemonade Eval installed — benchmarking: lemonade-eval run"
     log "Lemonade Nexus installed — zero-trust mesh VPN: lemonade-nexus --help"
@@ -846,14 +817,6 @@ INTSVC
 
 :80 {
     @local remote_ip 127.0.0.1 ::1 10.0.0.0/24 10.100.0.0/24
-
-    handle /arcade* {
-        handle @local {
-            uri strip_prefix /arcade
-            reverse_proxy 127.0.0.1:8190
-        }
-        respond 403
-    }
 
     handle /interviewer* {
         handle @local {
@@ -939,13 +902,11 @@ echo "  They will NOT run until you reboot."
 echo ""
 echo "  ── SERVICES ──────────────────────────────────"
 echo ""
-echo "  Infinity Arcade:  http://localhost:8190  (AI game generation)"
 echo "  Interviewer:      http://localhost:8191  (AI interview practice)"
 echo "  Lemonade Eval:    lemonade-eval run      (benchmarking)"
 echo "  Lemonade Nexus:   lemonade-nexus          (zero-trust mesh VPN)"
 echo ""
 echo "  Start services:"
-echo "    systemctl --user start infinity-arcade"
 echo "    systemctl --user start interviewer"
 echo ""
 echo "  ── NEXT STEPS (after reboot) ──────────────────"
