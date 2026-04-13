@@ -34,7 +34,8 @@ Welcome to the Halo AI Core knowledge base. Everything you need to run a local A
 
 - [Lego Blocks](Lego-Blocks.md) — Philosophy and how to add services
 - [Adding a Service](Adding-a-Service.md) — Step-by-step template for new blocks
-- [SSH Mesh](SSH-Mesh.md) — Multi-machine networking
+- [Nexus VPN](Nexus-VPN.md) — Zero-trust WireGuard mesh (replaces SSH Mixer)
+- [SSH Mesh](SSH-Mesh.md) — Legacy multi-machine networking *(superseded by Nexus)*
 - [Voice Pipeline](Voice-Pipeline.md) — Whisper + Kokoro + voice cloning
 - [Network Layout](Network-Layout.md) — Three-tier network architecture
 

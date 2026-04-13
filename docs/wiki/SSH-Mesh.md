@@ -1,5 +1,7 @@
 # SSH Mesh — Multi-Machine Networking
 
+> **⚠️ Superseded by [Lemonade Nexus](Nexus-VPN.md)** — SSH Mesh still works and is still valid for basic setups. But Nexus adds zero-trust WireGuard tunnels, cryptographic governance, automatic peer discovery, and health monitoring. If you're starting fresh, use Nexus. If you already have SSH Mesh running, Nexus layers on top — your existing keys and config stay.
+
 *"You mustn't be afraid to dream a little bigger, darling." — Eames, Inception*
 
 ~~We thought about using Kubernetes. Then we remembered we're not insane.~~
