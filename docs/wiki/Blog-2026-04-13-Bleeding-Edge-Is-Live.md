@@ -72,6 +72,30 @@ All compiled separately from source. All sit side by side. No wrappers. No ONNX 
 
 **Full details:** [Benchmarks →](Benchmarks.md)
 
+## NPU Benchmarks — All Models
+
+All Q4_1 quantized. XDNA2 NPU, 8 columns, firmware 1.1.2.65. CachyOS 7.0-rc3 kernel. Zero GPU usage during runs. Turbo power mode.
+
+| Model | Params | ~tok/s | Time (100 words) | Footprint |
+|-------|--------|--------|-------------------|-----------|
+| **lfm2.5-it** | 1.2B | **~59** | 4.2s | 0.9 GB |
+| **qwen3** | 0.6B | **~47** | 4.3s | 0.5 GB |
+| **qwen3.5** | 0.8B | **~45** | 7.8s | 0.6 GB |
+| **llama3.2** | 1B | **~43** | 4.5s | 0.8 GB |
+| **gemma3** | 1B | **~31** | 6.3s | 0.8 GB |
+| **llama3.2** | 3B | **~19** | 9.7s | 2.7 GB |
+| **qwen3** | 8B | **~8** | 50.5s | 5.6 GB |
+
+**Sweet spot:** sub-2B models at 40-60 tok/s. LFM2.5-IT at 1.2B is the NPU king — 59 tok/s with minimal footprint.
+
+**Notes:**
+- The 8B with reasoning mode is slow because the thinking chain generates hidden tokens before visible output
+- The 0.6B and 0.8B models are fast enough for real-time assistant responses
+- NPU runs alongside GPU — dedicated low-power inference while Radeon handles heavy models
+- Whisper v3 Turbo (0.62 GB) runs on NPU for always-on speech-to-text
+
+*tested 2026-04-13 on CachyOS 7.0.0-rc3-1-cachyos-rc-native*
+
 ## Changelog — Last 24 Hours
 
 ```
