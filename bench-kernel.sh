@@ -11,8 +11,9 @@
 # ============================================================
 set -euo pipefail
 
-API_URL="http://localhost:13305/v1/chat/completions"
-MODELS_URL="http://localhost:13305/v1/models"
+API_URL="${API_URL:-http://localhost:13305/v1/chat/completions}"
+MODELS_URL="${MODELS_URL:-http://localhost:13305/v1/models}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:13305/api/v1/health}"
 KERNEL=$(uname -r)
 TIMESTAMP=$(date -Iseconds)
 OUTPUT_DIR="$(cd "$(dirname "$0")" && pwd)/bench-results"
@@ -21,6 +22,33 @@ RESULT_FILE="${OUTPUT_DIR}/kernel-${KERNEL}-$(date +%Y%m%d-%H%M%S).json"
 
 G='\033[0;32m'; B='\033[0;34m'; Y='\033[1;33m'; C='\033[0;36m'; NC='\033[0m'; BOLD='\033[1m'
 
+resolve_model() {
+    curl -s "$HEALTH_URL" 2>/dev/null | python3 -c '
+import json, sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+loaded = data.get("model_loaded", "")
+models = data.get("all_models_loaded", [])
+
+if loaded and any(m.get("type") == "llm" and m.get("model_name") == loaded for m in models):
+    print(loaded)
+    raise SystemExit(0)
+
+for model in models:
+    if model.get("type") == "llm" and model.get("model_name"):
+        print(model["model_name"])
+        raise SystemExit(0)
+
+print("")
+' 2>/dev/null
+}
+
+main() {
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════╗${NC}"
 echo -e "${BOLD}║  halo-ai core — Kernel Benchmark Suite       ║${NC}"
@@ -50,9 +78,9 @@ echo -e "  Timestamp: ${TIMESTAMP}"
 echo ""
 
 # ── Check model ──
-MODEL=$(curl -s "$MODELS_URL" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data'][0]['id'] if d.get('data') else '')" 2>/dev/null)
+MODEL="$(resolve_model)"
 if [ -z "$MODEL" ]; then
-    echo -e "${Y}ERROR: No model loaded. Run: lemonade run <model>${NC}"
+    echo -e "${Y}ERROR: No LLM model loaded. Load one first with Lemonade.${NC}"
     exit 1
 fi
 echo -e "  Model:     ${BOLD}${MODEL}${NC}"
@@ -308,3 +336,8 @@ WIKI_UPDATE
 fi
 
 echo ""
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
