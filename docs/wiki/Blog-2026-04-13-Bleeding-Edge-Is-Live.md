@@ -96,6 +96,22 @@ All Q4_1 quantized. XDNA2 NPU, 8 columns, firmware 1.1.2.65. CachyOS 7.0-rc3 ker
 
 *tested 2026-04-13 on CachyOS 7.0.0-rc3-1-cachyos-rc-native*
 
+## Bonsai 1-Bit Benchmarks — GPU (Vulkan)
+
+PrismML Bonsai models. Q1_0 (1-bit ternary weights). Stock llama.cpp Vulkan backend. GPU forced to high performance mode. Kernel 6.19.11.
+
+| Model | Size on Disk | pp512 tok/s | tg128 tok/s |
+|-------|-------------|-------------|-------------|
+| **Bonsai 1.7B** | 231 MiB | **5,027** | **359.5** |
+| **Bonsai 4B** | 540 MiB | **1,998** | **190.1** |
+| **Bonsai 8B** | 1.07 GiB | **1,164** | **122.0** |
+
+**359 tok/s generation on 1.7B.** 5,027 tok/s prompt processing. The 8B fits in 1 GB and generates at 122 tok/s. 1-bit quantization on Vulkan is absurdly fast on Strix Halo.
+
+**Note:** The Prism ML llama.cpp fork gave ~5 tok/s on the same models. Stock llama.cpp Vulkan is 70x faster. Use stock llama.cpp for Bonsai, not the Prism fork.
+
+*tested 2026-04-13 on 6.19.11-arch1-1, Radeon 8060S (RADV Mesa 26.0.4), GPU high perf mode*
+
 ## Changelog — Last 24 Hours
 
 ```
