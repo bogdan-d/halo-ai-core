@@ -837,10 +837,15 @@ else
         spinner $! "Updating Lemonade Eval..."
     fi
 
-    # Install Python deps in a shared venv
+    # Install Python deps in a shared venv (use pyenv 3.13 — system 3.14 is too new for some deps)
     SVCENV="${HOME}/.local/share/halo-services-env"
+    PYENV_PYTHON="${HOME}/.pyenv/versions/${PYTHON_VERSION}/bin/python3"
     if [ ! -d "$SVCENV" ]; then
-        python3 -m venv "$SVCENV" >> "$LOG_FILE" 2>&1
+        if [ -f "$PYENV_PYTHON" ]; then
+            "$PYENV_PYTHON" -m venv "$SVCENV" >> "$LOG_FILE" 2>&1
+        else
+            python3 -m venv "$SVCENV" >> "$LOG_FILE" 2>&1
+        fi
     fi
 
     "$SVCENV/bin/pip" install --quiet \
