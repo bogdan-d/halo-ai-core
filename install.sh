@@ -6,8 +6,10 @@
 # "I know kung fu." — Neo, The Matrix
 #
 # Core services for AMD Strix Halo bare-metal AI platform
+# Kernel: Linux 7.0 stable (mainline)
 # Components: ROCm (GPU drivers), Caddy, Lemonade (lemond), Claude Code
 # llama.cpp runs Vulkan only — ROCm/HIP is for vLLM, FLM (NPU), PyTorch
+# NPU: XDNA2 via accel module, npu_7.sbin firmware, Lemonade FLM backend
 # All services route through lemond's built-in router on :13305
 # ============================================================
 set -euo pipefail
@@ -18,7 +20,7 @@ if [[ "$HOME" =~ [[:space:]] ]]; then
     exit 1
 fi
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Ensure USER is set (may be unset in containers/systemd)
 USER="${USER:-$(whoami)}"
@@ -255,7 +257,7 @@ fi
 # 1. BASE PACKAGES
 # ============================================================
 step "Base Packages"
-BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano nodejs npm uv"
+BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano nodejs npm uv linux-firmware vulkan-tools btrfs-progs cpupower"
 
 if $DRY_RUN; then
     info "Would install: $BASE_PKGS"
@@ -288,8 +290,14 @@ export ROCBLAS_USE_HIPBLASLT=1
 export PYTORCH_ROCM_ARCH=gfx1151
 export HSA_OVERRIDE_GFX_VERSION=11.5.1
 export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
-export IOMMU=pt
 ROCM_ENV
+
+        # IOMMU passthrough — kernel parameter, not env var
+        CMDLINE=$(cat /proc/cmdline)
+        if [[ "$CMDLINE" != *"iommu=pt"* ]]; then
+            warn "iommu=pt not in kernel cmdline — add it to bootloader for best GPU performance"
+            warn "For systemd-boot: sudo sed -i 's/options /options iommu=pt /' /boot/loader/entries/*.conf"
+        fi
 
         # Add user to video/render
         sudo usermod -aG video,render "$USER"
@@ -298,14 +306,38 @@ ROCM_ENV
         if command -v cpupower &>/dev/null; then
             sudo cpupower frequency-set -g performance >> "$LOG_FILE" 2>&1 || true
             echo "governor='performance'" | sudo tee /etc/default/cpupower > /dev/null
-            sudo systemctl enable cpupower >> "$LOG_FILE" 2>&1 || true
+            sudo systemctl enable --now cpupower >> "$LOG_FILE" 2>&1 || true
             log "CPU governor set to performance"
+        fi
+
+        # NPU — verify accel module and firmware (kernel 7.0+)
+        if modprobe accel 2>/dev/null; then
+            log "accel module loaded (NPU support)"
+        else
+            warn "accel module not available — NPU will not work"
+            warn "Kernel 7.0+ mainline required for XDNA2 NPU"
+        fi
+
+        if [ -c /dev/accel0 ]; then
+            log "NPU device present: /dev/accel0"
+        else
+            warn "NPU device /dev/accel0 not found"
+            warn "Check: ls /lib/firmware/amdnpu/17.50/npu_7.sbin"
+        fi
+
+        NPU_FW="/lib/firmware/amdnpu/17.50/npu_7.sbin"
+        if [ -f "$NPU_FW" ]; then
+            log "NPU firmware present: $NPU_FW"
+        else
+            warn "NPU firmware not found at $NPU_FW"
+            warn "Install linux-firmware package and reboot"
         fi
 
         # Source it now
         export PATH=$PATH:/opt/rocm/bin
 
         log "ROCm installed — $(/opt/rocm/bin/rocminfo 2>/dev/null | grep 'Marketing Name' | grep -v CPU | head -1 | sed 's/.*: *//')"
+        log "Kernel: $(uname -r)"
     fi
 else
     warn "Skipping ROCm"
@@ -438,15 +470,18 @@ if ! $SKIP_LEMONADE; then
         fi
 
         # Fix libwebsockets soname mismatch (Arch updates .so.20 → .so.21, breaks lemond)
-        for SO_NEW in /usr/lib/libwebsockets.so.*; do
-            [ -f "$SO_NEW" ] || continue
-            SO_VER=$(basename "$SO_NEW" | grep -oP '\.\d+$' | tr -d '.')
-            if [ -n "$SO_VER" ] && [ ! -f /usr/lib/libwebsockets.so.20 ]; then
-                sudo ln -sf "$SO_NEW" /usr/lib/libwebsockets.so.20
-                log "Fixed libwebsockets soname: $(basename "$SO_NEW") → libwebsockets.so.20"
-                break
-            fi
-        done
+        # Check if lemond actually needs the fix before applying
+        if ! lemonade --version &>/dev/null 2>&1; then
+            for SO_NEW in /usr/lib/libwebsockets.so.*; do
+                [ -f "$SO_NEW" ] || continue
+                SO_VER=$(basename "$SO_NEW" | grep -oP '\.\d+$' | tr -d '.')
+                if [ -n "$SO_VER" ] && [ ! -f /usr/lib/libwebsockets.so.20 ]; then
+                    sudo ln -sf "$SO_NEW" /usr/lib/libwebsockets.so.20
+                    log "Fixed libwebsockets soname: $(basename "$SO_NEW") → libwebsockets.so.20"
+                    break
+                fi
+            done
+        fi
 
         # Enable and start the daemon
         sudo systemctl daemon-reload
@@ -471,6 +506,14 @@ if ! $SKIP_LEMONADE; then
 
             lemonade backends install whispercpp:vulkan >> "$LOG_FILE" 2>&1 &
             spinner $! "Installing Whisper STT backend (Vulkan)..."
+
+            # NPU backend (XDNA2 — requires kernel 7.0+ and accel module)
+            if [ -c /dev/accel0 ]; then
+                lemonade backends install flm >> "$LOG_FILE" 2>&1 &
+                spinner $! "Installing FLM backend (NPU — XDNA2)..."
+            else
+                warn "Skipping NPU backend — /dev/accel0 not present"
+            fi
 
             # Pull voice models
             lemonade pull kokoro-v1 >> "$LOG_FILE" 2>&1 &
@@ -571,6 +614,21 @@ else
             warn "WireGuard Endpoint set to LAN IP ($LAN_IP)"
             warn "For remote access, update Endpoint in /etc/wireguard/client1.conf with your public IP or DDNS"
 
+            # Create nft rules file (cleaner than inline PostUp)
+            sudo tee /etc/wireguard/wg-nat.nft > /dev/null << NFT_RULES
+table inet wg-nat {
+    chain forward {
+        type filter hook forward priority 0; policy accept;
+        iifname wg0 accept
+    }
+    chain postrouting {
+        type nat hook postrouting priority 100;
+        oifname "$SERVER_IFACE" masquerade
+    }
+}
+NFT_RULES
+            sudo chmod 600 /etc/wireguard/wg-nat.nft
+
             WG_TMP=$(mktemp)
             chmod 600 "$WG_TMP"
             cat > "$WG_TMP" << WG_SRV
@@ -578,7 +636,7 @@ else
 Address = 10.100.0.1/24
 ListenPort = 51820
 PrivateKey = $SERVER_PRIV
-PostUp = nft add table inet wg-nat; nft add chain inet wg-nat forward '{type filter hook forward priority 0; policy accept;}'; nft add rule inet wg-nat forward iifname wg0 accept; nft add chain inet wg-nat postrouting '{type nat hook postrouting priority 100;}'; nft add rule inet wg-nat postrouting oifname "$SERVER_IFACE" masquerade
+PostUp = nft -f /etc/wireguard/wg-nat.nft
 PostDown = nft delete table inet wg-nat
 
 [Peer]
@@ -594,7 +652,7 @@ WG_SRV
 [Interface]
 PrivateKey = $CLIENT_PRIV
 Address = 10.100.0.2/24
-DNS = 1.1.1.1
+DNS = 10.0.0.1
 
 [Peer]
 PublicKey = $SERVER_PUB
@@ -671,20 +729,39 @@ STATSVC
 # halo-ai core — auto-load default models on boot (all through lemond)
 # "i'll be back." — the terminator
 
-LOG="$HOME/.local/log/halo-autoload.log"
+LOG="${HOME}/.local/log/halo-autoload.log"
 mkdir -p "$(dirname "$LOG")"
 
 log() { echo "[$(date '+%H:%M:%S')] $1" >> "$LOG"; }
 
 log "Auto-loading default models through lemond..."
+log "Kernel: $(uname -r)"
+
+# Verify NPU firmware and module
+if [ -c /dev/accel0 ]; then
+    log "NPU device present: /dev/accel0"
+else
+    modprobe accel 2>/dev/null || true
+    if [ -c /dev/accel0 ]; then
+        log "NPU device loaded after modprobe"
+    else
+        log "NPU device /dev/accel0 not available"
+    fi
+fi
 
 # Wait for lemond to be ready
 for i in $(seq 1 30); do
     if lemonade status --json 2>/dev/null | grep -q '"version"'; then
+        log "lemond ready"
         break
     fi
     sleep 2
 done
+
+if ! lemonade status --json 2>/dev/null | grep -q '"version"'; then
+    log "lemond not responding — skipping model loads"
+    exit 0
+fi
 
 # Load whisper (STT) through lemond
 log "Loading Whisper Large v3 Turbo..."
@@ -697,10 +774,14 @@ lemonade load kokoro-v1 >> "$LOG" 2>&1 || \
     log "Kokoro load failed (non-critical)"
 
 # Load default LLM on NPU (agents) through lemond
-log "Loading Gemma3 4B on NPU..."
-lemonade load gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
-  lemonade load user.gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
-    log "NPU model load failed (non-critical)"
+if [ -c /dev/accel0 ]; then
+    log "Loading Gemma3 4B on NPU..."
+    lemonade load gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
+      lemonade load user.gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
+        log "NPU model load failed (non-critical)"
+else
+    log "Skipping NPU model — /dev/accel0 not present"
+fi
 
 log "Auto-load complete."
 AUTOLOAD
@@ -796,6 +877,14 @@ INTSVC
     fi
 
     if [ ! -f /usr/local/bin/lemonade-nexus ]; then
+        # Nexus requires Rust toolchain + cmake
+        if ! command -v rustc &>/dev/null; then
+            sudo pacman -S --needed --noconfirm rust >> "$LOG_FILE" 2>&1
+            log "Rust toolchain installed for Nexus build"
+        fi
+        if ! command -v cmake &>/dev/null; then
+            sudo pacman -S --needed --noconfirm cmake >> "$LOG_FILE" 2>&1
+        fi
         (cd "$SERVICES_DIR/lemonade-nexus" && \
          cmake -B build -DCMAKE_BUILD_TYPE=Release >> "$LOG_FILE" 2>&1 && \
          cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1 && \
@@ -810,21 +899,19 @@ INTSVC
     log "Lemonade Eval installed — benchmarking: lemonade-eval run"
     log "Lemonade Nexus installed — zero-trust mesh VPN: lemonade-nexus --help"
 
-    # Add Caddy routes for services
+    # Add Caddy routes for services (import pattern — no duplicate :80 block)
     sudo tee /etc/caddy/conf.d/halo-services.caddy > /dev/null << 'SVCCADDY'
 # Halo AI Core — Lemonade Services
 # "I love it when a plan comes together." — Hannibal
+# This file is imported by the main Caddyfile via: import /etc/caddy/conf.d/*.caddy
 
-:80 {
+handle /interviewer* {
     @local remote_ip 127.0.0.1 ::1 10.0.0.0/24 10.100.0.0/24
-
-    handle /interviewer* {
-        handle @local {
-            uri strip_prefix /interviewer
-            reverse_proxy 127.0.0.1:8191
-        }
-        respond 403
+    handle @local {
+        uri strip_prefix /interviewer
+        reverse_proxy 127.0.0.1:8191
     }
+    respond 403
 }
 SVCCADDY
     sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || true
@@ -835,7 +922,7 @@ fi
 # ============================================================
 if ! $DRY_RUN; then
     # Remove old services that are now handled by lemond
-    for old_svc in vllm-server lemonade lemonade-ui gaia gaia-ui; do
+    for old_svc in vllm-server lemonade lemonade-ui gaia gaia-ui llama-server kokoro-tts whisper-server; do
         if systemctl is-enabled "$old_svc" &>/dev/null; then
             sudo systemctl disable --now "$old_svc" >> "$LOG_FILE" 2>&1 || true
             log "Disabled stale service: $old_svc (now handled by lemond)"
@@ -909,6 +996,16 @@ echo ""
 echo "  Start services:"
 echo "    systemctl --user start interviewer"
 echo ""
+echo "  ── SYSTEM ────────────────────────────────────"
+echo ""
+echo "  Kernel:  $(uname -r)"
+if [ -c /dev/accel0 ]; then
+echo "  NPU:     ONLINE (/dev/accel0 present)"
+else
+echo "  NPU:     NOT DETECTED (check linux-firmware)"
+fi
+echo "  GPU:     $(/opt/rocm/bin/rocminfo 2>/dev/null | grep 'Marketing Name' | grep -v CPU | head -1 | sed 's/.*: *//' || echo 'unknown')"
+echo ""
 echo "  ── NEXT STEPS (after reboot) ──────────────────"
 echo ""
 echo "  1. Open http://localhost:80 — dashboard with all controls"
@@ -917,6 +1014,16 @@ echo "  3. Launch Claude Code with local models:"
 echo "     lemonade launch claude -m <model-name>"
 echo "  4. Check status:"
 echo "     ./install.sh --status"
+echo ""
+echo "  ── COMMUNITY ───────────────────────────────────"
+echo ""
+echo "  GitHub:  https://github.com/stampby/halo-ai-core"
+echo "  Discord: https://discord.gg/dSyV646eBs"
+echo "  Reddit:  https://www.reddit.com/r/MidlifeCrisisAI/"
+echo ""
+echo "  \"The only limitation is ignorance.\""
+echo ""
+echo "  Designed and built by the architect."
 echo ""
 
 log "Installation complete."
