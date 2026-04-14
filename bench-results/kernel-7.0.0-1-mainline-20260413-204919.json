@@ -1,0 +1,26 @@
+{
+  "kernel": "7.0.0-1-mainline",
+  "timestamp": "2026-04-13T20:49:19-03:00",
+  "model": "Qwen3-Coder-30B-A3B-Q4_K_M.gguf",
+  "system": {
+    "cpu": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "cores": 32,
+    "ram": "124Gi",
+    "gpu": "Radeon 8060S Graphics",
+    "rocm": "7.2.1",
+    "governor": "powersave",
+    "lemonade": "lemonade version 10.2.0"
+  },
+  "benchmarks": [
+    {
+      "name": "Short Burst",
+      "prompt_tps": 75.7,
+      "gen_tps": 150.9,
+      "ttft_ms": 81,
+      "total_ms": 95,
+      "prompt_tokens": 20,
+      "gen_tokens": 2,
+      "runs": 3
+    }
+  ]
+}

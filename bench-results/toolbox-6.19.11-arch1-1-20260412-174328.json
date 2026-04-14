@@ -1,0 +1,376 @@
+{
+  "kernel": "6.19.11-arch1-1",
+  "timestamp": "2026-04-12T17:43:28-03:00",
+  "model": "Qwen3-30B-A3B-GGUF",
+  "backends_tested": "vulkan rocm",
+  "methodology": "adapted from kyuz0/amd-strix-halo-toolboxes",
+  "system": {
+    "cpu": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "gpu": "Radeon 8060S Graphics",
+    "rocm": "7.2.1",
+    "governor": "performance",
+    "lemonade": "lemonade version 10.2.0"
+  },
+  "benchmarks": [
+    {
+      "name": "pp64",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 32,
+      "prompt_tps": 230.3,
+      "gen_tps": 91.0,
+      "ttft_ms": 73,
+      "runs": 3
+    },
+    {
+      "name": "pp256",
+      "backend": "vulkan",
+      "prompt_tokens_target": 256,
+      "gen_tokens_target": 32,
+      "prompt_tps": 383.1,
+      "gen_tps": 90.4,
+      "ttft_ms": 95,
+      "runs": 3
+    },
+    {
+      "name": "pp512",
+      "backend": "vulkan",
+      "prompt_tokens_target": 512,
+      "gen_tokens_target": 32,
+      "prompt_tps": 438.8,
+      "gen_tps": 88.9,
+      "ttft_ms": 104,
+      "runs": 3
+    },
+    {
+      "name": "pp1024",
+      "backend": "vulkan",
+      "prompt_tokens_target": 1024,
+      "gen_tokens_target": 32,
+      "prompt_tps": 451.9,
+      "gen_tps": 86.4,
+      "ttft_ms": 188,
+      "runs": 3
+    },
+    {
+      "name": "pp2048",
+      "backend": "vulkan",
+      "prompt_tokens_target": 2048,
+      "gen_tokens_target": 32,
+      "prompt_tps": 467.1,
+      "gen_tps": 80.9,
+      "ttft_ms": 347,
+      "runs": 3
+    },
+    {
+      "name": "pp4096",
+      "backend": "vulkan",
+      "prompt_tokens_target": 4096,
+      "gen_tokens_target": 32,
+      "prompt_tps": 410.9,
+      "gen_tps": 73.1,
+      "ttft_ms": 772,
+      "runs": 3
+    },
+    {
+      "name": "tg32",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 32,
+      "prompt_tps": 129.2,
+      "gen_tps": 90.9,
+      "ttft_ms": 38,
+      "runs": 3
+    },
+    {
+      "name": "tg128",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 128,
+      "prompt_tps": 79.7,
+      "gen_tps": 88.9,
+      "ttft_ms": 13,
+      "runs": 3
+    },
+    {
+      "name": "tg256",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 256,
+      "prompt_tps": 84.7,
+      "gen_tps": 88.8,
+      "ttft_ms": 12,
+      "runs": 3
+    },
+    {
+      "name": "tg512",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 512,
+      "prompt_tps": 79.8,
+      "gen_tps": 88.9,
+      "ttft_ms": 13,
+      "runs": 3
+    },
+    {
+      "name": "tg1024",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 1024,
+      "prompt_tps": 239.5,
+      "gen_tps": 88.7,
+      "ttft_ms": 72,
+      "runs": 3
+    },
+    {
+      "name": "tg2048",
+      "backend": "vulkan",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 2048,
+      "prompt_tps": 84.4,
+      "gen_tps": 88.3,
+      "ttft_ms": 12,
+      "runs": 2
+    },
+    {
+      "name": "mixed_short",
+      "backend": "vulkan",
+      "prompt_tokens_target": 128,
+      "gen_tokens_target": 256,
+      "prompt_tps": 215.9,
+      "gen_tps": 88.3,
+      "ttft_ms": 72,
+      "runs": 3
+    },
+    {
+      "name": "mixed_medium",
+      "backend": "vulkan",
+      "prompt_tokens_target": 512,
+      "gen_tokens_target": 512,
+      "prompt_tps": 896.5,
+      "gen_tps": 86.3,
+      "ttft_ms": 303,
+      "runs": 3
+    },
+    {
+      "name": "mixed_long",
+      "backend": "vulkan",
+      "prompt_tokens_target": 1024,
+      "gen_tokens_target": 1024,
+      "prompt_tps": 503.5,
+      "gen_tps": 83.8,
+      "ttft_ms": 322,
+      "runs": 3
+    },
+    {
+      "name": "mixed_heavy",
+      "backend": "vulkan",
+      "prompt_tokens_target": 2048,
+      "gen_tokens_target": 2048,
+      "prompt_tps": 672.2,
+      "gen_tps": 79.1,
+      "ttft_ms": 511,
+      "runs": 2
+    },
+    {
+      "name": "ctx8k",
+      "backend": "vulkan",
+      "prompt_tokens_target": 8192,
+      "gen_tokens_target": 32,
+      "prompt_tps": 457.5,
+      "gen_tps": 62.4,
+      "ttft_ms": 4395,
+      "runs": 2
+    },
+    {
+      "name": "ctx16k",
+      "backend": "vulkan",
+      "prompt_tokens_target": 16384,
+      "gen_tokens_target": 32,
+      "prompt_tps": 525.3,
+      "gen_tps": 47.9,
+      "ttft_ms": 28091,
+      "runs": 2
+    },
+    {
+      "name": "pp64",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 32,
+      "prompt_tps": 231.4,
+      "gen_tps": 90.7,
+      "ttft_ms": 73,
+      "runs": 3
+    },
+    {
+      "name": "pp256",
+      "backend": "rocm",
+      "prompt_tokens_target": 256,
+      "gen_tokens_target": 32,
+      "prompt_tps": 382.7,
+      "gen_tps": 89.9,
+      "ttft_ms": 95,
+      "runs": 3
+    },
+    {
+      "name": "pp512",
+      "backend": "rocm",
+      "prompt_tokens_target": 512,
+      "gen_tokens_target": 32,
+      "prompt_tps": 437.1,
+      "gen_tps": 88.7,
+      "ttft_ms": 104,
+      "runs": 3
+    },
+    {
+      "name": "pp1024",
+      "backend": "rocm",
+      "prompt_tokens_target": 1024,
+      "gen_tokens_target": 32,
+      "prompt_tps": 451.5,
+      "gen_tps": 86.1,
+      "ttft_ms": 188,
+      "runs": 3
+    },
+    {
+      "name": "pp2048",
+      "backend": "rocm",
+      "prompt_tokens_target": 2048,
+      "gen_tokens_target": 32,
+      "prompt_tps": 464.1,
+      "gen_tps": 80.8,
+      "ttft_ms": 350,
+      "runs": 3
+    },
+    {
+      "name": "pp4096",
+      "backend": "rocm",
+      "prompt_tokens_target": 4096,
+      "gen_tokens_target": 32,
+      "prompt_tps": 410.1,
+      "gen_tps": 73.6,
+      "ttft_ms": 776,
+      "runs": 3
+    },
+    {
+      "name": "tg32",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 32,
+      "prompt_tps": 130.8,
+      "gen_tps": 91.0,
+      "ttft_ms": 38,
+      "runs": 3
+    },
+    {
+      "name": "tg128",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 128,
+      "prompt_tps": 81.5,
+      "gen_tps": 88.7,
+      "ttft_ms": 12,
+      "runs": 3
+    },
+    {
+      "name": "tg256",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 256,
+      "prompt_tps": 84.9,
+      "gen_tps": 88.9,
+      "ttft_ms": 12,
+      "runs": 3
+    },
+    {
+      "name": "tg512",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 512,
+      "prompt_tps": 85.3,
+      "gen_tps": 88.9,
+      "ttft_ms": 12,
+      "runs": 3
+    },
+    {
+      "name": "tg1024",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 1024,
+      "prompt_tps": 81.1,
+      "gen_tps": 88.9,
+      "ttft_ms": 12,
+      "runs": 3
+    },
+    {
+      "name": "tg2048",
+      "backend": "rocm",
+      "prompt_tokens_target": 64,
+      "gen_tokens_target": 2048,
+      "prompt_tps": 85.3,
+      "gen_tps": 88.8,
+      "ttft_ms": 12,
+      "runs": 2
+    },
+    {
+      "name": "mixed_short",
+      "backend": "rocm",
+      "prompt_tokens_target": 128,
+      "gen_tokens_target": 256,
+      "prompt_tps": 217.1,
+      "gen_tps": 88.4,
+      "ttft_ms": 72,
+      "runs": 3
+    },
+    {
+      "name": "mixed_medium",
+      "backend": "rocm",
+      "prompt_tokens_target": 512,
+      "gen_tokens_target": 512,
+      "prompt_tps": 521.0,
+      "gen_tps": 86.3,
+      "ttft_ms": 126,
+      "runs": 3
+    },
+    {
+      "name": "mixed_long",
+      "backend": "rocm",
+      "prompt_tokens_target": 1024,
+      "gen_tokens_target": 1024,
+      "prompt_tps": 912.6,
+      "gen_tps": 55.7,
+      "ttft_ms": 626,
+      "runs": 3
+    },
+    {
+      "name": "mixed_heavy",
+      "backend": "rocm",
+      "prompt_tokens_target": 2048,
+      "gen_tokens_target": 2048,
+      "prompt_tps": 671.3,
+      "gen_tps": 79.1,
+      "ttft_ms": 512,
+      "runs": 2
+    },
+    {
+      "name": "ctx8k",
+      "backend": "rocm",
+      "prompt_tokens_target": 8192,
+      "gen_tokens_target": 32,
+      "prompt_tps": 458.8,
+      "gen_tps": 62.3,
+      "ttft_ms": 4396,
+      "runs": 2
+    },
+    {
+      "name": "ctx16k",
+      "backend": "rocm",
+      "prompt_tokens_target": 16384,
+      "gen_tokens_target": 32,
+      "prompt_tps": 240.4,
+      "gen_tps": 48.3,
+      "ttft_ms": 11483,
+      "runs": 2
+    }
+  ]
+}

@@ -94,7 +94,7 @@ Same hardware (Strix Halo 395, 128GB), same model (Qwen3.5-35B-A3B Q4_K_M), diff
 |-------|------|---------|
 | LTX-Video | 20.6s | ~4s clip |
 
-## NPU (requires kernel 7.0+ — bleeding edge only)
+## NPU (kernel 7.0+ stable)
 
 | Model | tok/s | Engine |
 |-------|-------|--------|
@@ -103,7 +103,7 @@ Same hardware (Strix Halo 395, 128GB), same model (Qwen3.5-35B-A3B Q4_K_M), diff
 | Gemma3 4B | 17.0 | FLM |
 | DeepSeek-R1 8B | 10.5 | FLM |
 
-NPU runs independently from GPU — zero GPU memory used. For always-on agents while GPU handles big models. Requires [bleeding edge](https://github.com/stampby/halo-ai-core-bleeding-edge).
+NPU runs independently from GPU — zero GPU memory used. For always-on agents while GPU handles big models. Kernel 7.0+ mainline required.
 
 ## System Benchmarks
 

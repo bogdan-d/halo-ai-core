@@ -1,0 +1,20 @@
+{
+  "data": {
+    "chain": [
+      {
+        "activated_at": 1776068974,
+        "endorsement_sig": "",
+        "expires_at": 0,
+        "generation": 0,
+        "pubkey_hex": "af6ced447af7884d0573182ed86af4f70d8ddff6542e34e19b3f2019d725dc0b",
+        "signed_by_hex": ""
+      }
+    ],
+    "type": "root_key_chain"
+  },
+  "signature": "",
+  "signer_pubkey": "",
+  "timestamp": 1776068974,
+  "type": "root_key_chain",
+  "version": 1
+}

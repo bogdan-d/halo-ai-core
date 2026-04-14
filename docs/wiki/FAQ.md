@@ -2,7 +2,7 @@
 
 ## Why Arch Linux?
 
-Rolling release means latest drivers, latest ROCm, latest everything. No waiting 6 months for a package update. AMD hardware needs bleeding edge kernel and driver support.
+Rolling release means latest drivers, latest ROCm, latest everything. No waiting 6 months for a package update. AMD hardware needs the latest kernel and driver support.
 
 ## Why not Docker/Podman?
 
