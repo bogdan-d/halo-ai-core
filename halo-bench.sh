@@ -164,7 +164,7 @@ api_call() {
 # Extract timings from response
 extract_timings() {
     local response="$1"
-    python3 -c "
+    LC_ALL=C python3 -c "
 import sys, json
 try:
     r = json.loads(sys.argv[1])
@@ -202,6 +202,12 @@ run_bench() {
 
         IFS='|' read -r pp_speed gen_speed pp_tokens gen_tokens pp_ms gen_ms prompt_usage completion_usage <<< "$timings"
 
+        # Locale fix: convert any decimal commas to dots (e.g. French locale)
+        pp_speed="${pp_speed/,/.}"
+        gen_speed="${gen_speed/,/.}"
+        pp_ms="${pp_ms/,/.}"
+        gen_ms="${gen_ms/,/.}"
+
         if [[ "$pp_speed" == "ERROR" ]]; then
             failures=$((failures + 1))
             continue
@@ -212,7 +218,7 @@ run_bench() {
         pp_tokens_arr+=("$pp_tokens")
         gen_tokens_arr+=("$gen_tokens")
         ttfts+=("$pp_ms")
-        total_times+=("$(python3 -c "print(f'{$pp_ms + $gen_ms:.2f}')")")
+        total_times+=("$(LC_ALL=C python3 -c "print(f'{$pp_ms + $gen_ms:.2f}')")")
 
         if [[ $runs -gt 1 ]]; then
             printf "\r  ${DIM}Run %d/%d: pp=%.1f tok/s gen=%.1f tok/s${NC}    " "$i" "$runs" "$pp_speed" "$gen_speed"
@@ -231,14 +237,14 @@ run_bench() {
 
     # Compute averages and stddev
     local stats
-    stats=$(python3 -c "
+    stats=$(LC_ALL=C python3 -c "
 import statistics
-pp = [${pp_speeds[*]// /,}]
-gen = [${gen_speeds[*]// /,}]
-pp_tok = [${pp_tokens_arr[*]// /,}]
-gen_tok = [${gen_tokens_arr[*]// /,}]
-ttft = [${ttfts[*]// /,}]
-total = [${total_times[*]// /,}]
+pp = [$(IFS=,; echo "${pp_speeds[*]}")]
+gen = [$(IFS=,; echo "${gen_speeds[*]}")]
+pp_tok = [$(IFS=,; echo "${pp_tokens_arr[*]}")]
+gen_tok = [$(IFS=,; echo "${gen_tokens_arr[*]}")]
+ttft = [$(IFS=,; echo "${ttfts[*]}")]
+total = [$(IFS=,; echo "${total_times[*]}")]
 
 pp_avg = statistics.mean(pp)
 gen_avg = statistics.mean(gen)
