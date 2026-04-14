@@ -1,0 +1,6 @@
+
+# Sensitive data — never commit
+dashboard/data/
+dashboard/*.log
+*.enc
+keypair.*
