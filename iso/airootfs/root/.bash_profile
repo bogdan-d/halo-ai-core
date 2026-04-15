@@ -23,13 +23,16 @@ echo ""
 # Show IP + SSH info
 IP_ADDR=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1)
 if [[ -n "$IP_ADDR" ]]; then
-    echo -e "  \033[1;32mSSH enabled:\033[0m ssh root@${IP_ADDR} (password: halo)"
+    echo -e "  \033[1;32mSSH enabled:\033[0m ssh root@${IP_ADDR} (key auth only)"
 else
     echo -e "  \033[1;33mSSH:\033[0m waiting for network... run 'dhcpcd' then check 'ip addr'"
+fi
+
+# Remind to add keys
+if [[ ! -f /root/.ssh/authorized_keys ]] || [[ ! -s /root/.ssh/authorized_keys ]]; then
+    echo -e "  \033[1;33mNo SSH keys loaded.\033[0m Add keys to /root/.ssh/authorized_keys"
+    echo -e "  or build ISO with: --ssh-keys ~/.ssh/authorized_keys"
 fi
 echo ""
 echo -e "  \033[0;34m\"I know kung fu.\" — Neo\033[0m"
 echo ""
-
-# Set root password for SSH access in live environment
-echo "root:halo" | chpasswd 2>/dev/null

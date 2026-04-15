@@ -42,6 +42,7 @@ usage() {
     echo "  --clean          Remove work directory before building"
     echo "  --usb /dev/sdX   Write ISO to USB drive after building"
     echo "  --models PATH    Bundle models directory into ISO (e.g. ~/models/halo-1bit)"
+    echo "  --ssh-keys FILE  Bake authorized_keys into ISO for key-only SSH access"
     echo "  --work-dir PATH  Override work directory (default: /tmp/halo-iso-work)"
     echo "  --out-dir PATH   Override output directory (default: ../output)"
     echo "  -h, --help       Show this help"
@@ -57,6 +58,10 @@ while [[ $# -gt 0 ]]; do
         --clean) CLEAN=true; shift ;;
         --models)
             MODELS_DIR="$2"
+            shift 2
+            ;;
+        --ssh-keys)
+            SSH_KEYS="$2"
             shift 2
             ;;
         --usb)
@@ -114,6 +119,22 @@ info "Profile:   $PROFILE_DIR"
 info "Work dir:  $WORK_DIR"
 info "Output:    $OUT_DIR"
 echo ""
+
+# Bundle SSH keys if specified
+if [[ -n "${SSH_KEYS:-}" ]]; then
+    if [[ -f "$SSH_KEYS" ]]; then
+        info "Baking SSH authorized_keys from $SSH_KEYS"
+        mkdir -p "$PROFILE_DIR/airootfs/root/.ssh"
+        cp "$SSH_KEYS" "$PROFILE_DIR/airootfs/root/.ssh/authorized_keys"
+        chmod 600 "$PROFILE_DIR/airootfs/root/.ssh/authorized_keys"
+        # Add to file_permissions in profiledef.sh if not already there
+        grep -q '"/root/.ssh"' "$PROFILE_DIR/profiledef.sh" || \
+            sed -i '/file_permissions=(/a\    ["/root/.ssh"]="0:0:700"\n    ["/root/.ssh/authorized_keys"]="0:0:600"' "$PROFILE_DIR/profiledef.sh"
+        info "SSH keys baked — key-only auth ready"
+    else
+        error "SSH keys file not found: $SSH_KEYS"
+    fi
+fi
 
 # Bundle models if specified
 if [[ -n "$MODELS_DIR" ]]; then
