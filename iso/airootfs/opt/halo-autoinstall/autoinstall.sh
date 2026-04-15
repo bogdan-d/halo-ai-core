@@ -388,6 +388,15 @@ EOF
         chown -R ${HALO_USER}:${HALO_USER} /home/${HALO_USER}/.local
     " >> "$LOG" 2>&1
 
+    # Copy bundled 1-bit model if present on USB
+    if [[ -d /opt/halo-models ]]; then
+        info "Copying bundled models from USB..."
+        mkdir -p "$target/home/${HALO_USER}/models"
+        cp -r /opt/halo-models/* "$target/home/${HALO_USER}/models/" 2>/dev/null || true
+        arch-chroot "$target" chown -R "${HALO_USER}:${HALO_USER}" "/home/${HALO_USER}/models"
+        info "Models copied — no internet needed for first inference"
+    fi
+
     # Copy install log to new system
     cp "$LOG" "$target/home/${HALO_USER}/.local/log/halo-autoinstall.log" 2>/dev/null || true
 

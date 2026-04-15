@@ -18,6 +18,7 @@ PROFILE_DIR="$SCRIPT_DIR"
 WORK_DIR="/tmp/halo-iso-work"
 OUT_DIR="${SCRIPT_DIR}/../output"
 USB_DEV=""
+MODELS_DIR=""
 CLEAN=false
 
 # Colors
@@ -40,6 +41,7 @@ usage() {
     echo "Options:"
     echo "  --clean          Remove work directory before building"
     echo "  --usb /dev/sdX   Write ISO to USB drive after building"
+    echo "  --models PATH    Bundle models directory into ISO (e.g. ~/models/halo-1bit)"
     echo "  --work-dir PATH  Override work directory (default: /tmp/halo-iso-work)"
     echo "  --out-dir PATH   Override output directory (default: ../output)"
     echo "  -h, --help       Show this help"
@@ -53,6 +55,10 @@ usage() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --clean) CLEAN=true; shift ;;
+        --models)
+            MODELS_DIR="$2"
+            shift 2
+            ;;
         --usb)
             USB_DEV="$2"
             shift 2
@@ -108,6 +114,20 @@ info "Profile:   $PROFILE_DIR"
 info "Work dir:  $WORK_DIR"
 info "Output:    $OUT_DIR"
 echo ""
+
+# Bundle models if specified
+if [[ -n "$MODELS_DIR" ]]; then
+    if [[ -d "$MODELS_DIR" ]]; then
+        info "Bundling models from $MODELS_DIR"
+        mkdir -p "$PROFILE_DIR/airootfs/opt/halo-models"
+        cp -r "$MODELS_DIR"/* "$PROFILE_DIR/airootfs/opt/halo-models/"
+        local models_size
+        models_size=$(du -sh "$PROFILE_DIR/airootfs/opt/halo-models" | awk '{print $1}')
+        info "Models bundled: $models_size"
+    else
+        error "Models directory not found: $MODELS_DIR"
+    fi
+fi
 
 info "Building ISO... this may take 10-30 minutes"
 mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR"
