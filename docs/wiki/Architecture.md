@@ -1,63 +1,64 @@
-# Architecture
+# Architecture — Why MLX Wins
 
-## Layer Diagram
+## The Three Backends
+
+### Vulkan llamacpp (Stable)
+- C++ with Vulkan compute shaders
+- GGUF model format only
+- Wait for GGUF conversion on new model releases
+- ~82 tok/s on MoE models (3B active)
+
+### vLLM ROCm (Production Serving)
+- Python + C++ with Triton/HIP kernels
+- HuggingFace native models
+- PagedAttention, continuous batching, prefix caching
+- First-run Triton JIT: 20-350 seconds
+- ~117 tok/s on 0.6B, 2.3 tok/s on 72B dense
+
+### MLX ROCm (Bleeding Edge)
+- Pure C++ — compiled HIP kernels, no Python runtime
+- HuggingFace native models (safetensors)
+- Designed for unified memory (Apple Silicon → Strix Halo)
+- Cold start in seconds
+- ~151 tok/s on 0.6B, 29-85% faster than vLLM
+
+## Why MLX is Faster
+
+### 1. No Python Overhead
+vLLM spawns Python processes, loads PyTorch, initializes CUDA/HIP contexts. MLX is a single compiled binary.
+
+### 2. No Triton JIT
+vLLM uses Triton to compile attention kernels at runtime for your GPU. First load of each model size takes 20-350 seconds. MLX uses pre-compiled HIP kernels — instant.
+
+### 3. Unified Memory Native
+MLX was designed from day one for Apple's unified memory architecture. Strix Halo has the same design — CPU and GPU share the same memory pool. No copies, no PCIe bottleneck.
+
+### 4. No Subprocess Device Issues
+vLLM's EngineCore subprocess had Triton HIP device enumeration failures on gfx1151 (Triton Error 101: invalid device ordinal). MLX runs in a single process — no fork, no device inheritance problems.
+
+## When to Use What
+
+| Use Case | Best Backend |
+|----------|-------------|
+| Single user, fastest tok/s | **MLX** |
+| Multi-user serving | **vLLM** (PagedAttention) |
+| GGUF models specifically | **Vulkan llamacpp** |
+| Day-one new model access | **MLX** or **vLLM** |
+| NPU simultaneous | Any (NPU is separate silicon) |
+
+## The Stack
 
 ```
-┌─────────────────────────────────────────────┐
-│                   Caddy                      │
-│            Reverse Proxy (:80)               │
-├──────────┬──────────┬───────────┬───────────┤
-│ llama.cpp│ Lemonade │   Gaia    │  Future   │
-│ (Vulkan) │  :13305  │  agents   │ services  │
-├──────────┴──────────┴───────────┴───────────┤
-│     Vulkan (llama.cpp) + ROCm (vLLM/whisper)│
-├─────────────────────────────────────────────┤
-│         Arch Linux / systemd / btrfs        │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│  Applications (Discord agents, chat, API) │
+├──────────────────────────────────────────┤
+│  Lemonade SDK 10.2 — Model Router        │
+├────────────┬────────────┬────────────────┤
+│ MLX Engine │ vLLM ROCm  │ llamacpp Vulkan│
+│ (bleeding) │ (PR #1537) │ (stable)       │
+├────────────┴────────────┴────────────────┤
+│  ROCm 7.12 (portable) / 7.2.1 (system)  │
+├──────────────────────────────────────────┤
+│  AMD Strix Halo gfx1151, 128GB unified   │
+└──────────────────────────────────────────┘
 ```
-
-## Design Principles
-
-### Lego Blocks
-Every component is independent. Remove llama.cpp? Lemonade still works. Remove Gaia? llama.cpp still works. Nothing depends on everything else being there.
-
-### systemd Native
-Every service is a systemd unit. `systemctl start`, `systemctl stop`, `systemctl status`. No custom process managers. No Docker. No Kubernetes. Just systemd.
-
-### Lemonade as Unified Router
-All LLM inference goes through Lemonade (:13305), not directly to llama.cpp (:8080). Lemonade wraps llama.cpp, whisper, kokoro TTS, and sd-cpp under one OpenAI-compatible API. Downstream services (Gaia, agents) should target Lemonade, never llama.cpp directly.
-
-### Caddy as Gateway
-All services bind to `localhost`. Caddy is the only thing that could listen externally (and by default it only serves a status page). Drop a `.caddy` file in `/etc/caddy/conf.d/` and Caddy picks it up on reload.
-
-### btrfs Snapshots
-The install script is designed to be run on btrfs. Take a snapshot before installing, and if anything goes wrong, roll back in seconds.
-
-### SSH Only
-No web panels exposed. No open ports except 22. You SSH in and do everything from the terminal. This is a feature, not a limitation.
-
-## Ports
-
-| Service | Internal Port | Caddy Port | Notes |
-|---------|--------------|------------|-------|
-| Caddy | 80 | — | Landing page |
-| llama.cpp | 8080 | — | Internal only, accessed via Lemonade |
-| Lemonade | 13305 | 13306 | Unified router — all LLM traffic goes through here |
-| Gaia | varies | — | Agent framework |
-| SSH | 22 | — | Only external port |
-
-## File Locations
-
-| What | Where |
-|------|-------|
-| llama.cpp binary | `/usr/local/bin/llama-server` |
-| llama.cpp source | `~/llama.cpp/` |
-| Lemonade venv | `~/lemonade-env/` |
-| Gaia venv | `~/gaia-env/` |
-| Gaia source | `~/gaia/` |
-| Python 3.13 | `~/.pyenv/versions/3.13.12/` |
-| Caddy config | `/etc/caddy/Caddyfile` |
-| Caddy drop-ins | `/etc/caddy/conf.d/*.caddy` |
-| ROCm | `/opt/rocm/` |
-| systemd units | `/usr/lib/systemd/system/` |
-| Install log | `/tmp/halo-ai-core-install.log` |

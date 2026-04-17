@@ -1,1040 +1,423 @@
-#!/bin/bash
-# ============================================================
-# Halo AI Core — Install Script
-# Designed and built by the architect
+#!/usr/bin/env bash
+# halo-ai-core install.sh — the 1-bit monster from source for gfx1151
+# "There is no spoon." — Neo
 #
-# "I know kung fu." — Neo, The Matrix
+# Builds the entire stack from source:
+#   1. System packages
+#   2. TheRock (ROCm 7.13 — native Tensile, no hipBLAS runtime dep)
+#   3. rocm-cpp (inference engine — fused ternary HIP kernels)
+#   4. agent-cpp (17 specialists — bus, CVG, hash-chain audit)
+#   5. halo-1bit (model format + training — .h1b v2, .htok tokenizer)
+#   6. FTXUI man-cave (TUI dashboard)
+#   7. Environment + systemd units
 #
-# Core services for AMD Strix Halo bare-metal AI platform
-# Kernel: Linux 7.0 stable (mainline)
-# Components: ROCm (GPU drivers), Caddy, Lemonade (lemond), Claude Code
-# llama.cpp runs Vulkan only — ROCm/HIP is for vLLM, FLM (NPU), PyTorch
-# NPU: XDNA2 via accel module, npu_7.sbin firmware, Lemonade FLM backend
-# All services route through lemond's built-in router on :13305
-# ============================================================
+# Requirements: AMD Strix Halo (gfx1151), Arch/CachyOS, 50GB+ disk
+# Time: ~4 hours (TheRock LLVM is the long pole)
 set -euo pipefail
 
-# Validate HOME has no spaces (systemd units embed it)
-if [[ "$HOME" =~ [[:space:]] ]]; then
-    echo "ERROR: HOME path contains spaces ($HOME) — not supported"
-    exit 1
-fi
-
-VERSION="2.0.0"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Ensure USER is set (may be unset in containers/systemd)
-USER="${USER:-$(whoami)}"
-export USER
-LOG_DIR="${HOME}/.local/log"
-mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/halo-ai-core-install.log"
-touch "$LOG_FILE" && chmod 600 "$LOG_FILE"
-trap 'rm -f "${WG_TMP:-}" "${CLIENT_CONF:-}" 2>/dev/null; rm -rf "${YAY_TMPDIR:-}" "${WG_KEY_DIR:-}" 2>/dev/null' EXIT INT TERM
-DRY_RUN=false
-SKIP_ROCM=false
-SKIP_CADDY=false
-SKIP_LEMONADE=false
-SKIP_CLAUDE=false
-PYTHON_VERSION="3.13.12"
-
-# Colors
+# ── Colors ──────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
-usage() {
-    echo "Halo AI Core v${VERSION} — Install Script"
-    echo ""
-    echo "Usage: ./install.sh [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  --dry-run       Show what would be installed without doing it"
-    echo "  --yes-all       Skip all confirmation prompts"
-    echo "  --skip-rocm     Skip ROCm installation"
-    echo "  --skip-caddy    Skip Caddy installation"
-    echo "  --skip-lemonade Skip Lemonade Server"
-    echo "  --skip-claude   Skip Claude Code"
-    echo "  --status        Show current install status"
-    echo "  -h, --help      Show this help"
-    exit 0
+log()  { echo -e "${CYAN}[rocm++]${NC} $1"; }
+ok()   { echo -e "${GREEN}[✓]${NC} $1"; }
+warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+err()  { echo -e "${RED}[✗]${NC} $1"; }
+die()  { err "$1"; exit 1; }
+
+# ── Visual feedback ─────────────────────────────────────────
+SPINNER_CHARS='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+
+spin() {
+    local pid=$1 msg=$2
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  ${CYAN}%s${NC} %s" "${SPINNER_CHARS:i++%${#SPINNER_CHARS}:1}" "$msg"
+        sleep 0.1
+    done
+    printf "\r"
 }
 
-# Step count calculated dynamically based on skip flags
-CURRENT_STEP=0
-calculate_steps() {
-    TOTAL_STEPS=5  # base + python + wireguard + dashboard + services (always run)
-    $SKIP_ROCM     || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_CADDY    || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_LEMONADE || TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    $SKIP_CLAUDE   || TOTAL_STEPS=$((TOTAL_STEPS + 1))
+# Run command with spinner
+run_with_spinner() {
+    local msg="$1"; shift
+    local logfile="$1"; shift
+    "$@" > "$logfile" 2>&1 &
+    local pid=$!
+    spin $pid "$msg"
+    wait $pid
+    return $?
 }
 
+# Progress bar for known-length builds
 progress_bar() {
-    local pct=$((CURRENT_STEP * 100 / TOTAL_STEPS))
-    local filled=$((pct / 5))
-    local empty=$((20 - filled))
+    local current=$1 total=$2 width=40 label="${3:-}"
+    local pct=$((current * 100 / total))
+    local filled=$((current * width / total))
+    local empty=$((width - filled))
     local bar=""
     for ((i=0; i<filled; i++)); do bar+="█"; done
     for ((i=0; i<empty; i++)); do bar+="░"; done
-    echo -e "${BLUE}  [${bar}] ${pct}% — Step ${CURRENT_STEP}/${TOTAL_STEPS}${NC}"
+    printf "\r  ${CYAN}[%s]${NC} %3d%% %s" "$bar" "$pct" "$label"
 }
 
-step() {
-    CURRENT_STEP=$((CURRENT_STEP + 1))
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  ▸ Step ${CURRENT_STEP}/${TOTAL_STEPS}: $1${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    progress_bar
-    echo ""
-    echo "[$(date '+%H:%M:%S')] Step ${CURRENT_STEP}/${TOTAL_STEPS}: $1" >> "$LOG_FILE"
-}
-
-spinner() {
-    local pid=$1
-    local msg=$2
-    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local i=0
+# Monitor ninja build progress from log
+monitor_build() {
+    local logfile="$1" pid="$2" label="${3:-Building}"
+    local total=0 current=0
     while kill -0 "$pid" 2>/dev/null; do
-        printf "\r  ${BLUE}${spin:i++%${#spin}:1}${NC} %s" "$msg"
-        sleep 0.1
-    done
-    if wait "$pid"; then
-        printf "\r  ${GREEN}✓${NC} %s\n" "$msg"
-    else
-        printf "\r  ${RED}✗${NC} %s\n" "$msg"
-        err "$msg — failed (check $LOG_FILE)"
-        exit 1
-    fi
-}
-
-log() {
-    echo -e "  ${GREEN}✓${NC} $1"
-    echo "[$(date '+%H:%M:%S')] $1" >> "$LOG_FILE"
-}
-
-warn() {
-    echo -e "  ${YELLOW}⚠${NC} $1"
-    echo "[$(date '+%H:%M:%S')] WARN: $1" >> "$LOG_FILE"
-}
-
-err() {
-    echo -e "  ${RED}✗${NC} $1"
-    echo "[$(date '+%H:%M:%S')] ERROR: $1" >> "$LOG_FILE"
-}
-
-info() {
-    echo -e "  ${BLUE}→${NC} $1"
-}
-
-check_status() {
-    echo ""
-    echo "╔══════════════════════════════════════╗"
-    echo "║       Halo AI Core — Status          ║"
-    echo "╚══════════════════════════════════════╝"
-    echo ""
-
-    # ROCm
-    if command -v rocminfo &>/dev/null || [ -f /opt/rocm/bin/rocminfo ]; then
-        GPU=$(/opt/rocm/bin/rocminfo 2>/dev/null | grep "Marketing Name" | grep -v CPU | head -1 | sed 's/.*: *//')
-        echo -e "  ROCm:     ${GREEN}installed${NC} — $GPU"
-    else
-        echo -e "  ROCm:     ${RED}not installed${NC}"
-    fi
-
-    # Caddy
-    if systemctl is-active caddy &>/dev/null; then
-        echo -e "  Caddy:    ${GREEN}running${NC} — $(caddy version 2>/dev/null)"
-    elif command -v caddy &>/dev/null; then
-        echo -e "  Caddy:    ${YELLOW}installed but not running${NC}"
-    else
-        echo -e "  Caddy:    ${RED}not installed${NC}"
-    fi
-
-    # Lemonade (lemond)
-    if command -v lemonade &>/dev/null; then
-        VER=$(lemonade --version 2>/dev/null || echo "installed")
-        echo -e "  Lemonade: ${GREEN}installed${NC} — $VER"
-        if systemctl is-active lemonade-server &>/dev/null; then
-            echo -e "            ${GREEN}lemond running${NC} on :13305"
-            # Show loaded models
-            lemonade list 2>/dev/null | head -10 || true
+        local line=$(tail -1 "$logfile" 2>/dev/null)
+        if [[ "$line" =~ \[([0-9]+)/([0-9]+)\] ]]; then
+            current=${BASH_REMATCH[1]}
+            total=${BASH_REMATCH[2]}
+            progress_bar "$current" "$total" "$label [$current/$total]"
         else
-            echo -e "            ${YELLOW}lemond not running${NC}"
+            printf "\r  ${CYAN}⠿${NC} %s..." "$label"
         fi
-    else
-        echo -e "  Lemonade: ${RED}not installed${NC}"
-    fi
-
-    # Claude Code
-    if command -v claude &>/dev/null; then
-        echo -e "  Claude:   ${GREEN}installed${NC}"
-    else
-        echo -e "  Claude:   ${RED}not installed${NC}"
-    fi
-
-    # Services
-    echo ""
-    echo "  Services:"
-    for svc in caddy sshd lemonade-server halo-autoload; do
-        STATUS=$(systemctl is-enabled "$svc" 2>/dev/null || true); STATUS=${STATUS:-missing}
-        ACTIVE=$(systemctl is-active "$svc" 2>/dev/null || true); ACTIVE=${ACTIVE:-inactive}
-        if [ "$STATUS" = "enabled" ]; then
-            echo -e "    $svc: ${GREEN}$STATUS${NC} ($ACTIVE)"
-        else
-            echo -e "    $svc: ${YELLOW}$STATUS${NC} ($ACTIVE)"
-        fi
+        sleep 0.5
     done
+    if [[ $total -gt 0 ]]; then
+        progress_bar "$total" "$total" "$label [$total/$total]"
+    fi
     echo ""
-    exit 0
 }
 
-# Parse args
-YES_ALL=false
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --dry-run)     DRY_RUN=true; shift ;;
-        --yes-all)     YES_ALL=true; shift ;;
-        --skip-rocm)   SKIP_ROCM=true; shift ;;
-        --skip-caddy)  SKIP_CADDY=true; shift ;;
-        --skip-lemonade) SKIP_LEMONADE=true; shift ;;
-        --skip-claude) SKIP_CLAUDE=true; shift ;;
-        --status)      check_status ;;
-        -h|--help)     usage ;;
-        *)             err "Unknown option: $1"; usage ;;
-    esac
-done
+NPROC=$(nproc)
+HOME_DIR="$HOME"
+THEROCK_DIR="$HOME_DIR/therock"
+ROCMCPP_DIR="$HOME_DIR/rocm-cpp"
+AGENTCPP_DIR="$HOME_DIR/agent-cpp"
+HALO1BIT_DIR="$HOME_DIR/halo-1bit"
+FTXUI_DIR="$HOME_DIR/man-cave"
+LOG_DIR="$HOME_DIR/halo-ai-install-logs"
 
-# ============================================================
-calculate_steps
+mkdir -p "$LOG_DIR"
+
+# ── Banner ──────────────────────────────────────────────────
 echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║   Halo AI Core v${VERSION} — Installer   ║"
-echo "║   Designed and built by the architect║"
-echo "╚══════════════════════════════════════╝"
+echo -e "${BOLD}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║  halo-ai-core — the 1-bit monster                        ║${NC}"
+echo -e "${BOLD}║  rocm-cpp · agent-cpp · halo-1bit · gfx1151 · wave32     ║${NC}"
+echo -e "${BOLD}║  \"There is no spoon.\" — Neo                              ║${NC}"
+echo -e "${BOLD}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-if $DRY_RUN; then
-    warn "DRY RUN — nothing will be installed"
-    echo ""
+# ── Step 1: Verify hardware ─────────────────────────────────
+log "Step 1/8: Verifying hardware..."
+
+GPU_ARCH=""
+if command -v rocminfo &>/dev/null; then
+    GPU_ARCH=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1 || true)
 fi
 
-# Pre-flight checks
-if [ "$(id -u)" -eq 0 ]; then
-    err "Do not run as root. Run as your user with sudo access."
-    exit 1
-fi
-
-if ! command -v pacman &>/dev/null; then
-    if $DRY_RUN; then
-        warn "pacman not found — dry-run will show planned actions only"
+if [[ "$GPU_ARCH" != "gfx1151" ]]; then
+    if [[ -n "$GPU_ARCH" ]]; then
+        warn "Detected $GPU_ARCH — this script is optimized for gfx1151 (Strix Halo)"
+        read -rp "Continue anyway? (y/N): " CONT
+        [[ "$CONT" =~ ^[Yy]$ ]] || exit 0
     else
-        err "This script requires Arch Linux (pacman not found)"
-        exit 1
+        warn "Could not detect GPU. Assuming gfx1151."
+        GPU_ARCH="gfx1151"
     fi
 fi
+ok "GPU: $GPU_ARCH"
+ok "Cores: $NPROC"
+ok "Kernel: $(uname -r)"
 
-if ! sudo -n true 2>/dev/null; then
-    if $DRY_RUN; then
-        warn "sudo not available — dry-run will show planned actions only"
-    else
-        err "Passwordless sudo required. Run: echo '$USER ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$USER"
-        exit 1
-    fi
-fi
+# ── Step 2: System packages ─────────────────────────────────
+log "Step 2/8: Installing system packages..."
 
-# Confirm
-if ! $YES_ALL && ! $DRY_RUN; then
-    info "This will install Halo AI Core services on $(cat /proc/sys/kernel/hostname)"
-    read -p "Continue? [y/N] " -n 1 -r
-    echo
-    [[ $REPLY =~ ^[Yy]$ ]] || exit 0
-fi
+run_with_spinner "Installing system packages..." "$LOG_DIR/pacman.log" \
+    sudo pacman -S --noconfirm --needed \
+    base-devel cmake ninja git python python-pip \
+    rocm-hip-sdk rocm-opencl-sdk \
+    patchelf gcc-fortran numactl libdrm \
+    xxd curl unzip
 
-# ============================================================
-# 1. BASE PACKAGES
-# ============================================================
-step "Base Packages"
-BASE_PKGS="base-devel git openssh networkmanager curl wget htop nano nodejs npm uv linux-firmware vulkan-tools btrfs-progs cpupower"
+# Python deps for Tensile kernel generation
+pip install --break-system-packages --quiet \
+    pyyaml joblib packaging tqdm CppHeaderParser msgpack 2>/dev/null || \
+python3 -m pip install --break-system-packages --quiet \
+    pyyaml joblib packaging tqdm CppHeaderParser msgpack 2>/dev/null || true
 
-if $DRY_RUN; then
-    info "Would install: $BASE_PKGS"
-else
-    # shellcheck disable=SC2086
-    sudo pacman -S --needed --noconfirm ${BASE_PKGS} >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing base packages..."
-    sudo systemctl enable --now NetworkManager sshd >> "$LOG_FILE" 2>&1
-    log "Base packages installed"
-fi
+ok "System packages installed"
 
-# ============================================================
-# 2. ROCm
-# ============================================================
-if ! $SKIP_ROCM; then
-    step "ROCm GPU Stack"
-    ROCM_PKGS="rocm-hip-sdk rocm-opencl-sdk hip-runtime-amd rocminfo rocwmma vulkan-headers vulkan-icd-loader vulkan-radeon shaderc glslang"
+# ── Step 3: Environment ─────────────────────────────────────
+log "Step 3/8: Setting up environment..."
 
-    if $DRY_RUN; then
-        info "Would install: $ROCM_PKGS"
-    else
-        # shellcheck disable=SC2086
-        sudo pacman -S --needed --noconfirm ${ROCM_PKGS} >> "$LOG_FILE" 2>&1 &
-        spinner $! "Installing ROCm packages (this takes a few minutes)..."
-
-        # ROCm PATH and env
-        sudo tee /etc/profile.d/rocm.sh > /dev/null << 'ROCM_ENV'
-export PATH=$PATH:/opt/rocm/bin
-export ROCBLAS_USE_HIPBLASLT=1
-export PYTORCH_ROCM_ARCH=gfx1151
+ENV_FILE="$HOME_DIR/.rocmpp.env"
+cat > "$ENV_FILE" << 'ENVEOF'
+# ROCm C++ environment for gfx1151
 export HSA_OVERRIDE_GFX_VERSION=11.5.1
-export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
-ROCM_ENV
+export HSA_ENABLE_SDMA=0
+export ROCBLAS_USE_HIPBLASLT=1
+export HIP_VISIBLE_DEVICES=0
+export ROCM_PATH=/opt/rocm
+export HIP_PATH=/opt/rocm/hip
+export PATH=$ROCM_PATH/bin:$PATH
 
-        # IOMMU passthrough — kernel parameter, not env var
-        CMDLINE=$(cat /proc/cmdline)
-        if [[ "$CMDLINE" != *"iommu=pt"* ]]; then
-            warn "iommu=pt not in kernel cmdline — add it to bootloader for best GPU performance"
-            warn "For systemd-boot: sudo sed -i 's/options /options iommu=pt /' /boot/loader/entries/*.conf"
-        fi
-
-        # Add user to video/render
-        sudo usermod -aG video,render "$USER"
-
-        # Set CPU governor to performance for max throughput
-        if command -v cpupower &>/dev/null; then
-            sudo cpupower frequency-set -g performance >> "$LOG_FILE" 2>&1 || true
-            echo "governor='performance'" | sudo tee /etc/default/cpupower > /dev/null
-            sudo systemctl enable --now cpupower >> "$LOG_FILE" 2>&1 || true
-            log "CPU governor set to performance"
-        fi
-
-        # NPU — verify accel module and firmware (kernel 7.0+)
-        if modprobe accel 2>/dev/null; then
-            log "accel module loaded (NPU support)"
-        else
-            warn "accel module not available — NPU will not work"
-            warn "Kernel 7.0+ mainline required for XDNA2 NPU"
-        fi
-
-        if [ -c /dev/accel0 ]; then
-            log "NPU device present: /dev/accel0"
-        else
-            warn "NPU device /dev/accel0 not found"
-            warn "Check: ls /lib/firmware/amdnpu/17.50/npu_7.sbin"
-        fi
-
-        NPU_FW="/lib/firmware/amdnpu/17.50/npu_7.sbin"
-        if [ -f "$NPU_FW" ]; then
-            log "NPU firmware present: $NPU_FW"
-        else
-            warn "NPU firmware not found at $NPU_FW"
-            warn "Install linux-firmware package and reboot"
-        fi
-
-        # Source it now
-        export PATH=$PATH:/opt/rocm/bin
-
-        log "ROCm installed — $(/opt/rocm/bin/rocminfo 2>/dev/null | grep 'Marketing Name' | grep -v CPU | head -1 | sed 's/.*: *//')"
-        log "Kernel: $(uname -r)"
-    fi
-else
-    warn "Skipping ROCm"
+# TheRock paths (set after build completes)
+if [[ -d "$HOME/therock/build/math-libs/BLAS/rocBLAS/dist" ]]; then
+    export THEROCK_PATH=$HOME/therock/build
+    export LD_LIBRARY_PATH=$THEROCK_PATH/math-libs/BLAS/rocBLAS/dist/lib:$THEROCK_PATH/math-libs/BLAS/hipBLASLt/dist/lib:$THEROCK_PATH/core/clr/dist/lib:/opt/rocm/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+    export ROCBLAS_TENSILE_LIBPATH=$THEROCK_PATH/math-libs/BLAS/rocBLAS/dist/lib/rocblas/library
 fi
+ENVEOF
 
-# ============================================================
-# 3. CADDY (dashboard only — lemond handles all API routing)
-# ============================================================
-if ! $SKIP_CADDY; then
-    step "Caddy (Dashboard)"
-
-    if $DRY_RUN; then
-        info "Would install: caddy (dashboard on :80 only)"
-    else
-        sudo pacman -S --needed --noconfirm caddy >> "$LOG_FILE" 2>&1
-
-        # Clean stale configs from previous installs
-        sudo rm -f /etc/caddy/conf.d/*.caddy 2>/dev/null
-        sudo mkdir -p /etc/caddy/conf.d
-
-        # Caddy serves the dashboard on :80 — all API routing goes through lemond on :13305
-        if [ -f "$SCRIPT_DIR/dashboard/Caddyfile" ]; then
-            sudo cp "$SCRIPT_DIR/dashboard/Caddyfile" /etc/caddy/Caddyfile
-        else
-            sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYFILE'
-# Halo AI Core — Caddy
-# "There is no spoon." — Neo
-# Dashboard on :80 — all API routing through lemond :13305
-
-{
-    admin "unix//run/caddy/admin.socket"
-}
-
-:80 {
-    @local remote_ip 127.0.0.1 10.0.0.0/24 10.100.0.0/24
-
-    # Stats JSON (static file, updated every 5s)
-    handle /stats.json {
-        root * /srv/halo-dashboard
-        file_server
-        header Cache-Control "no-cache"
-    }
-
-    # Dashboard (static files)
-    root * /srv/halo-dashboard
-    file_server
-}
-
-import /etc/caddy/conf.d/*.caddy
-CADDYFILE
-        fi
-
-        sudo systemctl enable --now caddy >> "$LOG_FILE" 2>&1
-        log "Caddy installed — dashboard on :80"
+# Add to shell rc if not already there
+for RC in "$HOME_DIR/.zshrc" "$HOME_DIR/.bashrc"; do
+    if [[ -f "$RC" ]] && ! grep -q "rocmpp.env" "$RC"; then
+        echo "" >> "$RC"
+        echo "# ROCm C++ environment" >> "$RC"
+        echo "[[ -f ~/.rocmpp.env ]] && source ~/.rocmpp.env" >> "$RC"
     fi
-else
-    warn "Skipping Caddy"
-fi
-
-# ============================================================
-# 4. PYTHON (via pyenv for 3.13 compatibility)
-# ============================================================
-step "Python ${PYTHON_VERSION}"
-
-if $DRY_RUN; then
-    info "Would install Python ${PYTHON_VERSION} via pyenv"
-else
-    if [ ! -f "$HOME/.pyenv/versions/${PYTHON_VERSION}/bin/python3" ]; then
-        sudo pacman -S --needed --noconfirm tk sqlite openssl xz bzip2 libffi readline ncurses >> "$LOG_FILE" 2>&1
-
-        # Remove old/broken pyenv installs (detached HEAD, shallow clones)
-        if [ -d "$HOME/.pyenv" ]; then
-            if ! (cd "$HOME/.pyenv" && git symbolic-ref HEAD > /dev/null 2>&1); then
-                log "Removing broken pyenv (detached HEAD)..."
-                rm -rf "$HOME/.pyenv"
-            fi
-        fi
-
-        if [ ! -d "$HOME/.pyenv" ]; then
-            log "Installing pyenv..."
-            git clone https://github.com/pyenv/pyenv.git "$HOME/.pyenv" >> "$LOG_FILE" 2>&1
-            git clone https://github.com/pyenv/pyenv-virtualenv.git "$HOME/.pyenv/plugins/pyenv-virtualenv" >> "$LOG_FILE" 2>&1
-        else
-            log "Updating pyenv..."
-            (cd "$HOME/.pyenv" && git pull >> "$LOG_FILE" 2>&1)
-        fi
-
-        export PYENV_ROOT="$HOME/.pyenv"
-        export PATH="$PYENV_ROOT/bin:$PATH"
-        # shellcheck disable=SC1090
-        source <("$PYENV_ROOT/bin/pyenv" init -)
-
-        pyenv install -s "${PYTHON_VERSION}" >> "$LOG_FILE" 2>&1
-        log "Python ${PYTHON_VERSION} installed via pyenv"
-    else
-        log "Python ${PYTHON_VERSION} already installed"
-    fi
-fi
-
-# ============================================================
-# 5. LEMONADE SERVER (lemond — the core, all services route through here)
-# ============================================================
-if ! $SKIP_LEMONADE; then
-    step "Lemonade Server (lemond)"
-
-    if $DRY_RUN; then
-        info "Would install lemonade-server from AUR"
-        info "Would install backends: llamacpp:vulkan, whispercpp:vulkan, kokoro:cpu"
-        info "All API routing handled by lemond's built-in router on :13305"
-    else
-        if command -v lemonade &>/dev/null; then
-            log "Lemonade already installed — $(lemonade --version 2>/dev/null || echo 'installed')"
-        else
-            # Need an AUR helper (paru > yay > install yay)
-            AUR_HELPER=""
-            if command -v paru &>/dev/null; then
-                AUR_HELPER="paru"
-            elif command -v yay &>/dev/null; then
-                AUR_HELPER="yay"
-            else
-                info "Installing yay (AUR helper)..."
-                YAY_TMPDIR=$(mktemp -d)
-                (cd "$YAY_TMPDIR" && git clone https://aur.archlinux.org/yay.git yay >> "$LOG_FILE" 2>&1 && cd yay && makepkg -si --noconfirm >> "$LOG_FILE" 2>&1)
-                rm -rf "$YAY_TMPDIR"
-                AUR_HELPER="yay"
-            fi
-
-            $AUR_HELPER -S --needed --noconfirm lemonade-server >> "$LOG_FILE" 2>&1 &
-            spinner $! "Building lemonade-server from AUR (C++ native — this takes a minute)..."
-        fi
-
-        # Fix libwebsockets soname mismatch (Arch updates .so.20 → .so.21, breaks lemond)
-        # Check if lemond actually needs the fix before applying
-        if ! lemonade --version &>/dev/null 2>&1; then
-            for SO_NEW in /usr/lib/libwebsockets.so.*; do
-                [ -f "$SO_NEW" ] || continue
-                SO_VER=$(basename "$SO_NEW" | grep -oP '\.\d+$' | tr -d '.')
-                if [ -n "$SO_VER" ] && [ ! -f /usr/lib/libwebsockets.so.20 ]; then
-                    sudo ln -sf "$SO_NEW" /usr/lib/libwebsockets.so.20
-                    log "Fixed libwebsockets soname: $(basename "$SO_NEW") → libwebsockets.so.20"
-                    break
-                fi
-            done
-        fi
-
-        # Enable and start the daemon
-        sudo systemctl daemon-reload
-        sudo systemctl enable --now lemonade-server >> "$LOG_FILE" 2>&1 || true
-
-        # Wait for lemond to be ready
-        log "Waiting for lemond to start..."
-        for i in $(seq 1 30); do
-            if lemonade status --json > /dev/null 2>&1; then break; fi
-            sleep 1
-        done
-
-        # Install backends through lemond's built-in router
-        if lemonade status --json > /dev/null 2>&1; then
-            log "Installing backends through lemond..."
-
-            lemonade backends install llamacpp:vulkan >> "$LOG_FILE" 2>&1 &
-            spinner $! "Installing llamacpp:vulkan backend..."
-
-            lemonade backends install kokoro:cpu >> "$LOG_FILE" 2>&1 &
-            spinner $! "Installing Kokoro TTS backend..."
-
-            lemonade backends install whispercpp:vulkan >> "$LOG_FILE" 2>&1 &
-            spinner $! "Installing Whisper STT backend (Vulkan)..."
-
-            # NPU backend (XDNA2 — requires kernel 7.0+ and accel module)
-            if [ -c /dev/accel0 ]; then
-                lemonade backends install flm >> "$LOG_FILE" 2>&1 &
-                spinner $! "Installing FLM backend (NPU — XDNA2)..."
-            else
-                warn "Skipping NPU backend — /dev/accel0 not present"
-            fi
-
-            # Pull voice models
-            lemonade pull kokoro-v1 >> "$LOG_FILE" 2>&1 &
-            spinner $! "Downloading Kokoro TTS model..."
-
-            lemonade pull Whisper-Large-v3-Turbo >> "$LOG_FILE" 2>&1 &
-            spinner $! "Downloading Whisper Large v3 Turbo (1.5 GB)..."
-
-            # Pull default NPU model (optional, non-fatal)
-            (lemonade pull gemma3-4b-FLM >> "$LOG_FILE" 2>&1 || \
-             lemonade pull user.gemma3-4b-FLM >> "$LOG_FILE" 2>&1 || true) &
-            spinner $! "Downloading Gemma3 4B for NPU (optional)..."
-
-            # Set default context size
-            lemonade config set ctx_size=32768 >> "$LOG_FILE" 2>&1
-
-            log "Backends installed — all routing through lemond on :13305"
-        else
-            warn "lemond not responding — backends will need manual install after reboot"
-            warn "Run: lemonade backends install llamacpp:vulkan && lemonade backends install kokoro:cpu && lemonade backends install whispercpp:vulkan"
-        fi
-
-        VER=$(lemonade --version 2>/dev/null || echo "installed")
-        log "Lemonade Server $VER"
-        log "Built-in router on :13305 — OpenAI, Anthropic, Ollama compatible"
-        log "Web UI:        http://localhost:13305"
-        log "OpenAI API:    http://localhost:13305/v1/chat/completions"
-        log "Anthropic API: http://localhost:13305/v1/messages"
-    fi
-else
-    warn "Skipping Lemonade Server"
-fi
-
-# ============================================================
-# 6. CLAUDE CODE (via Lemonade)
-# ============================================================
-if ! $SKIP_CLAUDE; then
-    step "Claude Code (via Lemonade)"
-
-    if $DRY_RUN; then
-        info "Would install Claude Code CLI and configure for Lemonade"
-    else
-        # Install Claude Code
-        if command -v claude &>/dev/null; then
-            log "Claude Code already installed — $(claude --version 2>/dev/null || echo 'installed')"
-        else
-            if command -v npm &>/dev/null; then
-                npm install -g --ignore-scripts --prefix "$HOME/.local" @anthropic-ai/claude-code >> "$LOG_FILE" 2>&1 &
-                spinner $! "Installing Claude Code..."
-                log "Claude Code installed via npm"
-            else
-                err "npm not found — cannot install Claude Code"
-            fi
-        fi
-
-        # Verify lemonade launch claude is available
-        if command -v lemonade &>/dev/null; then
-            log "Launch with: lemonade launch claude -m <model-name>"
-        else
-            warn "Lemonade CLI not found — install Lemonade Server first"
-        fi
-    fi
-else
-    warn "Skipping Claude Code"
-fi
-
-# ============================================================
-# 7. WIREGUARD — Remote Access via QR Code
-# ============================================================
-step "WireGuard VPN"
-
-if $DRY_RUN; then
-    info "Would install wireguard-tools, qrencode, nftables and generate VPN config"
-else
-    sudo pacman -S --needed --noconfirm wireguard-tools qrencode nftables >> "$LOG_FILE" 2>&1
-
-    WG_DIR="/etc/wireguard"
-    WG_CONF="$WG_DIR/wg0.conf"
-
-    if [ ! -f "$WG_CONF" ]; then
-        WG_KEY_DIR=$(mktemp -d)
-        chmod 700 "$WG_KEY_DIR"
-        wg genkey | tee "$WG_KEY_DIR/server.key" | wg pubkey > "$WG_KEY_DIR/server.pub"
-        wg genkey | tee "$WG_KEY_DIR/client.key" | wg pubkey > "$WG_KEY_DIR/client.pub"
-        chmod 600 "$WG_KEY_DIR"/*.key
-        SERVER_PRIV=$(cat "$WG_KEY_DIR/server.key")
-        SERVER_PUB=$(cat "$WG_KEY_DIR/server.pub")
-        CLIENT_PRIV=$(cat "$WG_KEY_DIR/client.key")
-        CLIENT_PUB=$(cat "$WG_KEY_DIR/client.pub")
-        SERVER_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
-        if [[ -z "$SERVER_IFACE" || ! "$SERVER_IFACE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            warn "Could not detect default network interface — skipping WireGuard"
-            warn "Set up WireGuard manually: https://wiki.archlinux.org/title/WireGuard"
-        else
-            # Use LAN IP for WireGuard endpoint (no external IP lookups — privacy first)
-            LAN_IP=$(ip -o -4 addr show "$SERVER_IFACE" | awk '{print $4}' | cut -d/ -f1 | head -1)
-            SERVER_IP="$LAN_IP"
-            warn "WireGuard Endpoint set to LAN IP ($LAN_IP)"
-            warn "For remote access, update Endpoint in /etc/wireguard/client1.conf with your public IP or DDNS"
-
-            # Create nft rules file (cleaner than inline PostUp)
-            sudo tee /etc/wireguard/wg-nat.nft > /dev/null << NFT_RULES
-table inet wg-nat {
-    chain forward {
-        type filter hook forward priority 0; policy accept;
-        iifname wg0 accept
-    }
-    chain postrouting {
-        type nat hook postrouting priority 100;
-        oifname "$SERVER_IFACE" masquerade
-    }
-}
-NFT_RULES
-            sudo chmod 600 /etc/wireguard/wg-nat.nft
-
-            WG_TMP=$(mktemp)
-            chmod 600 "$WG_TMP"
-            cat > "$WG_TMP" << WG_SRV
-[Interface]
-Address = 10.100.0.1/24
-ListenPort = 51820
-PrivateKey = $SERVER_PRIV
-PostUp = nft -f /etc/wireguard/wg-nat.nft
-PostDown = nft delete table inet wg-nat
-
-[Peer]
-PublicKey = $CLIENT_PUB
-AllowedIPs = 10.100.0.2/32
-WG_SRV
-            sudo install -m 600 "$WG_TMP" "$WG_CONF"
-            rm -f "$WG_TMP"
-
-            CLIENT_CONF=$(mktemp)
-            chmod 600 "$CLIENT_CONF"
-            cat > "$CLIENT_CONF" << WG_CLIENT
-[Interface]
-PrivateKey = $CLIENT_PRIV
-Address = 10.100.0.2/24
-DNS = 10.0.0.1
-
-[Peer]
-PublicKey = $SERVER_PUB
-Endpoint = $SERVER_IP:51820
-AllowedIPs = 10.100.0.0/24
-PersistentKeepalive = 25
-WG_CLIENT
-
-            sudo sysctl -w net.ipv4.ip_forward=1 >> "$LOG_FILE" 2>&1 || true
-            echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-wireguard.conf >> "$LOG_FILE" 2>&1
-            sudo systemctl enable --now wg-quick@wg0 >> "$LOG_FILE" 2>&1 || true
-
-            sudo install -m 600 "$CLIENT_CONF" /etc/wireguard/client1.conf
-            rm -f "$CLIENT_CONF"
-            rm -rf "$WG_KEY_DIR"
-            log "WireGuard VPN configured on 10.100.0.1:51820"
-        fi  # SERVER_IFACE validation
-    else
-        log "WireGuard already configured at $WG_CONF"
-    fi
-fi
-
-# ============================================================
-# 8. DASHBOARD & AUTO-LOAD
-# ============================================================
-step "Dashboard & Auto-load"
-if $DRY_RUN; then
-    info "Would deploy dashboard on :80"
-    info "Would create auto-load service for voice + NPU models on boot"
-else
-    # Install dashboard
-    log "Installing dashboard..."
-    sudo mkdir -p /srv/halo-dashboard
-    if [ -f "$SCRIPT_DIR/dashboard/index.html" ]; then
-        sudo cp "$SCRIPT_DIR/dashboard/index.html" /srv/halo-dashboard/index.html
-    fi
-
-    # Install dashboard stats server
-    log "Installing dashboard stats server..."
-    sudo pacman -S --noconfirm --needed python-psutil >> "$LOG_FILE" 2>&1 || true
-    STATS_DIR="$HOME/.local/share/halo-dashboard"
-    mkdir -p "$STATS_DIR"
-    if [ -f "$SCRIPT_DIR/dashboard/stats-server.py" ]; then
-        cp "$SCRIPT_DIR/dashboard/stats-server.py" "$STATS_DIR/stats-server.py"
-    fi
-
-    # Create stats server systemd user service
-    mkdir -p "$HOME/.config/systemd/user"
-    cat > "$HOME/.config/systemd/user/halo-stats.service" << STATSVC
-[Unit]
-Description=halo-ai dashboard stats API
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 ${STATS_DIR}/stats-server.py
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=default.target
-STATSVC
-    systemctl --user daemon-reload 2>/dev/null || true
-    systemctl --user enable --now halo-stats.service >> "$LOG_FILE" 2>&1 || true
-    log "Stats server installed on :5090"
-
-    # Reload Caddy with dashboard config
-    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || sudo systemctl restart caddy >> "$LOG_FILE" 2>&1 || true
-    log "Dashboard deployed on :80"
-
-    # Create auto-load script (loads voice + NPU models through lemond on boot)
-    sudo tee /usr/local/bin/halo-autoload.sh > /dev/null << 'AUTOLOAD'
-#!/bin/bash
-# halo-ai core — auto-load default models on boot (all through lemond)
-# "i'll be back." — the terminator
-
-LOG="${HOME}/.local/log/halo-autoload.log"
-mkdir -p "$(dirname "$LOG")"
-
-log() { echo "[$(date '+%H:%M:%S')] $1" >> "$LOG"; }
-
-log "Auto-loading default models through lemond..."
-log "Kernel: $(uname -r)"
-
-# Verify NPU firmware and module
-if [ -c /dev/accel0 ]; then
-    log "NPU device present: /dev/accel0"
-else
-    modprobe accel 2>/dev/null || true
-    if [ -c /dev/accel0 ]; then
-        log "NPU device loaded after modprobe"
-    else
-        log "NPU device /dev/accel0 not available"
-    fi
-fi
-
-# Wait for lemond to be ready
-for i in $(seq 1 30); do
-    if lemonade status --json 2>/dev/null | grep -q '"version"'; then
-        log "lemond ready"
-        break
-    fi
-    sleep 2
 done
 
-if ! lemonade status --json 2>/dev/null | grep -q '"version"'; then
-    log "lemond not responding — skipping model loads"
-    exit 0
-fi
+source "$ENV_FILE"
+ok "Environment configured: $ENV_FILE"
 
-# Load whisper (STT) through lemond
-log "Loading Whisper Large v3 Turbo..."
-lemonade load Whisper-Large-v3-Turbo --whispercpp vulkan >> "$LOG" 2>&1 || \
-    log "Whisper load failed (non-critical)"
+# ── Step 4: Clone repos ─────────────────────────────────────
+log "Step 4/8: Cloning repositories..."
 
-# Load kokoro (TTS) through lemond
-log "Loading Kokoro v1..."
-lemonade load kokoro-v1 >> "$LOG" 2>&1 || \
-    log "Kokoro load failed (non-critical)"
-
-# Load default LLM on NPU (agents) through lemond
-if [ -c /dev/accel0 ]; then
-    log "Loading Gemma3 4B on NPU..."
-    lemonade load gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
-      lemonade load user.gemma3-4b-FLM --ctx-size 32768 >> "$LOG" 2>&1 || \
-        log "NPU model load failed (non-critical)"
+# TheRock
+if [[ ! -d "$THEROCK_DIR/.git" ]]; then
+    log "Cloning TheRock (ROCm from source)..."
+    git clone https://github.com/ROCm/TheRock.git "$THEROCK_DIR" 2>&1 | tail -3
+    cd "$THEROCK_DIR" && git submodule update --init --recursive 2>&1 | tail -3
+    ok "TheRock cloned"
 else
-    log "Skipping NPU model — /dev/accel0 not present"
+    ok "TheRock already cloned"
 fi
 
-log "Auto-load complete."
-AUTOLOAD
-    sudo chmod +x /usr/local/bin/halo-autoload.sh
-
-    # Create auto-load systemd service
-    sudo tee /usr/lib/systemd/system/halo-autoload.service > /dev/null << SVCUNIT
-[Unit]
-Description=Halo AI Core — Auto-load default models through lemond
-After=lemonade-server.service
-Wants=lemonade-server.service
-
-[Service]
-Type=oneshot
-User=${USER}
-RemainAfterExit=yes
-ExecStartPre=/bin/sleep 5
-ExecStart=/usr/local/bin/halo-autoload.sh
-
-[Install]
-WantedBy=multi-user.target
-SVCUNIT
-    sudo systemctl daemon-reload
-    sudo systemctl enable halo-autoload >> "$LOG_FILE" 2>&1
-    log "Auto-load service enabled — voice + NPU models load through lemond on every boot"
-fi
-
-# ============================================================
-# 9. LEMONADE SERVICES (Interviewer, Eval, Nexus)
-# ============================================================
-step "Lemonade Services"
-if $DRY_RUN; then
-    info "Would install: Interviewer, Lemonade Eval, Lemonade Nexus"
+# rocm-cpp
+if [[ ! -d "$ROCMCPP_DIR/.git" ]]; then
+    git clone https://github.com/stampby/rocm-cpp.git "$ROCMCPP_DIR" 2>&1 | tail -3
+    ok "rocm-cpp cloned"
 else
-    SERVICES_DIR="${HOME}/.local/share/halo-services"
-    mkdir -p "$SERVICES_DIR"
-
-    # Interviewer — AI interview practice
-    if [ ! -d "$SERVICES_DIR/interviewer" ]; then
-        git clone https://github.com/stampby/interviewer.git "$SERVICES_DIR/interviewer" >> "$LOG_FILE" 2>&1 &
-        spinner $! "Cloning Interviewer..."
-    else
-        (cd "$SERVICES_DIR/interviewer" && git pull >> "$LOG_FILE" 2>&1) &
-        spinner $! "Updating Interviewer..."
-    fi
-
-    # Lemonade Eval — benchmarking client
-    if [ ! -d "$SERVICES_DIR/lemonade-eval" ]; then
-        git clone https://github.com/stampby/lemonade-eval.git "$SERVICES_DIR/lemonade-eval" >> "$LOG_FILE" 2>&1 &
-        spinner $! "Cloning Lemonade Eval..."
-    else
-        (cd "$SERVICES_DIR/lemonade-eval" && git pull >> "$LOG_FILE" 2>&1) &
-        spinner $! "Updating Lemonade Eval..."
-    fi
-
-    # Install Python deps in a shared venv (use pyenv 3.13 — system 3.14 is too new for some deps)
-    SVCENV="${HOME}/.local/share/halo-services-env"
-    PYENV_PYTHON="${HOME}/.pyenv/versions/${PYTHON_VERSION}/bin/python3"
-    if [ ! -d "$SVCENV" ]; then
-        if [ -f "$PYENV_PYTHON" ]; then
-            "$PYENV_PYTHON" -m venv "$SVCENV" >> "$LOG_FILE" 2>&1
-        else
-            python3 -m venv "$SVCENV" >> "$LOG_FILE" 2>&1
-        fi
-    fi
-
-    "$SVCENV/bin/pip" install --quiet \
-        -e "$SERVICES_DIR/interviewer" \
-        -e "$SERVICES_DIR/lemonade-eval" \
-        >> "$LOG_FILE" 2>&1 &
-    spinner $! "Installing service dependencies..."
-
-    # Create systemd user service for Interviewer
-    cat > "$HOME/.config/systemd/user/interviewer.service" << INTSVC
-[Unit]
-Description=AI Interviewer — Practice Sessions
-After=lemonade-server.service
-
-[Service]
-Type=simple
-ExecStart=${SVCENV}/bin/python -m interviewer.server --host 127.0.0.1 --port 8191
-Restart=on-failure
-RestartSec=5
-Environment=LEMONADE_HOST=127.0.0.1
-Environment=LEMONADE_PORT=13305
-
-[Install]
-WantedBy=default.target
-INTSVC
-
-    # Lemonade Nexus — zero-trust WireGuard mesh VPN (built from source)
-    if [ ! -d "$SERVICES_DIR/lemonade-nexus" ]; then
-        git clone https://github.com/stampby/lemonade-nexus.git "$SERVICES_DIR/lemonade-nexus" >> "$LOG_FILE" 2>&1 &
-        spinner $! "Cloning Lemonade Nexus..."
-    else
-        (cd "$SERVICES_DIR/lemonade-nexus" && git pull >> "$LOG_FILE" 2>&1) &
-        spinner $! "Updating Lemonade Nexus..."
-    fi
-
-    if [ ! -f /usr/local/bin/lemonade-nexus ]; then
-        # Nexus requires Rust toolchain + cmake
-        if ! command -v rustc &>/dev/null; then
-            sudo pacman -S --needed --noconfirm rust >> "$LOG_FILE" 2>&1
-            log "Rust toolchain installed for Nexus build"
-        fi
-        if ! command -v cmake &>/dev/null; then
-            sudo pacman -S --needed --noconfirm cmake >> "$LOG_FILE" 2>&1
-        fi
-        (cd "$SERVICES_DIR/lemonade-nexus" && \
-         cmake -B build -DCMAKE_BUILD_TYPE=Release >> "$LOG_FILE" 2>&1 && \
-         cmake --build build --config Release -j"$(nproc)" >> "$LOG_FILE" 2>&1 && \
-         sudo cp build/projects/LemonadeNexus/lemonade-nexus /usr/local/bin/) &
-        spinner $! "Building Lemonade Nexus (C++20 + Rust — this takes a minute)..."
-    else
-        log "Lemonade Nexus already installed"
-    fi
-
-    systemctl --user daemon-reload 2>/dev/null || true
-    log "Interviewer installed — AI interview practice on :8191"
-    log "Lemonade Eval installed — benchmarking: lemonade-eval run"
-    log "Lemonade Nexus installed — zero-trust mesh VPN: lemonade-nexus --help"
-
-    # Add Caddy routes for services (import pattern — no duplicate :80 block)
-    sudo tee /etc/caddy/conf.d/halo-services.caddy > /dev/null << 'SVCCADDY'
-# Halo AI Core — Lemonade Services
-# "I love it when a plan comes together." — Hannibal
-# This file is imported by the main Caddyfile via: import /etc/caddy/conf.d/*.caddy
-
-handle /interviewer* {
-    @local remote_ip 127.0.0.1 ::1 10.0.0.0/24 10.100.0.0/24
-    handle @local {
-        uri strip_prefix /interviewer
-        reverse_proxy 127.0.0.1:8191
-    }
-    respond 403
-}
-SVCCADDY
-    sudo systemctl reload caddy >> "$LOG_FILE" 2>&1 || true
+    cd "$ROCMCPP_DIR" && git pull --ff-only 2>/dev/null || true
+    ok "rocm-cpp updated"
 fi
 
-# ============================================================
-# CLEANUP — remove stale services from previous installs
-# ============================================================
-if ! $DRY_RUN; then
-    # Remove old services that are now handled by lemond
-    for old_svc in vllm-server lemonade lemonade-ui gaia gaia-ui llama-server kokoro-tts whisper-server; do
-        if systemctl is-enabled "$old_svc" &>/dev/null; then
-            sudo systemctl disable --now "$old_svc" >> "$LOG_FILE" 2>&1 || true
-            log "Disabled stale service: $old_svc (now handled by lemond)"
+# agent-cpp (specialist framework — companion to rocm-cpp)
+if [[ ! -d "$AGENTCPP_DIR/.git" ]]; then
+    git clone https://github.com/stampby/agent-cpp.git "$AGENTCPP_DIR" 2>&1 | tail -3
+    ok "agent-cpp cloned"
+else
+    cd "$AGENTCPP_DIR" && git pull --ff-only 2>/dev/null || true
+    ok "agent-cpp updated"
+fi
+
+# halo-1bit (model format + training pipeline — .h1b v2, .htok tokenizer)
+if [[ ! -d "$HALO1BIT_DIR/.git" ]]; then
+    git clone https://github.com/stampby/halo-1bit.git "$HALO1BIT_DIR" 2>&1 | tail -3
+    ok "halo-1bit cloned"
+else
+    cd "$HALO1BIT_DIR" && git pull --ff-only 2>/dev/null || true
+    ok "halo-1bit updated"
+fi
+
+# ── Step 5: Build TheRock ────────────────────────────────────
+log "Step 5/8: Building TheRock (ROCm 7.13 from source)..."
+log "This is the long pole — LLVM alone is 8000+ files. ~3-4 hours."
+
+cd "$THEROCK_DIR"
+
+# Apply GCC 15 patches
+log "Applying GCC 15 patches..."
+
+# elfutils: -Wno-error for const qualifier
+ELFUTILS_CMAKE="third-party/sysdeps/linux/elfutils/CMakeLists.txt"
+if [[ -f "$ELFUTILS_CMAKE" ]] && ! grep -q "Wno-error=discarded-qualifiers" "$ELFUTILS_CMAKE"; then
+    sed -i 's|"CPPFLAGS=${EXTRA_CPPFLAGS}"|"CPPFLAGS=${EXTRA_CPPFLAGS} -Wno-error=discarded-qualifiers"|' "$ELFUTILS_CMAKE"
+    ok "Patched elfutils for GCC 15"
+fi
+
+# rocprofiler-sdk elfio: missing cstdint
+ELFIO_TYPES="rocm-systems/projects/rocprofiler-sdk/external/elfio/elfio/elf_types.hpp"
+if [[ -f "$ELFIO_TYPES" ]] && ! grep -q "cstdint" "$ELFIO_TYPES"; then
+    sed -i '/#define ELFTYPES_H/a #include <cstdint>' "$ELFIO_TYPES"
+    ok "Patched elfio for GCC 15"
+fi
+
+# rocprofiler-sdk yaml-cpp: missing cstdint
+YAML_EMITTER="rocm-systems/projects/rocprofiler-sdk/external/yaml-cpp/src/emitterutils.cpp"
+if [[ -f "$YAML_EMITTER" ]] && ! grep -q "cstdint" "$YAML_EMITTER"; then
+    sed -i '/#include <algorithm>/a #include <cstdint>' "$YAML_EMITTER"
+    ok "Patched yaml-cpp for GCC 15"
+fi
+
+# aqlprofile test: skip in TheRock
+AQL_TEST="rocm-systems/projects/aqlprofile/test/integration/CMakeLists.txt"
+if [[ -f "$AQL_TEST" ]] && ! grep -q "THEROCK_SOURCE_DIR" "$AQL_TEST"; then
+    sed -i '1a if(DEFINED THEROCK_SOURCE_DIR)\n  return()\nendif()' "$AQL_TEST"
+    ok "Patched aqlprofile test"
+fi
+
+# Configure
+if [[ ! -f "build/CMakeCache.txt" ]]; then
+    log "Configuring TheRock..."
+    cmake -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DTHEROCK_AMDGPU_TARGETS=gfx1151 \
+        -DTHEROCK_DIST_AMDGPU_FAMILIES=gfx115X-all \
+        -DTHEROCK_ENABLE_BLAS=ON \
+        2>&1 | tee "$LOG_DIR/therock-configure.log" | tail -5
+    ok "TheRock configured"
+fi
+
+# Build (target BLAS specifically)
+log "Building TheRock BLAS stack (rocBLAS + hipBLASLt + rocRoller)..."
+log "Logging to $LOG_DIR/therock-build.log"
+
+# Symlink Python packages into Tensile's PYTHONPATH
+PYTHON_BIN=$(command -v python3.12 2>/dev/null || command -v python3 2>/dev/null)
+if [[ -n "$PYTHON_BIN" ]]; then
+    SITE=$($PYTHON_BIN -c "import site; print(site.getusersitepackages())" 2>/dev/null || true)
+    for pkg in packaging joblib tqdm yaml msgpack; do
+        PKG_PATH=$($PYTHON_BIN -c "import $pkg; import os; print(os.path.dirname($pkg.__file__))" 2>/dev/null || true)
+        if [[ -n "$PKG_PATH" && -d "$PKG_PATH" && -d "rocm-libraries/projects/hipblaslt/tensilelite" ]]; then
+            ln -sf "$PKG_PATH" rocm-libraries/projects/hipblaslt/tensilelite/ 2>/dev/null || true
         fi
-        sudo rm -f "/usr/lib/systemd/system/${old_svc}.service" 2>/dev/null
     done
-    # Remove old Caddy conf.d proxies (lemond handles routing)
-    sudo rm -f /etc/caddy/conf.d/llm-api.caddy 2>/dev/null
-    sudo rm -f /etc/caddy/conf.d/lemonade-ui.caddy 2>/dev/null
-    sudo rm -f /etc/caddy/conf.d/gaia-ui.caddy 2>/dev/null
-    sudo rm -f /etc/caddy/conf.d/gaia-api.caddy 2>/dev/null
-    sudo rm -f /etc/caddy/conf.d/llama.caddy 2>/dev/null
-    sudo systemctl daemon-reload
 fi
 
-# ============================================================
-# DONE
-# ============================================================
-HOSTNAME=$(cat /proc/sys/kernel/hostname)
-echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║     Halo AI Core — Install Done      ║"
-echo "╚══════════════════════════════════════╝"
-echo ""
-echo "  \"There is no spoon.\" — The Matrix"
-echo ""
-echo "  ── EVERYTHING RUNS THROUGH LEMOND ──────────────"
-echo ""
-echo "  Lemonade (web UI + all APIs):"
-echo "    http://localhost:13305"
-echo "    SSH: ssh -L 13305:localhost:13305 $HOSTNAME"
-echo ""
-echo "  Built-in router on :13305 serves:"
-echo "    OpenAI API:    /v1/chat/completions"
-echo "    Anthropic API: /v1/messages"
-echo "    Ollama API:    /api/chat"
-echo "    Web UI:        / (browser)"
-echo ""
-echo "  Claude Code (local AI coding agent):"
-echo "    lemonade launch claude -m <model-name>"
-echo ""
-echo "  Dashboard:"
-echo "    http://localhost:80"
-echo ""
+ninja -C build -k0 math-libs/BLAS/rocBLAS math-libs/BLAS/hipBLASLt math-libs/BLAS/rocRoller \
+    -j"$NPROC" > "$LOG_DIR/therock-build.log" 2>&1 &
+BUILD_PID=$!
+monitor_build "$LOG_DIR/therock-build.log" $BUILD_PID "TheRock BLAS"
+wait $BUILD_PID || true
 
-if [ -f /etc/wireguard/wg0.conf ]; then
-echo "  ── REMOTE ACCESS (WireGuard VPN) ───────────────"
-echo ""
-echo "  Phone VPN IP: 10.100.0.2"
-echo "  Lemonade:     http://10.100.0.1:13305"
-echo "  Dashboard:    http://10.100.0.1"
-echo "  Show QR:      qrencode -t ansiutf8 < /etc/wireguard/client1.conf"
-echo ""
-fi
-
-echo "  ══════════════════════════════════════════════"
-echo "  ██  YOU MUST REBOOT. THIS IS NOT OPTIONAL. ██"
-echo "  ══════════════════════════════════════════════"
-echo ""
-echo "    sudo reboot"
-echo ""
-echo "  NPU will NOT work until you reboot (firmware + accel module)."
-echo "  Services will NOT start until you reboot (systemd)."
-echo "  ROCm groups will NOT apply until you reboot (video/render)."
-echo "  Skipping the reboot is the #1 cause of 'it doesnt work'."
-echo ""
-echo "  \"You shall not pass.\" — until you reboot."
-echo ""
-echo "  ── SERVICES ──────────────────────────────────"
-echo ""
-echo "  Interviewer:      http://localhost:8191  (AI interview practice)"
-echo "  Lemonade Eval:    lemonade-eval run      (benchmarking)"
-echo "  Lemonade Nexus:   lemonade-nexus          (zero-trust mesh VPN)"
-echo ""
-echo "  Start services:"
-echo "    systemctl --user start interviewer"
-echo ""
-echo "  ── SYSTEM ────────────────────────────────────"
-echo ""
-echo "  Kernel:  $(uname -r)"
-if [ -c /dev/accel0 ]; then
-echo "  NPU:     ONLINE (/dev/accel0 present)"
+# Verify
+if [[ -f "build/math-libs/BLAS/rocBLAS/dist/lib/librocblas.so" ]]; then
+    KERNEL_COUNT=$(find build/math-libs/BLAS/rocBLAS/dist/lib/rocblas/library/gfx1151/ -name "*.hsaco" 2>/dev/null | wc -l)
+    ok "TheRock built: $KERNEL_COUNT native Tensile kernels for gfx1151"
 else
-echo "  NPU:     NOT DETECTED (check linux-firmware)"
+    die "TheRock BLAS build failed. Check $LOG_DIR/therock-build.log"
 fi
-echo "  GPU:     $(/opt/rocm/bin/rocminfo 2>/dev/null | grep 'Marketing Name' | grep -v CPU | head -1 | sed 's/.*: *//' || echo 'unknown')"
-echo ""
-echo "  ── NEXT STEPS (after reboot) ──────────────────"
-echo ""
-echo "  1. Open http://localhost:80 — dashboard with all controls"
-echo "  2. Open http://localhost:13305 — load a model, start chatting"
-echo "  3. Launch Claude Code with local models:"
-echo "     lemonade launch claude -m <model-name>"
-echo "  4. Check status:"
-echo "     ./install.sh --status"
-echo ""
-echo "  ── COMMUNITY ───────────────────────────────────"
-echo ""
-echo "  GitHub:  https://github.com/stampby/halo-ai-core"
-echo "  Discord: https://discord.gg/dSyV646eBs"
-echo "  Reddit:  https://www.reddit.com/r/MidlifeCrisisAI/"
-echo ""
-echo "  \"The only limitation is ignorance.\""
-echo ""
-echo "  Designed and built by the architect."
-echo ""
 
-log "Installation complete."
-log "Full log: $LOG_FILE"
+# ── Step 6: Build rocm-cpp (librocm_cpp + bitnet_decode + tests) ──
+log "Step 6/8: Building rocm-cpp (librocm_cpp + bitnet_decode)..."
+
+cd "$ROCMCPP_DIR"
+THEROCK_DIST="$THEROCK_DIR/build/dist/rocm"
+
+cmake -S . -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_HIP_ARCHITECTURES=gfx1151 \
+    -DCMAKE_HIP_COMPILER="$THEROCK_DIST/lib/llvm/bin/clang++" \
+    -DCMAKE_C_COMPILER="$THEROCK_DIST/lib/llvm/bin/clang" \
+    -DCMAKE_CXX_COMPILER="$THEROCK_DIST/lib/llvm/bin/clang++" \
+    2>&1 | tail -3
+
+cmake --build build --parallel "$NPROC" \
+    --target rocm_cpp bitnet_decode test_prim_and_attn \
+    > "$LOG_DIR/rocmcpp-build.log" 2>&1 &
+BUILD_PID=$!
+monitor_build "$LOG_DIR/rocmcpp-build.log" $BUILD_PID "rocm-cpp"
+wait $BUILD_PID || true
+
+if [[ -f "build/librocm_cpp.so" && -f "build/bitnet_decode" ]]; then
+    ok "rocm-cpp built: librocm_cpp.so + bitnet_decode"
+else
+    warn "rocm-cpp build had issues. Check $LOG_DIR/rocmcpp-build.log"
+fi
+
+# ── Step 7: Build agent-cpp (specialist framework) ──────────
+log "Step 7/8: Building agent-cpp (specialist framework, C++20)..."
+
+cd "$AGENTCPP_DIR"
+
+# agent-cpp is pure C++20 + pthreads — no ROCm dependency for the
+# scaffold. Specialists that call into librocm_cpp pick it up from
+# LD_LIBRARY_PATH at runtime; no link-time coupling.
+cmake -S . -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DAGENT_CPP_TESTS=ON \
+    2>&1 | tail -3
+
+cmake --build build --parallel "$NPROC" > "$LOG_DIR/agentcpp-build.log" 2>&1 &
+BUILD_PID=$!
+monitor_build "$LOG_DIR/agentcpp-build.log" $BUILD_PID "agent-cpp"
+wait $BUILD_PID || true
+
+if [[ -f "build/agent_cpp" ]]; then
+    ok "agent-cpp built: agent_cpp demo + 17 specialists"
+    if ./build/test_runtime 2>/dev/null | grep -q OK; then
+        ok "agent-cpp runtime smoke test: PASS"
+    fi
+else
+    warn "agent-cpp build had issues. Check $LOG_DIR/agentcpp-build.log"
+fi
+
+# ── Step 8: Build FTXUI dashboard ────────────────────────────
+log "Step 8/8: Building FTXUI dashboard..."
+
+# Install FTXUI if not present
+if ! pkg-config --exists ftxui 2>/dev/null; then
+    log "Building FTXUI from source..."
+    FTXUI_BUILD="/tmp/ftxui-build"
+    rm -rf "$FTXUI_BUILD"
+    git clone https://github.com/ArthurSonzogni/FTXUI.git "$FTXUI_BUILD" 2>&1 | tail -3
+    cd "$FTXUI_BUILD"
+    cmake -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DFTXUI_BUILD_EXAMPLES=OFF \
+        -DFTXUI_BUILD_TESTS=OFF \
+        2>&1 | tail -3
+    cmake --build build --parallel "$NPROC" 2>&1 | tail -3
+    sudo cmake --install build 2>&1 | tail -3
+    ok "FTXUI installed"
+fi
+
+# Build Man Cave TUI if it exists
+if [[ -d "$FTXUI_DIR" ]]; then
+    cd "$FTXUI_DIR"
+    if [[ -f "CMakeLists.txt" ]]; then
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -3
+        cmake --build build --parallel "$NPROC" 2>&1 | tail -3
+        ok "Man Cave TUI built"
+    fi
+elif [[ -d "$HOME_DIR/man-cave" ]]; then
+    cd "$HOME_DIR/man-cave"
+    if [[ -f "CMakeLists.txt" ]]; then
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -3
+        cmake --build build --parallel "$NPROC" 2>&1 | tail -3
+        ok "Man Cave TUI built"
+    fi
+else
+    warn "Man Cave TUI not found — skipping FTXUI dashboard"
+fi
+
+# ── Done ─────────────────────────────────────────────────────
+source "$HOME_DIR/.rocmpp.env"
+
+echo ""
+echo -e "${BOLD}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║  ROCm C++ — Build Complete                               ║${NC}"
+echo -e "${BOLD}╚═══════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo "  GPU:              $GPU_ARCH"
+echo "  TheRock:          $THEROCK_DIR/build/"
+echo "  Tensile kernels:  $(find $THEROCK_DIR/build/math-libs/BLAS/rocBLAS/dist/lib/rocblas/library/gfx1151/ -name '*.hsaco' 2>/dev/null | wc -l) native .hsaco files"
+echo "  rocm-cpp:         $ROCMCPP_DIR/"
+echo "  Engine:           $ENGINE_DIR/build/server"
+echo "  Environment:      source ~/.rocmpp.env"
+echo ""
+echo "  Quick start:"
+echo "    source ~/.rocmpp.env"
+echo "    cd $ROCMCPP_DIR && ./tools/bench_ternary"
+echo "    cd $ROCMCPP_DIR && ./tools/bench_gemm"
+echo "    cd $ENGINE_DIR && ./build/chat mlx-community/Qwen3-4B-4bit"
+echo ""
+echo "  Run benchmarks:"
+echo "    cd $ROCMCPP_DIR/tools && ./run_bench.sh"
+echo ""
+echo "  Logs: $LOG_DIR/"
+echo ""
+echo -e "  ${BOLD}If it can be done in C++, we do it in C++.${NC}"
+echo -e "  ${BOLD}Stamped by the architect.${NC}"
 echo ""

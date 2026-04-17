@@ -1,3 +1,0 @@
-#!/bin/bash
-# Convenience wrapper — type 'halo-install' from the live USB shell
-exec /opt/halo-autoinstall/autoinstall.sh "$@"
