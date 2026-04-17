@@ -131,8 +131,15 @@ for a in "${OPTIONAL_ASSETS[@]}"; do
 done
 
 # GPG signature is optional (skipped if missing or --skip-gpg)
+# Use -f so curl DOES NOT write a body on error (would otherwise leave a
+# bogus SHA256SUMS.asc on disk that the verify block later chokes on).
 if [[ $DRY_RUN -eq 0 && $SKIP_GPG -eq 0 ]]; then
-    curl --fail-with-body -sLO "$SOURCE/SHA256SUMS.asc" 2>/dev/null || warn "no GPG signature found at $SOURCE — skipping sig check"
+    if curl -fsLO "$SOURCE/SHA256SUMS.asc" 2>/dev/null; then
+        ok "GPG signature fetched"
+    else
+        rm -f SHA256SUMS.asc
+        warn "no GPG signature at $SOURCE — skipping sig check"
+    fi
 fi
 ok "assets downloaded"
 
