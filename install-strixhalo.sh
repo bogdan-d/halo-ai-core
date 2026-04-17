@@ -166,7 +166,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
     sudo tar --zstd -xf agent_cpp.tar.zst          -C "$INSTALL_PREFIX/"
     sudo tar --zstd -xf librocm_cpp-rdna.tar.zst   -C "$INSTALL_PREFIX/"
     [[ -f man-cave-rdna.tar.zst ]] && sudo tar --zstd -xf man-cave-rdna.tar.zst -C "$INSTALL_PREFIX/"
-    tar --zstd -xf halo-1bit-2b.tar.zst            -C "$MODELS_DIR/"
+    tar --zstd -xf halo-1bit-2b.tar.zst            -C "$MODELS_DIR/" --strip-components=1
     sudo ldconfig
 else
     warn "dry-run: skipping install"
