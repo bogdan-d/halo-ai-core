@@ -54,7 +54,9 @@ cd halo-ai-core
 | [`./install-strixhalo.sh`](install-strixhalo.sh) | **gfx1151** (Strix Halo) | ~5 min | downloads pre-built binaries from GH Releases, verifies SHA256 + GPG, wires systemd |
 | [`./install-source.sh`](install-source.sh) | any other AMD GPU | ~4 hrs | builds TheRock + rocm-cpp + agent-cpp + halo-1bit from source for your arch |
 
-why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB unified). one build produces a binary that runs bit-identically on every such box — no reason to rebuild from source every time. for anything else (gfx1030, gfx1100, CDNA), the wave32 WMMA kernels don't port, so source build with arch-specific codegen is the only safe option.
+why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB unified). one build produces a binary that runs bit-identically on every such box — no reason to rebuild from source every time. for anything else (gfx1030, gfx1100, gfx1201, CDNA), the wave32 WMMA kernels don't port 1:1, so source build with arch-specific codegen is the safe option.
+
+**running something other than a strix halo and want the kernels built for your GPU?** see [`release/KERNELS.md`](release/KERNELS.md) for arch coverage, how to build your own, and how to share community builds back.
 
 [![Install Demo](https://img.shields.io/badge/asciinema-watch_install_demo-d40000?style=flat&logo=asciinema&logoColor=white)](docs/install-rocmpp.cast)
 
