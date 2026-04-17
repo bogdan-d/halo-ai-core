@@ -127,7 +127,12 @@ for a in "${OPTIONAL_ASSETS[@]}"; do
         log "dry-run: would try $SOURCE/$a (optional)"
         continue
     fi
-    curl --fail-with-body -sLO "$SOURCE/$a" 2>/dev/null || log "optional asset $a not in release — skipping"
+    if curl -fsLO "$SOURCE/$a" 2>/dev/null; then
+        ok "optional asset $a fetched"
+    else
+        rm -f "$a"
+        log "optional asset $a not in release — skipping"
+    fi
 done
 
 # GPG signature is optional (skipped if missing or --skip-gpg)
