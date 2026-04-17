@@ -8,9 +8,9 @@
 
 # halo-ai core
 
-### the bare-metal ai foundation for amd strix halo
+### 1bit monster
 
-**13 core services · 128gb unified · lemonade + llama.cpp + nexus · zero cloud · lego blocks**
+**bare-metal 1-bit inference on amd strix halo · librocm_cpp (82 tok/s BitNet-2B-4T, bit-match vs reference) · agent-cpp specialists · nexus · zero cloud · lego blocks**
 
 *stamped by the architect*
 
@@ -180,7 +180,7 @@ core is the foundation. snap on what you need:
 
 | block | what it does | status |
 |-------|-------------|--------|
-| **nexus vpn** | zero-trust wireguard mesh with cryptographic governance (replaces ssh mesh) | [guide →](docs/wiki/Nexus-VPN.md) |
+| **nexus vpn** | zero-trust wireguard mesh with cryptographic governance | [guide →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | 802.1Q network isolation (requires managed switch) | [guide →](docs/wiki/Network-Layout.md) |
 | **voice pipeline** | whisper + kokoro tts | [guide →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | chat frontend | planned |
@@ -211,18 +211,7 @@ they're a recommendation, not a requirement. [core agents guide →](docs/wiki/C
 
 ## security
 
-**lemonade nexus** — zero-trust wireguard mesh vpn. ~~ssh mixer is deprecated and removed.~~ nexus is the replacement and it's not even close.
-
-| | ssh mesh (old) | nexus (now) |
-|---|---|---|
-| key management | manual on every machine | ed25519 auto-generated per server |
-| encryption | ssh only | wireguard chacha20-poly1305 tunnels |
-| peer discovery | none — manual config | udp gossip protocol, automatic |
-| key rotation | manual | automatic weekly with shamir's secret sharing |
-| governance | flat trust | democratic — tier 1 majority vote |
-| nat traversal | none | stun hole-punching + relay fallback |
-| health monitoring | none | peer health gating, ≥90% uptime for tier 1 |
-| trust model | everyone equal | 5-layer: ed25519 → wireguard → zero-trust → tee attestation → governance |
+**lemonade nexus** — zero-trust wireguard mesh vpn. the networking layer.
 
 all services bind to 127.0.0.1. nexus provides the encrypted tunnel. no open ports. no passwords. *"you shall not pass."*
 
