@@ -1,0 +1,25 @@
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  halo-ai-core — the 1-bit monster                                 ║
+║  bootable live environment · gfx1151 optimized                    ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+You're running halo-ai-core live off USB. Everything below is local,
+no cloud, no telemetry.
+
+  bitnet_decode --model /opt/halo-ai/models/halo-1bit-2b.h1b --repl
+      start the inference engine REPL (loads 1.8 GB model, ~2 s)
+
+  bitnet_decode --model /opt/halo-ai/models/halo-1bit-2b.h1b --server 8080
+      OpenAI-compatible HTTP endpoint on :8080
+
+  agent_cpp
+      17-specialist agent runtime (needs bitnet_decode --server up)
+
+  halo-install
+      commit this stack to disk (partitions your target disk — read first)
+
+  halo-ai-core
+      repo clone in ~/halo-ai-core with install scripts + docs
+
+"the 1-bit monster is already here. it just had to learn to count."

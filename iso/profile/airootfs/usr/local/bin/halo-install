@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# halo-install — commit the live halo-ai-core stack to the target disk.
+#
+# Call this after booting the ISO. Wipes the target disk, lays down
+# a fresh Arch with btrfs (@, @home, @log, @pkg layout), copies the
+# already-staged /opt/halo-ai binaries + model into the new root, and
+# installs a systemd-boot entry.
+#
+# DESTRUCTIVE — you will lose everything on the target disk.
+set -euo pipefail
+
+TARGET="${1:-}"
+if [[ -z "$TARGET" || ! -b "$TARGET" ]]; then
+    echo "usage: halo-install /dev/nvmeXn1   (or /dev/sdX)"
+    echo
+    echo "available block devices:"
+    lsblk -d -o NAME,SIZE,MODEL | grep -vE "^loop|^sr|^zram" | head -10
+    exit 1
+fi
+
+read -rp "wipe $TARGET and install halo-ai-core? type YES: " c
+[[ "$c" == "YES" ]] || { echo "aborted"; exit 1; }
+
+# Hand off to the bootstrap script with known defaults
+BOOTSTRAP_HOST="" TARGET_DISK="$TARGET" TARGET_USER="bcloud" TARGET_HOSTNAME="halo" \
+    exec /usr/local/bin/halo-bootstrap
