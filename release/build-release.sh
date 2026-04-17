@@ -39,13 +39,19 @@ die()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 rm -rf "$DIST" "$STAGE"
 mkdir -p "$DIST" "$STAGE"
 
-# ── rocm-cpp — bitnet_decode + librocm_cpp ──────────────────
-log "building rocm-cpp @ $ROCMCPP"
+# ── rocm-cpp — bitnet_decode + librocm_cpp ──────────────────────
+# gfx1151 (Strix Halo) is the only arch we ship today. RDNA3.5's
+# wmma-256b intrinsics don't port to RDNA4 (gfx1201 uses wmma-512b);
+# a 9070 XT port is separate kernel work, tracked outside this script.
+# Users who want other arches take the install-source.sh path.
+HIP_ARCHES="${HIP_ARCHES:-gfx1151}"
+log "building rocm-cpp @ $ROCMCPP (arches: $HIP_ARCHES)"
 [[ -d "$ROCMCPP" ]] || die "rocm-cpp not found at $ROCMCPP"
 (
     cd "$ROCMCPP"
     [[ "$CLEAN" == "1" ]] && rm -rf build
-    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_HIP_ARCHITECTURES=gfx1151 >/dev/null
+    cmake -B build -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_HIP_ARCHITECTURES="$HIP_ARCHES" >/dev/null
     cmake --build build -j$(nproc) --target bitnet_decode rocm_cpp 2>&1 | tail -3
 )
 mkdir -p "$STAGE/rocm-cpp/bin" "$STAGE/rocm-cpp/lib"
@@ -56,11 +62,11 @@ cp "$ROCMCPP/build/librocm_cpp.so"   "$STAGE/rocm-cpp/lib/" 2>/dev/null || \
 strip --strip-unneeded "$STAGE/rocm-cpp/bin/bitnet_decode" || true
 strip --strip-unneeded "$STAGE/rocm-cpp/lib/"*.so 2>/dev/null || true
 
-tar --zstd -cf "$DIST/bitnet_decode-gfx1151.tar.zst" -C "$STAGE/rocm-cpp" bin/
+tar --zstd -cf "$DIST/bitnet_decode-rdna.tar.zst" -C "$STAGE/rocm-cpp" bin/
 if [[ -f "$STAGE/rocm-cpp/lib/librocm_cpp.so" ]]; then
-    tar --zstd -cf "$DIST/librocm_cpp-gfx1151.tar.zst" -C "$STAGE/rocm-cpp" lib/
+    tar --zstd -cf "$DIST/librocm_cpp-rdna.tar.zst" -C "$STAGE/rocm-cpp" lib/
 fi
-ok "rocm-cpp packaged"
+ok "rocm-cpp packaged (multi-arch: $HIP_ARCHES)"
 
 # ── agent-cpp — agent_cpp (arch-agnostic — pure C++) ────────
 log "building agent-cpp @ $AGENTCPP"
@@ -105,15 +111,22 @@ log "packaging halo-1bit models"
 [[ -d "$HALO1BIT/models" ]] || die "halo-1bit models not found at $HALO1BIT/models"
 mkdir -p "$STAGE/models"
 shopt -s nullglob
-for f in "$HALO1BIT"/models/*.h1b "$HALO1BIT"/models/*.htok "$HALO1BIT"/tokenizer.htok; do
+# Ship ONE model (the absmean-quantized default). Total asset budget is
+# 2 GB per file on GitHub Releases; all three .h1b variants together
+# would overflow. Users who want the qat / vanilla variants can grab
+# the halo-1bit repo directly.
+if [[ -f "$HALO1BIT/models/halo-1bit-2b-absmean.h1b" ]]; then
+    cp "$HALO1BIT/models/halo-1bit-2b-absmean.h1b" "$STAGE/models/halo-1bit-2b.h1b"
+elif [[ -f "$HALO1BIT/models/halo-1bit-2b.h1b" ]]; then
+    cp "$HALO1BIT/models/halo-1bit-2b.h1b"         "$STAGE/models/halo-1bit-2b.h1b"
+else
+    die "no halo-1bit-2b model found in $HALO1BIT/models/"
+fi
+for f in "$HALO1BIT"/models/*.htok "$HALO1BIT"/tokenizer.htok; do
     [[ -f "$f" ]] && cp "$f" "$STAGE/models/"
 done
 shopt -u nullglob
-# prefer the absmean flavor as the ship default
-if [[ -f "$STAGE/models/halo-1bit-2b-absmean.h1b" ]]; then
-    mv "$STAGE/models/halo-1bit-2b-absmean.h1b" "$STAGE/models/halo-1bit-2b.h1b"
-fi
-tar --zstd -cf "$DIST/halo-1bit-models-tq1_0.tar.zst" -C "$STAGE" models/
+tar --zstd -cf "$DIST/halo-1bit-2b.tar.zst" -C "$STAGE" models/
 ok "halo-1bit models packaged"
 
 # ── SHA256SUMS ──────────────────────────────────────────────

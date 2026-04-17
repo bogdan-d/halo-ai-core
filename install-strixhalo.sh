@@ -63,11 +63,15 @@ echo -e "${BOLD}╚════════════════════�
 echo
 
 # ── Step 1: Verify GPU ──────────────────────────────────────
-log "step 1/6: verifying gfx1151"
+log "step 1/6: verifying gfx1151 (Strix Halo)"
 if command -v rocminfo &>/dev/null; then
     GPU_ARCH=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1 || true)
 else
-    GPU_ARCH=""
+    if lspci 2>/dev/null | grep -q "Strix Halo\|Radeon 8060S"; then
+        GPU_ARCH="gfx1151"
+    else
+        GPU_ARCH=""
+    fi
 fi
 if [[ "$GPU_ARCH" != "gfx1151" ]]; then
     if [[ -n "$GPU_ARCH" ]]; then
@@ -101,12 +105,14 @@ trap "rm -rf $WORK" EXIT
 cd "$WORK"
 
 ASSETS=(
-    bitnet_decode-gfx1151.tar.zst
+    bitnet_decode-rdna.tar.zst
     agent_cpp.tar.zst
-    librocm_cpp-gfx1151.tar.zst
-    man-cave-gfx1151.tar.zst
-    halo-1bit-models-tq1_0.tar.zst
+    librocm_cpp-rdna.tar.zst
+    halo-1bit-2b.tar.zst
     SHA256SUMS
+)
+OPTIONAL_ASSETS=(
+    man-cave-rdna.tar.zst       # FTXUI TUI — not always shipped
 )
 
 for a in "${ASSETS[@]}"; do
@@ -115,6 +121,13 @@ for a in "${ASSETS[@]}"; do
         continue
     fi
     curl --fail-with-body -sLO "$SOURCE/$a" || die "fetch failed: $a"
+done
+for a in "${OPTIONAL_ASSETS[@]}"; do
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log "dry-run: would try $SOURCE/$a (optional)"
+        continue
+    fi
+    curl --fail-with-body -sLO "$SOURCE/$a" 2>/dev/null || log "optional asset $a not in release — skipping"
 done
 
 # GPG signature is optional (skipped if missing or --skip-gpg)
@@ -149,11 +162,11 @@ if [[ $DRY_RUN -eq 0 ]]; then
     sudo mkdir -p "$INSTALL_PREFIX/bin" "$INSTALL_PREFIX/lib"
     mkdir -p "$MODELS_DIR"
 
-    sudo tar --zstd -xf bitnet_decode-gfx1151.tar.zst -C "$INSTALL_PREFIX/"
-    sudo tar --zstd -xf agent_cpp.tar.zst            -C "$INSTALL_PREFIX/"
-    sudo tar --zstd -xf librocm_cpp-gfx1151.tar.zst  -C "$INSTALL_PREFIX/"
-    sudo tar --zstd -xf man-cave-gfx1151.tar.zst     -C "$INSTALL_PREFIX/"
-    tar --zstd -xf halo-1bit-models-tq1_0.tar.zst -C "$MODELS_DIR/"
+    sudo tar --zstd -xf bitnet_decode-rdna.tar.zst -C "$INSTALL_PREFIX/"
+    sudo tar --zstd -xf agent_cpp.tar.zst          -C "$INSTALL_PREFIX/"
+    sudo tar --zstd -xf librocm_cpp-rdna.tar.zst   -C "$INSTALL_PREFIX/"
+    [[ -f man-cave-rdna.tar.zst ]] && sudo tar --zstd -xf man-cave-rdna.tar.zst -C "$INSTALL_PREFIX/"
+    tar --zstd -xf halo-1bit-2b.tar.zst            -C "$MODELS_DIR/"
     sudo ldconfig
 else
     warn "dry-run: skipping install"

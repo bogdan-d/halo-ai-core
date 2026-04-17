@@ -51,7 +51,7 @@ cd halo-ai-core
 
 | path | who it's for | time | what it does |
 |------|--------|------|------|
-| [`./install-strixhalo.sh`](install-strixhalo.sh) | **gfx1151** (Strix Halo) users | ~5 min | downloads pre-built binaries from GH Releases, verifies SHA256 + GPG, wires systemd |
+| [`./install-strixhalo.sh`](install-strixhalo.sh) | **gfx1151** (Strix Halo) | ~5 min | downloads pre-built binaries from GH Releases, verifies SHA256 + GPG, wires systemd |
 | [`./install-source.sh`](install-source.sh) | any other AMD GPU | ~4 hrs | builds TheRock + rocm-cpp + agent-cpp + halo-1bit from source for your arch |
 
 why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB unified). one build produces a binary that runs bit-identically on every such box — no reason to rebuild from source every time. for anything else (gfx1030, gfx1100, CDNA), the wave32 WMMA kernels don't port, so source build with arch-specific codegen is the only safe option.
