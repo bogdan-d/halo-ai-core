@@ -180,7 +180,7 @@ o core é a fundação. encaixe o que precisar:
 
 | bloco | o que faz | estado |
 |-------|-----------|--------|
-| **nexus vpn** | mesh wireguard zero-trust com governança criptográfica (substitui ssh mesh) | [guia →](docs/wiki/Nexus-VPN.md) |
+| **nexus vpn** | mesh wireguard zero-trust com governança criptográfica | [guia →](docs/wiki/Nexus-VPN.md) |
 | **vlan tagging** | isolamento de rede 802.1Q (requer switch gerido) | [guia →](docs/wiki/Network-Layout.md) |
 | **pipeline de voz** | whisper + kokoro tts | [guia →](docs/wiki/Voice-Pipeline.md) |
 | **open webui** | frontend de chat | planeado |
@@ -211,16 +211,7 @@ são uma recomendação, não um requisito. [guia dos agentes principais →](do
 
 ## segurança
 
-**lemonade nexus** — vpn mesh wireguard zero-trust. ~~ssh mixer está obsoleto e removido.~~ nexus é o substituto.
-
-| | ssh mesh (antigo) | nexus (agora) |
-|---|---|---|
-| gestão de chaves | manual em cada máquina | ed25519 auto-gerado por servidor |
-| criptografia | apenas ssh | túneis wireguard chacha20-poly1305 |
-| descoberta de pares | nenhuma | protocolo gossip udp, automático |
-| rotação de chaves | manual | automática semanal com shamir |
-| governança | confiança plana | democrática — voto majoritário tier 1 |
-| traversal nat | nenhum | stun hole-punching + relay |
+**lemonade nexus** — vpn mesh wireguard zero-trust. a camada de rede.
 
 todos os serviços escutam em 127.0.0.1. nexus fornece o túnel criptografado. *"você não passará."*
 

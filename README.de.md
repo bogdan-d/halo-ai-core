@@ -180,7 +180,7 @@ der Kern ist das Fundament. steck an, was du brauchst:
 
 | Baustein | was er tut | Status |
 |----------|-----------|--------|
-| **Nexus VPN** | Zero-Trust WireGuard-Mesh mit kryptographischer Governance (ersetzt SSH-Mesh) | [Guide →](docs/wiki/Nexus-VPN.md) |
+| **Nexus VPN** | Zero-Trust WireGuard-Mesh mit kryptographischer Governance | [Guide →](docs/wiki/Nexus-VPN.md) |
 | **VLAN Tagging** | 802.1Q Netzwerk-Isolation (erfordert Managed Switch) | [Anleitung →](docs/wiki/Network-Layout.md) |
 | **Sprach-Pipeline** | whisper + kokoro tts | [Anleitung →](docs/wiki/Voice-Pipeline.md) |
 | **Open WebUI** | Chat-Oberfläche | geplant |
@@ -211,16 +211,7 @@ sie sind eine Empfehlung, keine Voraussetzung. [Kern-Agenten-Anleitung →](docs
 
 ## Sicherheit
 
-**Lemonade Nexus** — Zero-Trust WireGuard-Mesh-VPN. ~~SSH Mixer ist veraltet und entfernt.~~ Nexus ist der Ersatz.
-
-| | SSH-Mesh (alt) | Nexus (jetzt) |
-|---|---|---|
-| Schlüsselverwaltung | manuell auf jeder Maschine | Ed25519 auto-generiert pro Server |
-| Verschlüsselung | nur SSH | WireGuard ChaCha20-Poly1305 Tunnel |
-| Peer-Erkennung | keine | UDP-Gossip-Protokoll, automatisch |
-| Schlüsselrotation | manuell | automatisch wöchentlich mit Shamir |
-| Governance | flaches Vertrauen | demokratisch — Tier-1-Mehrheitsvotum |
-| NAT-Traversal | keines | STUN Hole-Punching + Relay |
+**Lemonade Nexus** — Zero-Trust WireGuard-Mesh-VPN. Die Netzwerkschicht.
 
 alle Dienste binden an 127.0.0.1. Nexus stellt den verschlüsselten Tunnel bereit. *"du kommst hier nicht vorbei."*
 
