@@ -74,7 +74,7 @@ echo -e "${BOLD}╚════════════════════�
 echo
 
 # ── Step 1: Verify GPU ──────────────────────────────────────
-log "step 1/6: verifying gfx1151 (Strix Halo)"
+log "step 1/7: verifying gfx1151 (Strix Halo)"
 if command -v rocminfo &>/dev/null; then
     GPU_ARCH=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1 || true)
 else
@@ -97,7 +97,7 @@ fi
 ok "GPU: $GPU_ARCH"
 
 # ── Step 2: ROCm userspace ──────────────────────────────────
-log "step 2/6: ROCm userspace (pacman)"
+log "step 2/7: ROCm userspace (pacman)"
 if ! command -v hipconfig &>/dev/null || [[ ! -d /opt/rocm ]]; then
     if [[ $DRY_RUN -eq 1 ]]; then
         warn "dry-run: would install rocm-hip-sdk"
@@ -110,7 +110,7 @@ else
 fi
 
 # ── Step 3: Fetch release manifest ──────────────────────────
-log "step 3/6: fetching release from $SOURCE"
+log "step 3/7: fetching release from $SOURCE"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
@@ -161,7 +161,7 @@ ok "assets downloaded"
 
 # ── Step 4: Verify integrity ────────────────────────────────
 if [[ $DRY_RUN -eq 0 ]]; then
-    log "step 4/6: verifying SHA256SUMS"
+    log "step 4/7: verifying SHA256SUMS"
     # No --ignore-missing: SHA256SUMS is authoritative, every listed file
     # must be on disk and match. A tampered SUMS that drops required rows
     # should not silently pass.
@@ -187,7 +187,7 @@ else
 fi
 
 # ── Step 5: Install ─────────────────────────────────────────
-log "step 5/6: installing to $INSTALL_PREFIX and $MODELS_DIR"
+log "step 5/7: installing to $INSTALL_PREFIX and $MODELS_DIR"
 
 # Canonicalize INSTALL_PREFIX — refuse paths outside the known-safe set
 # (prevents path-traversal via INSTALL_PREFIX=../../etc tricks).
@@ -231,7 +231,7 @@ fi
 ok "installed"
 
 # ── Step 6: systemd units ───────────────────────────────────
-log "step 6/6: systemd units"
+log "step 6/7: systemd units"
 if [[ $DRY_RUN -eq 0 ]]; then
     sudo tee /etc/systemd/system/halo-bitnet.service >/dev/null <<EOF
 [Unit]
@@ -273,11 +273,218 @@ else
     warn "dry-run: skipping systemd"
 fi
 
+# ── Step 7: private mesh — Caddy + Headscale + Tailscale ────
+# Sets up a private Tailscale-compatible mesh rooted on *this* box. No SaaS,
+# no port forwarding, no cloud. Every device that wants to talk to halo-ai
+# joins the mesh via a preauth key; the install prints a QR + one-liner.
+# Docs: docs/NETWORKING.md
+log "step 7/7: private mesh (Caddy + Headscale + Tailscale)"
+if [[ $DRY_RUN -eq 0 ]]; then
+    sudo pacman -S --needed --noconfirm \
+        caddy headscale tailscale qrencode >/dev/null
+    ok "network stack installed"
+
+    # ── Identity + secrets ──────────────────────────────────
+    HALO_HOSTNAME="$(cat /proc/sys/kernel/hostname)"
+    LAN_IP="$(ip -4 -br addr show scope global 2>/dev/null \
+              | awk 'NR==1{print $3}' | cut -d/ -f1)"
+    LAN_SUBNET="$(echo "$LAN_IP" | cut -d. -f1-3).0/24"
+    if [[ -f /etc/caddy/token.secret ]]; then
+        BEARER_TOKEN="$(sudo cat /etc/caddy/token.secret)"
+    else
+        BEARER_TOKEN="sk-halo-$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 40)"
+        echo "$BEARER_TOKEN" | sudo tee /etc/caddy/token.secret >/dev/null
+        sudo chown caddy:caddy /etc/caddy/token.secret
+        sudo chmod 0600 /etc/caddy/token.secret
+    fi
+
+    # ── Caddy reverse proxy ─────────────────────────────────
+    sudo tee /etc/caddy/Caddyfile >/dev/null <<CADDY_EOF
+{
+    admin off
+}
+
+# halo-ai inference — bearer-gated HTTPS, proxies bitnet_decode on :8080.
+${HALO_HOSTNAME}.local, ${LAN_IP} {
+    tls internal
+    @authorized header_regexp Authorization ^Bearer\s+${BEARER_TOKEN}\$
+    handle @authorized {
+        reverse_proxy 127.0.0.1:8080 {
+            flush_interval -1
+            transport http {
+                read_timeout  10m
+                write_timeout 10m
+            }
+        }
+    }
+    handle {
+        respond "unauthorized — bearer token required" 401
+    }
+}
+
+# Headscale coordination plane — clients connect here to join the mesh.
+# No bearer gate (tailscale protocol has its own auth).
+headscale.${HALO_HOSTNAME}.local {
+    tls internal
+    reverse_proxy 127.0.0.1:8380
+}
+
+# LAN-only bootstrap server — serves join.sh + CA cert + mobile page.
+http://${LAN_IP}:8099 {
+    root * /var/www/halo-bootstrap
+    file_server browse
+}
+CADDY_EOF
+    sudo mkdir -p /var/www/halo-bootstrap /var/log/caddy
+    sudo chown -R caddy:caddy /var/www/halo-bootstrap /var/log/caddy
+
+    # ── Headscale config patch ──────────────────────────────
+    sudo sed -i \
+        -e "s|^server_url:.*|server_url: https://headscale.${HALO_HOSTNAME}.local|" \
+        -e "s|^listen_addr: 127.0.0.1:8080|listen_addr: 127.0.0.1:8380|" \
+        /etc/headscale/config.yaml
+
+    # ── /etc/hosts + service enable ─────────────────────────
+    grep -q "headscale.${HALO_HOSTNAME}.local" /etc/hosts || \
+        echo "127.0.0.1 headscale.${HALO_HOSTNAME}.local ${HALO_HOSTNAME}.local" \
+            | sudo tee -a /etc/hosts >/dev/null
+    sudo systemctl enable --now caddy headscale tailscaled
+
+    # ── Trust Caddy's local CA ──────────────────────────────
+    CADDY_ROOT=/var/lib/caddy/pki/authorities/local/root.crt
+    for _ in 1 2 3 4 5; do [[ -f $CADDY_ROOT ]] && break; sleep 1; done
+    if [[ -f $CADDY_ROOT ]]; then
+        sudo install -m 644 "$CADDY_ROOT" \
+            /etc/ca-certificates/trust-source/anchors/halo-local.crt
+        sudo trust extract-compat
+        sudo update-ca-trust
+        sudo systemctl restart tailscaled
+        ok "local CA trusted system-wide"
+    else
+        warn "Caddy CA not yet generated — rerun 'sudo trust extract-compat' later"
+    fi
+
+    # ── Headscale user + 24h reusable preauth key ───────────
+    sudo headscale users create "$RUN_USER" >/dev/null 2>&1 || true
+    HS_UID=$(sudo headscale users list 2>&1 \
+            | awk -v u="$RUN_USER" 'tolower($0) ~ u { for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+$/) { print $i; exit } }')
+    HS_UID=${HS_UID:-1}
+    PREAUTH_KEY=$(sudo headscale preauthkeys create -u "$HS_UID" --reusable --expiration 24h 2>&1 | tail -1)
+
+    # ── Enrol this box as the first mesh node ───────────────
+    sudo tailscale up --reset \
+        --login-server="https://headscale.${HALO_HOSTNAME}.local" \
+        --authkey="$PREAUTH_KEY" \
+        --hostname="${HALO_HOSTNAME}-box" >/dev/null 2>&1 || true
+    TAILNET_IP=$(tailscale ip -4 2>/dev/null | head -1)
+
+    # ── Bootstrap artifacts for peer devices ────────────────
+    HALO_PUBKEY_FILE="/home/${RUN_USER}/.ssh/id_ed25519.pub"
+    HALO_PUBKEY=$([[ -f "$HALO_PUBKEY_FILE" ]] && cat "$HALO_PUBKEY_FILE" || echo '')
+    sudo tee /var/www/halo-bootstrap/join.sh >/dev/null <<JOIN_EOF
+#!/usr/bin/env bash
+# Join the halo-ai mesh (Arch-family peers):
+#   curl -fsSL http://${LAN_IP}:8099/join.sh | sudo bash
+set -euo pipefail
+
+AUTHKEY="${PREAUTH_KEY}"
+HALO_PUBKEY="${HALO_PUBKEY}"
+
+command -v tailscale >/dev/null 2>&1 || pacman -S --noconfirm tailscale
+systemctl enable --now tailscaled
+grep -q "headscale.${HALO_HOSTNAME}.local" /etc/hosts || \\
+    echo "${LAN_IP} headscale.${HALO_HOSTNAME}.local" >> /etc/hosts
+curl -fsSL http://${LAN_IP}:8099/halo-local.crt \\
+    -o /etc/ca-certificates/trust-source/anchors/halo-local.crt
+trust extract-compat
+update-ca-trust
+systemctl restart tailscaled
+tailscale up --reset \\
+    --login-server=https://headscale.${HALO_HOSTNAME}.local \\
+    --authkey="\$AUTHKEY" \\
+    --hostname="\$(hostname)"
+if [[ -n "\$HALO_PUBKEY" ]]; then
+    PEER_USER="\${SUDO_USER:-\$USER}"
+    PEER_HOME=\$(getent passwd "\$PEER_USER" | cut -d: -f6)
+    install -d -m 700 -o "\$PEER_USER" -g "\$PEER_USER" "\$PEER_HOME/.ssh"
+    touch "\$PEER_HOME/.ssh/authorized_keys"
+    chown "\$PEER_USER:\$PEER_USER" "\$PEER_HOME/.ssh/authorized_keys"
+    chmod 600 "\$PEER_HOME/.ssh/authorized_keys"
+    grep -qF "\$HALO_PUBKEY" "\$PEER_HOME/.ssh/authorized_keys" || \\
+        echo "\$HALO_PUBKEY" >> "\$PEER_HOME/.ssh/authorized_keys"
+fi
+echo "joined — tailnet: \$(tailscale ip -4 | head -1)"
+JOIN_EOF
+    sudo chmod 755 /var/www/halo-bootstrap/join.sh
+    [[ -f $CADDY_ROOT ]] && sudo install -m 644 "$CADDY_ROOT" \
+        /var/www/halo-bootstrap/halo-local.crt
+
+    # ── Mobile onboarding page (target of the QR) ───────────
+    sudo tee /var/www/halo-bootstrap/m.html >/dev/null <<HTML_EOF
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>halo-ai · join the mesh</title>
+<style>body{font-family:system-ui;max-width:28rem;margin:2rem auto;padding:0 1rem;line-height:1.5}
+code{background:#eee;padding:.1rem .3rem;border-radius:3px}
+.k{word-break:break-all;display:block;padding:.6rem;background:#f4f4f4;border-radius:6px;margin:.5rem 0;user-select:all}
+h1{font-size:1.3rem}</style>
+<h1>🌐 halo-ai · join the mesh</h1>
+<ol>
+ <li>Install <a href="https://tailscale.com/download">Tailscale</a>.</li>
+ <li>Settings → <em>Use alternate coordination server</em>:
+   <code class=k>https://headscale.${HALO_HOSTNAME}.local</code></li>
+ <li>Paste the auth key (reusable, 24h):
+   <code class=k>${PREAUTH_KEY}</code></li>
+ <li>Your LLM endpoint:
+   <code class=k>https://${HALO_HOSTNAME}.local/v1</code>
+   API key:
+   <code class=k>${BEARER_TOKEN}</code></li>
+</ol>
+<p>Any OpenAI-compatible app works: Chatbox · LM Studio · SillyTavern · Continue · Jan.</p>
+HTML_EOF
+    sudo chown -R caddy:caddy /var/www/halo-bootstrap
+    sudo systemctl restart caddy
+
+    # ── Firewall open the mesh + reverse proxy to LAN ───────
+    if systemctl is-active ufw >/dev/null 2>&1; then
+        sudo ufw allow from "$LAN_SUBNET" to any port 8099 proto tcp >/dev/null
+        sudo ufw allow from "$LAN_SUBNET" to any port 443   proto tcp >/dev/null
+        sudo ufw allow from "$LAN_SUBNET" to any port 80    proto tcp >/dev/null
+        sudo ufw reload >/dev/null 2>&1 || true
+        ok "UFW allowed 80/443/8099 from $LAN_SUBNET"
+    fi
+
+    ok "mesh online"
+else
+    warn "dry-run: skipping network stack"
+fi
+
+# ── Final summary with QR + endpoints ───────────────────────
 echo
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║  done. the 1-bit monster is awake.                       ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo
-echo "  curl http://localhost:8080/v1/models"
-echo "  journalctl --user -fu halo-bitnet"
-echo "  man-cave                     # FTXUI dashboard"
+if [[ $DRY_RUN -eq 0 ]] && [[ -n "${LAN_IP:-}" ]]; then
+    echo -e "${BOLD}📱 scan to join from a phone${NC}"
+    qrencode -t ansiutf8 -o - "http://${LAN_IP}:8099/m.html" 2>/dev/null || \
+        echo "   (install 'qrencode' to render the QR; URL is http://${LAN_IP}:8099/m.html)"
+    echo
+    echo -e "${BOLD}🔗 endpoints${NC}"
+    echo -e "   LAN:     ${CYAN}https://${HALO_HOSTNAME}.local/v1${NC}   (trust CA once)"
+    [[ -n "${TAILNET_IP:-}" ]] && \
+        echo -e "   Tailnet: ${CYAN}http://${TAILNET_IP}:8080/v1${NC}"
+    echo
+    echo -e "${BOLD}🔑 bearer token${NC} (OpenAI-compatible API key)"
+    echo -e "   ${YELLOW}${BEARER_TOKEN}${NC}"
+    echo
+    echo -e "${BOLD}🌐 join a peer (Arch-family)${NC}"
+    echo -e "   ${CYAN}curl -fsSL http://${LAN_IP}:8099/join.sh | sudo bash${NC}"
+    echo -e "   phones / Windows / Mac: scan QR above → follow the page"
+    echo
+    echo -e "${BOLD}📖 docs${NC}   halo-ai-core/docs/NETWORKING.md"
+    echo
+fi
+echo "  curl -H 'Authorization: Bearer \$TOKEN' http://localhost:8080/v1/models"
+echo "  journalctl -fu halo-bitnet"
+echo "  sudo headscale nodes list      # see peers"
+echo "  man-cave                       # FTXUI dashboard"
