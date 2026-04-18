@@ -1,24 +1,37 @@
-# bleeding-edge Wiki
+# halo-ai-core Wiki — the 1-bit monster
 
-> *"Cubically Contained" — The Headstones*
+Local AI on AMD Strix Halo. No Python at runtime. No cloud. No telemetry. No subscriptions. All C++.
 
-## Navigation
+## Start here
 
-- [Home](Home.md) — You are here
-- [Quick Start](Quick-Start.md) — 30-second setup
-- [MLX Setup Guide](MLX-Setup-Guide.md) — Full setup from scratch
-- [Benchmarks](Benchmarks.md) — MLX vs vLLM vs Vulkan
-- [Replication](Replication.md) — Reproduce our results
-- [Architecture](Architecture.md) — Why MLX wins
-- [Troubleshooting](Troubleshooting.md) — Common issues
-- [Hardware](Hardware.md) — Tested configurations
+- **[Getting-Started](Getting-Started.md)** — install, verify, first chat completion
+- **[Architecture](Architecture.md)** — how the three engineering repos fit together
+- **[Agents](Agents.md)** — the 17 C++ specialists and what each one does
+- **[Integrations](Integrations.md)** — point your apps at the stack (curl, Python, Node, C++, WebUI)
 
-## What Is This
+## Reference
 
-The experimental branch of [halo-ai CORE](https://github.com/stampby/halo-ai-core). Current focus: MLX Engine ROCm — pure C++ LLM inference that's 29-85% faster than vLLM on AMD Strix Halo.
+- **[Benchmarks](Benchmarks.md)** — PPL, KLD, top-1 agreement, decode speed; how to reproduce
+- **[Troubleshooting](Troubleshooting.md)** — common failures and their fixes
+- **[Contributing](Contributing.md)** — how to add arch coverage, submit community builds, port kernels to non-Strix hardware
 
-## Links
+## Project shape
 
-- [halo-ai CORE](https://github.com/stampby/halo-ai-core) — Stable release
-- [Discord](https://discord.gg/dSyV646eBs) — Community
-- [r/MidlifeCrisisAI](https://reddit.com/r/MidlifeCrisisAI) — Write-ups
+```
+halo-ai-core         ← you are here. the installer + orchestrator.
+├── rocm-cpp         ← the inference engine (HIP, ternary kernels, HTTP server)
+├── agent-cpp        ← the agent runtime (17 specialists on a message bus)
+└── halo-1bit        ← the model format (.h1b) + training pipeline
+```
+
+All four repos MIT-licensed. Everything reproducible from source (`install-source.sh`),
+everything fast-installable for Strix Halo (`install-strixhalo.sh`).
+
+## Movie quotes we live by
+
+- *"I know kung fu."*
+- *"they get the kingdom. they forge their own keys."*
+- *"there is no cloud. there is only zuul."*
+- *"the 1-bit monster is already here. it just had to learn to count."*
+
+— *stamped by the architect*
