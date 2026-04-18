@@ -213,7 +213,30 @@ if [[ $DRY_RUN -eq 0 ]]; then
     sudo tar --zstd -xf librocm_cpp-rdna.tar.zst   -C "$INSTALL_PREFIX/"
     [[ -f man-cave-rdna.tar.zst ]] && sudo tar --zstd -xf man-cave-rdna.tar.zst -C "$INSTALL_PREFIX/"
     tar --zstd -xf halo-1bit-2b.tar.zst            -C "$MODELS_DIR/" --strip-components=1
+
+    # Arch/CachyOS does NOT include /usr/local/lib in ld.so.conf by default
+    # (unlike Debian/Ubuntu). Without this, bitnet_decode fails with
+    # "librocm_cpp.so: cannot open shared object file" even though the .so
+    # is extracted. Register the path before running ldconfig.
+    LIB_PATH="${INSTALL_PREFIX_REAL}/lib"
+    CONF_FILE="/etc/ld.so.conf.d/halo-ai.conf"
+    if [[ ! -f "$CONF_FILE" ]] || ! grep -qxF "$LIB_PATH" "$CONF_FILE" 2>/dev/null; then
+        echo "$LIB_PATH" | sudo tee "$CONF_FILE" >/dev/null
+        ok "registered $LIB_PATH with ld.so.conf.d"
+    fi
     sudo ldconfig
+
+    # Workaround for a hardcoded tokenizer path in the v0.2.x release
+    # binary (expects ~/halo-1bit/models/*.htok regardless of actual
+    # install location). Symlink until the binary is rebuilt with a
+    # relocatable lookup. Tracked as an issue on halo-ai-core.
+    COMPAT_DIR="$HOME/halo-1bit/models"
+    if [[ -f "$MODELS_DIR/halo-1bit-2b.htok" && ! -e "$COMPAT_DIR/halo-1bit-2b.htok" ]]; then
+        mkdir -p "$COMPAT_DIR"
+        ln -sf "$MODELS_DIR/halo-1bit-2b.htok" "$COMPAT_DIR/halo-1bit-2b.htok"
+        ln -sf "$MODELS_DIR/halo-1bit-2b.h1b"  "$COMPAT_DIR/halo-1bit-2b.h1b"
+        warn "linked $MODELS_DIR → $COMPAT_DIR (tokenizer path workaround)"
+    fi
 else
     warn "dry-run: skipping install"
 fi
