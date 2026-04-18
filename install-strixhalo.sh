@@ -11,6 +11,8 @@
 #
 # Time: ~5 minutes. For non-Strix-Halo users, use ./install-source.sh (~4 hours).
 set -euo pipefail
+# Pin PATH against a malicious inherit. All tools we use live here.
+PATH=/usr/bin:/bin
 
 # ── Configuration ───────────────────────────────────────────
 REPO="${REPO:-stampby/halo-ai-core}"
@@ -53,6 +55,15 @@ EOF
         *) die "unknown arg: $1" ;;
     esac
 done
+
+# ── Source protocol check (after --from-local may have overridden SOURCE) ──
+# HTTP has no transport integrity; we still fall back to SHA256 (+ GPG when
+# available) for those, but warn loudly so the user knows what they're doing.
+case "$SOURCE" in
+    https://*|file://*) ;;
+    http://*)  warn "HTTP source — transport unauthenticated; GPG-sign your mirror" ;;
+    *)         die "unsupported source scheme in SOURCE=$SOURCE" ;;
+esac
 
 # ── Banner ──────────────────────────────────────────────────
 echo
@@ -101,7 +112,7 @@ fi
 # ── Step 3: Fetch release manifest ──────────────────────────
 log "step 3/6: fetching release from $SOURCE"
 WORK=$(mktemp -d)
-trap "rm -rf $WORK" EXIT
+trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 
 ASSETS=(
@@ -151,7 +162,10 @@ ok "assets downloaded"
 # ── Step 4: Verify integrity ────────────────────────────────
 if [[ $DRY_RUN -eq 0 ]]; then
     log "step 4/6: verifying SHA256SUMS"
-    sha256sum -c SHA256SUMS --ignore-missing --quiet || die "checksum verification FAILED"
+    # No --ignore-missing: SHA256SUMS is authoritative, every listed file
+    # must be on disk and match. A tampered SUMS that drops required rows
+    # should not silently pass.
+    sha256sum -c SHA256SUMS --quiet || die "checksum verification FAILED"
     ok "checksums match"
 
     if [[ -f SHA256SUMS.asc && $SKIP_GPG -eq 0 ]]; then
@@ -160,6 +174,10 @@ if [[ $DRY_RUN -eq 0 ]]; then
         else
             warn "GPG signature invalid or architect's key not imported"
             warn "import via: curl https://github.com/stampby.gpg | gpg --import"
+            # Refuse to proceed non-interactively — no prompt to answer.
+            if [[ ! -t 0 ]]; then
+                die "GPG signature invalid and stdin is not a tty — aborting"
+            fi
             read -rp "continue anyway? (y/N): " cont
             [[ "$cont" =~ ^[Yy]$ ]] || die "aborted on unverified signature"
         fi
@@ -170,6 +188,22 @@ fi
 
 # ── Step 5: Install ─────────────────────────────────────────
 log "step 5/6: installing to $INSTALL_PREFIX and $MODELS_DIR"
+
+# Canonicalize INSTALL_PREFIX — refuse paths outside the known-safe set
+# (prevents path-traversal via INSTALL_PREFIX=../../etc tricks).
+INSTALL_PREFIX_REAL="$(readlink -f "$INSTALL_PREFIX" 2>/dev/null || echo "$INSTALL_PREFIX")"
+case "$INSTALL_PREFIX_REAL" in
+    /usr/local|/usr/local/*|/opt|/opt/*|"$HOME"|"$HOME"/*) ;;
+    *) die "INSTALL_PREFIX=$INSTALL_PREFIX_REAL is outside /usr/local, /opt, or \$HOME — refusing" ;;
+esac
+
+# Resolve the user the service should run as. If invoked via plain sudo,
+# SUDO_USER is the real user. Fall back to $USER. Never allow root.
+RUN_USER="${SUDO_USER:-$USER}"
+if [[ "$RUN_USER" == "root" || -z "$RUN_USER" ]]; then
+    die "refusing to install systemd unit as root — re-run this script without sudo login shell"
+fi
+
 if [[ $DRY_RUN -eq 0 ]]; then
     sudo mkdir -p "$INSTALL_PREFIX/bin" "$INSTALL_PREFIX/lib"
     mkdir -p "$MODELS_DIR"
@@ -198,7 +232,7 @@ Type=simple
 ExecStart=$INSTALL_PREFIX/bin/bitnet_decode $MODELS_DIR/halo-1bit-2b.h1b --server 8080
 Restart=on-failure
 RestartSec=3
-User=$USER
+User=$RUN_USER
 
 [Install]
 WantedBy=multi-user.target
@@ -214,7 +248,7 @@ Type=simple
 ExecStart=$INSTALL_PREFIX/bin/agent_cpp
 Restart=on-failure
 RestartSec=3
-User=$USER
+User=$RUN_USER
 
 [Install]
 WantedBy=multi-user.target
