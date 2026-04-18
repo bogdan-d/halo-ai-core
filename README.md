@@ -155,6 +155,7 @@ paid API providers (OpenAI, Anthropic, Groq, DeepSeek, xAI, OpenRouter) are supp
 
 | doc | what it covers |
 |-----|---|
+| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | **point your apps at the stack — openai sdk, curl, python, node, c++, webui, mobile** |
 | [docs/benchmark-comparison.md](docs/benchmark-comparison.md) | reproducible numbers vs llama.cpp / vLLM / MLX |
 | [docs/replicate.md](docs/replicate.md) | step-by-step: build the monster on your box |
 | [docs/mlx-setup-guide.md](docs/mlx-setup-guide.md) | the MLX path (comparison / optional) |
