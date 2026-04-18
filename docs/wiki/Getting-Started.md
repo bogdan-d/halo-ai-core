@@ -7,8 +7,10 @@ anything else that needs building from source.
 
 - **Hardware**: AMD Strix Halo (Radeon 8060S, gfx1151) — or any Ryzen AI APU /
   RDNA3+ dGPU if you're on the source path
-- **OS**: Arch Linux (CachyOS works too). Bare metal recommended; podman works
-  for headless setups.
+- **OS**: **CachyOS**. This is not optional for the NPU path — the XDNA2 NPU
+  on Strix Halo only works correctly on CachyOS. Stock Arch, Ubuntu, Fedora,
+  EndeavourOS, Manjaro either miss the NPU patches or silently fall back to
+  CPU. See the CachyOS gate in the main README for details.
 - **Privileges**: passwordless `sudo` for the installer
 - **Disk**: ~20 GiB free (build artifacts, kernels, models)
 
@@ -59,17 +61,36 @@ Expected: ~300 ms round-trip, ~85 tok/s decode steady-state.
 ## 5. Point your apps at it
 
 See the [Integrations](Integrations.md) page. Short version: any OpenAI-compat
-client works against `http://127.0.0.1:8080/v1` with any non-empty API key.
+client works against `http://127.0.0.1:8080/v1` with any non-empty API key —
+or, from another device on the mesh, against `https://<halo-hostname>.local/v1`
+with the bearer token the installer printed.
 
-## 6. What's next
+## 6. Add other devices to the private mesh
+
+`install-strixhalo.sh` stood up a **Headscale** coordination server on the halo
+box and printed a QR code + one-liner at the end. Rerun the installer if you
+missed it (idempotent), or pull the onboarding bits directly:
+
+| device type | how |
+|---|---|
+| another Arch-family box (laptop, other halo) | `curl -fsSL http://<halo-lan-ip>:8099/join.sh \| sudo bash` |
+| phone (iOS / Android) | scan the QR → follow the mobile onboarding page |
+| Windows / Mac / Ubuntu / Fedora | install Tailscale, point at `https://headscale.<halo-hostname>.local`, paste the preauth key |
+
+The mesh is **bi-directional full-mesh WireGuard** — any peer reaches any
+other peer. Full walkthrough: [Networking](../NETWORKING.md).
+
+Once joined, your OpenAI-compatible app (Chatbox, LM Studio, SillyTavern,
+Continue, Jan, etc.) talks to `https://<halo-hostname>.local/v1` with the
+printed bearer token. Zero port forwarding, zero cloud.
+
+## 7. What's next
 
 - **Voice loop**: start `whisper-server` and `kokoro-tts` systemd units, then
   see the STT→LLM→TTS example in [Integrations](Integrations.md).
 - **Agent specialists**: `agent_cpp` is running in headless mode. To connect
   Discord, set `DISCORD_TOKEN` + `DISCORD_WATCH_CHANNELS` in the service
   environment. See [Agents](Agents.md).
-- **Expose to LAN/phone**: SSH tunnel or caddy reverse proxy with bearer auth
-  — both covered in [Integrations](Integrations.md).
 
 ## Uninstall
 

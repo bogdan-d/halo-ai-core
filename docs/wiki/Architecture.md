@@ -7,7 +7,6 @@ How the four repos fit together.
 │  halo-ai-core  (you are here)                                   │
 │     install-strixhalo.sh ── pull pre-built binaries from GH     │
 │     install-source.sh    ── build everything from source        │
-│     iso/ + build-iso.sh  ── make a bootable USB                 │
 │     release/              ── build + publish pipeline           │
 │     orchestrator/         ── systemd units                      │
 └────────┬────────────────────┬───────────────────┬───────────────┘
@@ -35,6 +34,14 @@ How the four repos fit together.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
+│   peer devices (laptop · phone · other halo boxes)       │ ← consumers
+├─────────────────────────────────────────────────────────┤
+│   Tailscale client on each peer ─── WireGuard mesh ─     │ ← private net
+├─────────────────────────────────────────────────────────┤
+│   Headscale control plane (self-hosted, :8380 local)     │ ← coordination
+├─────────────────────────────────────────────────────────┤
+│   Caddy reverse proxy (:443) — tls internal + bearer     │ ← edge / auth
+├─────────────────────────────────────────────────────────┤
 │            agent-cpp — 17 C++ specialists                │ ← orchestration
 ├─────────────────────────────────────────────────────────┤
 │  rocm-cpp server (:8080) — OpenAI-compat, SSE streaming  │ ← API surface
@@ -50,6 +57,10 @@ How the four repos fit together.
 │              Arch Linux · systemd · btrfs                │ ← OS
 └─────────────────────────────────────────────────────────┘
 ```
+
+The top three layers (peers · WireGuard · Headscale) are what `install-strixhalo.sh`
+step 7/7 sets up. Peer devices pull a preauth key from the halo box and join the mesh
+in one command / one QR scan. Full walkthrough: [Networking](../NETWORKING.md).
 
 ## Key architectural decisions
 

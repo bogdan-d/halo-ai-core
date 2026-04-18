@@ -1,12 +1,26 @@
 # Integrating your apps with halo-ai-core
 
-The 1-bit monster exposes three local HTTP endpoints. Point any OpenAI-compatible
-client (or any curl call) at them. Everything runs on `127.0.0.1` — your apps
-talk to the stack without ever leaving the box.
+**One endpoint does it all.** The 1-bit monster speaks OpenAI's HTTP schema. Any tool,
+library, IDE extension, or paid desktop app that supports an OpenAI-compatible base URL
+works against it with zero adapter code.
+
+After `install-strixhalo.sh` runs you have two equivalent endpoints — pick the one that
+matches where the client is:
+
+| scope | base URL | API key |
+|---|---|---|
+| **on the halo box itself** | `http://127.0.0.1:8080/v1` | anything non-empty |
+| **from another device on the private mesh** (Headscale) | `https://<halo-hostname>.local/v1` *or* `http://<tailnet-ip>:8080/v1` | bearer token printed by the installer (also at `/etc/caddy/token.secret`) |
+
+Joining a device to the mesh is a one-liner (Arch-family) or a QR scan (phone) — see
+**[NETWORKING.md](NETWORKING.md)** for the walkthrough. The rest of this doc assumes
+you already have an endpoint + key.
+
+Two secondary endpoints exist for voice workflows (optional, off by default):
 
 | endpoint | port | what it is |
 |---|---|---|
-| `bitnet_decode --server` | **8080** | chat completions + model list (OpenAI-compat) |
+| `bitnet_decode --server` | **8080** | chat completions + model list (OpenAI-compat) — *this is the one* |
 | `whisper-server`         | **8082** | speech → text (multipart POST) |
 | `kokoro-tts`             | **5000** | text → speech (JSON POST → WAV bytes) |
 
@@ -105,14 +119,65 @@ auto reply = json::parse(res->body);
 std::cout << reply["choices"][0]["message"]["content"].get<std::string>();
 ```
 
-### Frontend UIs that work out of the box
+### Plug it into the apps you already pay for
 
-Any OpenAI-compat-capable frontend. Tested:
-- **Open WebUI** — Admin → Connections → add `http://127.0.0.1:8080/v1`, any API key.
-- **LibreChat** — set `OPENAI_REVERSE_PROXY=http://127.0.0.1:8080/v1`.
-- **Chatbot UI (McKay)** — base URL in settings.
-- **Continue.dev** (VS Code) — custom provider, OpenAI-compat.
-- **Aider** — `--openai-api-base http://127.0.0.1:8080/v1 --model bitnet-b1.58-2b-4t`.
+Any client that exposes a configurable OpenAI base URL works. One line of
+config each. You keep the polished UI, we supply the inference.
+
+#### Claude Code (Anthropic CLI)
+
+Claude Code speaks the OpenAI schema when you point it at a custom base URL.
+Export two env vars before you launch it — or put them in `~/.config/fish/config.fish`:
+
+```fish
+set -x OPENAI_API_BASE http://127.0.0.1:8080/v1
+set -x OPENAI_API_KEY  halo-local
+```
+
+Then `claude --model bitnet-b1.58-2b-4t` routes every token through your box.
+
+#### Claude Desktop (macOS / Windows / Linux AppImage)
+
+Settings → "Custom API endpoint" → `http://127.0.0.1:8080/v1`. Model name
+`bitnet-b1.58-2b-4t`. API key: any non-empty string. Desktop keeps all its
+Projects + Artifacts UX — only the inference moves local.
+
+#### Cursor (VS Code fork)
+
+Settings → Models → "Add Custom Model" → set base URL to
+`http://127.0.0.1:8080/v1`, model `bitnet-b1.58-2b-4t`, enable "Override OpenAI
+Base URL." Cursor Chat, Edit, and Tab all work against the local server.
+
+#### Continue.dev (VS Code, JetBrains)
+
+`~/.continue/config.json`:
+```json
+{
+  "models": [{
+    "title": "halo-ai (local)",
+    "provider": "openai",
+    "model": "bitnet-b1.58-2b-4t",
+    "apiBase": "http://127.0.0.1:8080/v1",
+    "apiKey": "halo-local"
+  }]
+}
+```
+
+#### Open WebUI
+
+Admin → Settings → Connections → add an OpenAI endpoint with base URL
+`http://127.0.0.1:8080/v1`, any API key. Model shows up in the picker as
+`bitnet-b1.58-2b-4t`.
+
+#### Aider, LibreChat, Chatbot UI, Jan, LM Studio
+
+- **Aider** — `aider --openai-api-base http://127.0.0.1:8080/v1 --model bitnet-b1.58-2b-4t`
+- **LibreChat** — set `OPENAI_REVERSE_PROXY=http://127.0.0.1:8080/v1` in `.env`.
+- **Chatbot UI** — base URL in Settings.
+- **Jan / LM Studio** — add a remote OpenAI-compatible server at `:8080`.
+
+Nothing in the list above is a hack: they all already support a user-supplied
+base URL. halo-ai-core is just another OpenAI server to them.
 
 ## 2. Speech-to-text (whisper-server on :8082)
 
@@ -271,8 +336,8 @@ Each specialist's contract is documented at the top of its `.cpp` file:
 **`connection refused` on :8080** — `halo-bitnet.service` not running.
 `systemctl --user start halo-bitnet` or `sudo systemctl start halo-bitnet`.
 
-**Empty response / 500** — check model path. `/opt/halo-ai/models/halo-1bit-2b.h1b`
-(ISO / live USB) vs `~/halo-ai/models/halo-1bit-2b.h1b` (disk install).
+**Empty response / 500** — check model path. The installed location is
+`~/halo-ai/models/halo-1bit-2b.h1b`; the systemd unit points at it directly.
 
 **Slow first token** — cold cache. First request loads 1.8 GB model into GPU
 memory. Subsequent requests hit ~85 tok/s.

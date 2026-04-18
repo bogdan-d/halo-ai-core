@@ -1,6 +1,7 @@
 # Troubleshooting
 
 Common failures and their fixes, ranked by how often they come up.
+Private-mesh / Headscale / Caddy issues: jump to [Networking](#networking) below.
 
 ## Install
 
@@ -128,6 +129,66 @@ unit's `Environment=GH_TOKEN=ghp_...`.
 
 GitHub rate-limited the app. The specialists don't currently handle 403
 retry-after; fix pending. Wait 5 min and it clears.
+
+## Networking
+
+See **[NETWORKING.md](../NETWORKING.md)** for the full stack walkthrough.
+Ranked common failures:
+
+### `x509: certificate signed by unknown authority` — on a peer trying to join
+
+The peer hasn't trusted the halo box's local CA. Fix:
+
+```bash
+sudo curl -fsSL http://<halo-lan-ip>:8099/halo-local.crt \
+  -o /etc/ca-certificates/trust-source/anchors/halo-local.crt
+sudo trust extract-compat && sudo update-ca-trust
+sudo systemctl restart tailscaled
+```
+
+The `join.sh` bootstrap does this automatically for Arch-family peers. For
+Ubuntu/Debian peers use `/usr/local/share/ca-certificates/halo-local.crt` and
+`sudo update-ca-certificates` instead.
+
+### `Failed to connect to 10.0.0.10 port 8099`
+
+UFW is blocking the bootstrap port. `install-strixhalo.sh` adds an allow rule
+for the detected `/24`, but if your peer is on a different subnet:
+
+```bash
+sudo ufw allow from <peer-subnet>/24 to any port 8099 proto tcp
+sudo ufw reload
+```
+
+### `preauth key expired`
+
+Keys default to 24h reusable. Regenerate:
+
+```bash
+sudo headscale preauthkeys create -u 1 --reusable --expiration 24h
+```
+
+Then reprint the QR / join one-liner or update the mobile onboarding page at
+`/var/www/halo-bootstrap/m.html`.
+
+### `halo-bitnet.service` returns 401 even with the right token
+
+Caddy's bearer regex in `/etc/caddy/Caddyfile` includes the token verbatim.
+If you regenerated `/etc/caddy/token.secret`, you have to rewrite the Caddyfile
+(or re-run the relevant block of `install-strixhalo.sh`). Restart with
+`sudo systemctl restart caddy`.
+
+### `MagicDNS warnings` on the halo box (systemd-resolved/NetworkManager)
+
+Benign — Arch's resolved + NM wiring can confuse tailscale's MagicDNS probe.
+Names in `*.ts.net` may not resolve locally; the tailnet IPs always work. If
+MagicDNS actually fails and you need hostnames, add entries to `/etc/hosts`
+on each peer, or run `sudo resolvectl dns tailscale0 100.100.100.100`.
+
+### `Main process exited, code=dumped, status=11/SEGV` on bitnet_decode
+
+Historical — fixed in rocm-cpp commit `8f764d7`. If you're on an older binary,
+update with `install-strixhalo.sh --tag latest`.
 
 ## If all else fails
 

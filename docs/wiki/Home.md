@@ -8,6 +8,7 @@ Local AI on AMD Strix Halo. No Python at runtime. No cloud. No telemetry. No sub
 - **[Architecture](Architecture.md)** — how the three engineering repos fit together
 - **[Agents](Agents.md)** — the 17 C++ specialists and what each one does
 - **[Integrations](Integrations.md)** — point your apps at the stack (curl, Python, Node, C++, WebUI)
+- **[Networking](../NETWORKING.md)** — private mesh (Caddy + Headscale + Tailscale); phone / laptop / multi-node onboarding
 
 ## Reference
 

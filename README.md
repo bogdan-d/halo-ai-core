@@ -137,9 +137,30 @@ pick what you want. drop the rest.
 | **agent_cpp → echo_ear+echo_mouth** | voice loop | optional (whisper + kokoro services) |
 | **agent_cpp → quartermaster/magistrate/librarian** | GitHub automation | optional (set GH_TOKEN) |
 | **agent_cpp → anvil** | CI runner | optional |
-| **caddy** | reverse proxy + bearer auth | optional |
+| **caddy** | reverse proxy + bearer auth | installed + configured |
+| **headscale** | self-hosted mesh (Tailscale-compatible) | installed + configured |
 | **man-cave TUI** | FTXUI dashboard over SSH | optional (v2) |
 | **orchestrator** | systemd unit wiring | included |
+
+## private mesh
+
+halo-ai ships **private-mesh-by-default**. No port forwarding. No SaaS. No cloud dependency.
+
+The install script stands up [Headscale](https://github.com/juanfont/headscale) — a self-hosted, open-source re-implementation of the Tailscale control plane — and enrols the halo box as the first node in its own mesh. Every other device (your laptop, phone, game PC, another halo box) joins by scanning a QR code or running a one-liner the installer prints.
+
+- **Bi-directional full-mesh** — any peer reaches any other peer over WireGuard; no hub-and-spoke.
+- **Zero vendor lock-in** — Headscale is OSS, the clients are the standard Tailscale apps on every OS.
+- **No keys leave your box** — Headscale stores the coordination state locally in SQLite.
+- **Bearer-gated HTTPS** — Caddy terminates TLS with a local CA and enforces an OpenAI-style `Authorization: Bearer ...` token.
+
+Adding a peer (Arch-family):
+```bash
+curl -fsSL http://<halo-lan-ip>:8099/join.sh | sudo bash
+```
+
+Adding a phone: scan the QR code the installer prints → follow the 3-step mobile page → done.
+
+Full walkthrough in **[docs/NETWORKING.md](docs/NETWORKING.md)**.
 
 ## philosophy
 
@@ -164,6 +185,7 @@ paid API providers (OpenAI, Anthropic, Groq, DeepSeek, xAI, OpenRouter) are supp
 | doc | what it covers |
 |-----|---|
 | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | **point your apps at the stack — openai sdk, curl, python, node, c++, webui, mobile** |
+| [docs/NETWORKING.md](docs/NETWORKING.md) | **private mesh — Caddy + Headscale + Tailscale; phone / laptop / multi-node onboarding** |
 | [docs/benchmark-comparison.md](docs/benchmark-comparison.md) | reproducible numbers vs llama.cpp / vLLM / MLX |
 | [docs/replicate.md](docs/replicate.md) | step-by-step: build the monster on your box |
 | [docs/mlx-setup-guide.md](docs/mlx-setup-guide.md) | the MLX path (comparison / optional) |
