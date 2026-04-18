@@ -225,18 +225,6 @@ if [[ $DRY_RUN -eq 0 ]]; then
         ok "registered $LIB_PATH with ld.so.conf.d"
     fi
     sudo ldconfig
-
-    # Workaround for a hardcoded tokenizer path in the v0.2.x release
-    # binary (expects ~/halo-1bit/models/*.htok regardless of actual
-    # install location). Symlink until the binary is rebuilt with a
-    # relocatable lookup. Tracked as an issue on halo-ai-core.
-    COMPAT_DIR="$HOME/halo-1bit/models"
-    if [[ -f "$MODELS_DIR/halo-1bit-2b.htok" && ! -e "$COMPAT_DIR/halo-1bit-2b.htok" ]]; then
-        mkdir -p "$COMPAT_DIR"
-        ln -sf "$MODELS_DIR/halo-1bit-2b.htok" "$COMPAT_DIR/halo-1bit-2b.htok"
-        ln -sf "$MODELS_DIR/halo-1bit-2b.h1b"  "$COMPAT_DIR/halo-1bit-2b.h1b"
-        warn "linked $MODELS_DIR → $COMPAT_DIR (tokenizer path workaround)"
-    fi
 else
     warn "dry-run: skipping install"
 fi
