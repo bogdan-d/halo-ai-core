@@ -14,6 +14,17 @@
 # Requirements: AMD Strix Halo (gfx1151), Arch/CachyOS, 50GB+ disk
 # Time: ~4 hours (TheRock LLVM is the long pole)
 set -euo pipefail
+# Pin PATH against a malicious inherit. All tools we call live here.
+PATH=/usr/bin:/bin
+
+# ── Upstream refs — pinned for reproducibility ─────────────
+# Override with env vars for bleeding-edge work, but the defaults should always
+# be commits we've built and smoke-tested ourselves.
+THEROCK_REF="${THEROCK_REF:-main}"     # TODO: replace with pinned SHA once a good one is chosen
+ROCMCPP_REF="${ROCMCPP_REF:-main}"
+AGENTCPP_REF="${AGENTCPP_REF:-main}"
+HALO1BIT_REF="${HALO1BIT_REF:-main}"
+FTXUI_REF="${FTXUI_REF:-v5.0.0}"
 
 # ── Colors ──────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -138,11 +149,12 @@ run_with_spinner "Installing system packages..." "$LOG_DIR/pacman.log" \
     patchelf gcc-fortran numactl libdrm \
     xxd curl unzip
 
-# Python deps for Tensile kernel generation
-pip install --break-system-packages --quiet \
-    pyyaml joblib packaging tqdm CppHeaderParser msgpack 2>/dev/null || \
-python3 -m pip install --break-system-packages --quiet \
-    pyyaml joblib packaging tqdm CppHeaderParser msgpack 2>/dev/null || true
+# Python deps for Tensile kernel generation. Install under --user so we don't
+# clobber Arch's system Python (--break-system-packages is a footgun). The
+# Tensile site-packages symlink below still picks these up via the user site.
+python3 -m pip install --user --quiet \
+    pyyaml joblib packaging tqdm CppHeaderParser msgpack \
+    || die "pip install failed — check network and try: python3 -m pip install --user pyyaml joblib packaging tqdm CppHeaderParser msgpack"
 
 ok "System packages installed"
 
@@ -183,41 +195,55 @@ ok "Environment configured: $ENV_FILE"
 # ── Step 4: Clone repos ─────────────────────────────────────
 log "Step 4/8: Cloning repositories..."
 
+# Helper: clone-or-update to a pinned ref. Checking out a specific ref/tag/SHA
+# is the only way to get reproducible builds of third-party source.
+checkout_ref() {
+    local dir="$1" ref="$2"
+    cd "$dir"
+    git fetch --tags --quiet origin "$ref" 2>/dev/null || git fetch --quiet origin
+    git checkout --quiet "$ref" || die "checkout failed: $dir @ $ref"
+    git submodule update --init --recursive --quiet 2>&1 | tail -3 || true
+}
+
 # TheRock
 if [[ ! -d "$THEROCK_DIR/.git" ]]; then
-    log "Cloning TheRock (ROCm from source)..."
+    log "Cloning TheRock (ROCm from source) @ $THEROCK_REF..."
     git clone https://github.com/ROCm/TheRock.git "$THEROCK_DIR" 2>&1 | tail -3
-    cd "$THEROCK_DIR" && git submodule update --init --recursive 2>&1 | tail -3
-    ok "TheRock cloned"
+    checkout_ref "$THEROCK_DIR" "$THEROCK_REF"
+    ok "TheRock cloned @ $THEROCK_REF"
 else
-    ok "TheRock already cloned"
+    checkout_ref "$THEROCK_DIR" "$THEROCK_REF"
+    ok "TheRock @ $THEROCK_REF"
 fi
 
 # rocm-cpp
 if [[ ! -d "$ROCMCPP_DIR/.git" ]]; then
     git clone https://github.com/stampby/rocm-cpp.git "$ROCMCPP_DIR" 2>&1 | tail -3
-    ok "rocm-cpp cloned"
+    checkout_ref "$ROCMCPP_DIR" "$ROCMCPP_REF"
+    ok "rocm-cpp cloned @ $ROCMCPP_REF"
 else
-    cd "$ROCMCPP_DIR" && git pull --ff-only 2>/dev/null || true
-    ok "rocm-cpp updated"
+    checkout_ref "$ROCMCPP_DIR" "$ROCMCPP_REF"
+    ok "rocm-cpp @ $ROCMCPP_REF"
 fi
 
 # agent-cpp (specialist framework — companion to rocm-cpp)
 if [[ ! -d "$AGENTCPP_DIR/.git" ]]; then
     git clone https://github.com/stampby/agent-cpp.git "$AGENTCPP_DIR" 2>&1 | tail -3
-    ok "agent-cpp cloned"
+    checkout_ref "$AGENTCPP_DIR" "$AGENTCPP_REF"
+    ok "agent-cpp cloned @ $AGENTCPP_REF"
 else
-    cd "$AGENTCPP_DIR" && git pull --ff-only 2>/dev/null || true
-    ok "agent-cpp updated"
+    checkout_ref "$AGENTCPP_DIR" "$AGENTCPP_REF"
+    ok "agent-cpp @ $AGENTCPP_REF"
 fi
 
 # halo-1bit (model format + training pipeline — .h1b v2, .htok tokenizer)
 if [[ ! -d "$HALO1BIT_DIR/.git" ]]; then
     git clone https://github.com/stampby/halo-1bit.git "$HALO1BIT_DIR" 2>&1 | tail -3
-    ok "halo-1bit cloned"
+    checkout_ref "$HALO1BIT_DIR" "$HALO1BIT_REF"
+    ok "halo-1bit cloned @ $HALO1BIT_REF"
 else
-    cd "$HALO1BIT_DIR" && git pull --ff-only 2>/dev/null || true
-    ok "halo-1bit updated"
+    checkout_ref "$HALO1BIT_DIR" "$HALO1BIT_REF"
+    ok "halo-1bit @ $HALO1BIT_REF"
 fi
 
 # ── Step 5: Build TheRock ────────────────────────────────────
@@ -404,14 +430,14 @@ echo "  GPU:              $GPU_ARCH"
 echo "  TheRock:          $THEROCK_DIR/build/"
 echo "  Tensile kernels:  $(find $THEROCK_DIR/build/math-libs/BLAS/rocBLAS/dist/lib/rocblas/library/gfx1151/ -name '*.hsaco' 2>/dev/null | wc -l) native .hsaco files"
 echo "  rocm-cpp:         $ROCMCPP_DIR/"
-echo "  Engine:           $ENGINE_DIR/build/server"
+echo "  bitnet_decode:    $ROCMCPP_DIR/build/bitnet_decode"
+echo "  agent_cpp:        $AGENTCPP_DIR/build/agent_cpp"
 echo "  Environment:      source ~/.rocmpp.env"
 echo ""
 echo "  Quick start:"
 echo "    source ~/.rocmpp.env"
-echo "    cd $ROCMCPP_DIR && ./tools/bench_ternary"
-echo "    cd $ROCMCPP_DIR && ./tools/bench_gemm"
-echo "    cd $ENGINE_DIR && ./build/chat mlx-community/Qwen3-4B-4bit"
+echo "    cd $ROCMCPP_DIR && ./build/bitnet_decode --help"
+echo "    cd $AGENTCPP_DIR && ./build/agent_cpp"
 echo ""
 echo "  Run benchmarks:"
 echo "    cd $ROCMCPP_DIR/tools && ./run_bench.sh"

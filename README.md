@@ -27,6 +27,14 @@
 
 halo-ai core is the **install script for the 1-bit monster** — a full local AI stack that runs entirely in C++ on AMD Strix Halo hardware. no python at runtime. no cloud. no telemetry. no subscriptions.
 
+> ## ⚠️ You must be running CachyOS. This is not optional.
+>
+> The XDNA2 NPU on Strix Halo **only works correctly on [CachyOS](https://cachyos.org/)** — the upstream Arch kernel and every other distro we've tested either misses the NPU patches, ships an older `amdxdna` driver, or has `HSA_OVERRIDE_GFX_VERSION` plumbing that silently falls back to CPU. On CachyOS the kernel already carries the fixes we need; on anything else, the NPU loads but inference quietly runs on the iGPU at a fraction of the speed.
+>
+> **Install CachyOS first.** Then run this script. We do not support Ubuntu, Fedora, Debian, stock Arch, EndeavourOS, or Manjaro for NPU workloads. The GPU path (`rocm-cpp`) technically runs on stock Arch, but you will lose the NPU specialists (`echo_ear`, lemond-FLM backends) and several benchmarks in `bench.sh`.
+>
+> If `lspci -k | grep -A3 amdxdna` shows the driver bound and you're on kernel `7.0.0-cachyos` or newer — you're good. If not, **go install CachyOS before reading further.** Nothing in this stack will work around a missing NPU driver for you.
+
 one script, three engineering repos:
 
 | repo | what it is |
@@ -175,10 +183,20 @@ paid API providers (OpenAI, Anthropic, Groq, DeepSeek, xAI, OpenRouter) are supp
 
 ## requirements
 
-- Arch Linux (bare metal preferred; podman works for headless)
+- **[CachyOS](https://cachyos.org/) — required for NPU.** See the warning callout at the top; stock Arch and other distros fall back to CPU/iGPU silently.
 - AMD Ryzen AI hardware — Strix Halo (gfx1151) or Strix Point (gfx1150)
+- kernel `7.0.0-cachyos` or newer with `amdxdna` bound to the NPU (check with `lspci -k | grep -A3 amdxdna`)
 - passwordless sudo
 - ~20 GiB free disk (build artifacts, kernels, models)
+
+### why CachyOS specifically
+
+- ships the XDNA2 NPU driver patches out of the box (stock Arch kernel lags)
+- `rocm-hip-sdk` in `extra` is built against the same LLVM toolchain the release binaries use — no `HSA_OVERRIDE` gymnastics
+- limine + btrfs + snapper snapshots for easy rollback if a ROCm upgrade regresses the NPU path
+- `gfx1151` is a first-class target in the Cachy community's ROCm tracking
+
+If you want to port to another distro, PRs welcome — but the NPU path will stay CachyOS-only until the NPU patches land upstream.
 
 ## credits
 

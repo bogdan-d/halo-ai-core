@@ -4,6 +4,16 @@
 set -euo pipefail
 
 API="http://localhost:8091"
+# Default to localhost-only — LAN exposure is opt-in via BURN_EXPOSE_LAN=1.
+# Historically this script bound 0.0.0.0 which leaked the LLM API to the whole
+# LAN for the duration of a burn. SECURITY.md already says "localhost by
+# default" — now the code matches the policy.
+BIND_HOST="${BURN_EXPOSE_LAN:-0}"
+if [[ "$BIND_HOST" == "1" ]]; then
+    BIND_HOST="0.0.0.0"
+else
+    BIND_HOST="127.0.0.1"
+fi
 RUNS=5
 WARMUP=2
 MAX_TOKENS=256
@@ -47,7 +57,7 @@ kill_server() {
 
 start_server() {
   kill_server
-  nohup "$MLX_BIN" --port 8091 --host 0.0.0.0 > /tmp/mlx-burn-server.log 2>&1 &
+  nohup "$MLX_BIN" --port 8091 --host "$BIND_HOST" > /tmp/mlx-burn-server.log 2>&1 &
   disown 2>/dev/null
   local retries=0
   while ! curl -s --max-time 2 "${API}/health" 2>/dev/null | grep -q "ok"; do
