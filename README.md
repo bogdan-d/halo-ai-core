@@ -98,7 +98,9 @@ why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB u
 
 | metric | value | note |
 |---|---|---|
-| **decode speed** | 85 tok/s | BitNet-b1.58-2B, greedy, Strix Halo |
+| **decode speed @ 64 ctx** | **83 tok/s** | BitNet-b1.58-2B, greedy, Strix Halo |
+| **decode speed @ 1024 ctx** | **68.6 tok/s** | same model, long context (split-KV FD attn) |
+| **prefill** | ~88 tok/s | steady across all context sizes |
 | **PPL @ 1k wikitext-103** | **9.16** | matches Microsoft's BitNet-b1.58-2B paper baseline |
 | **model size** | 1.1 GiB | TQ1_0 format, 4× smaller than F16 |
 | **KLD vs F16** | 0.0023 | mean bits/token — indistinguishable in practice |
@@ -108,6 +110,9 @@ why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB u
 | **runtime deps** | 0 python | libc, pthreads, httplib, nlohmann-json, OpenSSL |
 
 details and methodology: [docs/benchmark-comparison.md](docs/benchmark-comparison.md) · [docs/replicate.md](docs/replicate.md)
+
+latest bench (post-RoPE-fix + split-KV FD default, 2026-04-19):
+`N=64 → 83.1 tok/s · N=256 → 73.5 · N=512 → 71.1 · N=1024 → 68.6`. This is a **1.83× lift at 1024 context** vs pre-session baseline (37.5 → 68.6). Re-run via `bench.sh`.
 
 ### recent improvements (2026-04-19)
 
