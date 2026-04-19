@@ -99,6 +99,7 @@ why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB u
 | metric | value | note |
 |---|---|---|
 | **decode speed** | 85 tok/s | BitNet-b1.58-2B, greedy, Strix Halo |
+| **PPL @ 1k wikitext-103** | **9.16** | matches Microsoft's BitNet-b1.58-2B paper baseline |
 | **model size** | 1.1 GiB | TQ1_0 format, 4× smaller than F16 |
 | **KLD vs F16** | 0.0023 | mean bits/token — indistinguishable in practice |
 | **top-1 agreement** | 96.3% | vs F16 reference, same argmax token |
@@ -107,6 +108,16 @@ why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB u
 | **runtime deps** | 0 python | libc, pthreads, httplib, nlohmann-json, OpenSSL |
 
 details and methodology: [docs/benchmark-comparison.md](docs/benchmark-comparison.md) · [docs/replicate.md](docs/replicate.md)
+
+### recent improvements (2026-04-19)
+
+| kernel / fix | effect | verified |
+|---|---|---|
+| **RoPE split-half convention** | PPL @ 1k wikitext: broken → **9.16** (paper baseline) | bit-exact vs HF reference |
+| Sherry ternary GEMV (LDS bank-conflict fix) | **1.44–1.66× halo v2** microbench | `max \|halo − sherry\| = 0` |
+| TQ1 ternary GEMV (`__builtin_amdgcn_perm` repack) | **1.45–1.66× halo, 197 GB/s** microbench | `max \|halo − tq1\| = 0` |
+| Split-KV Flash-Decoding attention | up to **6.78× at L=2048** microbench | `max \|fp16 − fd\| < 2e-4` |
+| `bitnet_decode --ppl <file>` | teacher-forced PPL harness + wikitext-103 on disk | new in this release |
 
 ## what you get
 
