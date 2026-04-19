@@ -1,0 +1,180 @@
+/* man-cave — dark navy, frosted glass, daily wallpaper. */
+:root {
+    --bg: #0b1220;
+    --bg-2: #0f172a;
+    --fg: #e6edf7;
+    --muted: rgba(230, 237, 247, 0.6);
+    --accent: #5eafff;
+    --glass: rgba(15, 23, 42, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --tile-hover: rgba(94, 175, 255, 0.15);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    overflow: hidden;
+}
+
+.wallpaper {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    background-position: center;
+    background-color: var(--bg-2);
+    transition: opacity 0.8s ease-in;
+    opacity: 0;
+}
+.wallpaper.loaded { opacity: 1; }
+.wallpaper::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(11,18,32,0.2) 0%, rgba(11,18,32,0.65) 100%);
+}
+
+.dock {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+header { text-align: center; margin-bottom: 2rem; }
+header h1 {
+    font-size: 3rem;
+    font-weight: 200;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+header .sub {
+    margin: 0.25rem 0 0 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+    max-width: min(80vw, 1100px);
+    width: 100%;
+}
+
+.tile {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    padding: 1.5rem 1.25rem;
+    text-decoration: none;
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    position: relative;
+}
+.tile:hover {
+    transform: translateY(-2px);
+    background: var(--tile-hover);
+    border-color: var(--accent);
+}
+.tile .emoji { font-size: 2rem; line-height: 1; }
+.tile .name  { font-size: 1.15rem; font-weight: 600; }
+.tile .url   { font-size: 0.82rem; color: var(--muted); word-break: break-all; }
+
+.tile .del {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.tile:hover .del { opacity: 1; }
+.tile .del:hover { color: #ff6b6b; background: rgba(255,107,107,0.15); }
+
+.add {
+    margin-top: 2rem;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--glass-border);
+    color: var(--fg);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: transform 0.12s, border-color 0.12s;
+}
+.add:hover { transform: rotate(90deg); border-color: var(--accent); }
+
+dialog {
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    color: var(--fg);
+    padding: 1.5rem;
+    min-width: 320px;
+}
+dialog::backdrop { background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+dialog h2 { margin: 0 0 1rem 0; font-weight: 500; }
+dialog label { display: block; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--muted); }
+dialog input {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.06);
+    color: var(--fg);
+    font-size: 0.95rem;
+}
+dialog input:focus { outline: none; border-color: var(--accent); }
+dialog .row { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+dialog button {
+    padding: 0.55rem 1.1rem;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+}
+dialog button.primary { background: var(--accent); color: #06101f; border-color: transparent; font-weight: 600; }
+
+footer {
+    position: fixed;
+    bottom: 1rem;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+footer .sep { margin: 0 0.5rem; }
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--accent); }

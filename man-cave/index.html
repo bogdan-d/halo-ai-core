@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>man-cave · halo-ai</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="wallpaper" id="wallpaper"></div>
+
+    <main class="dock">
+        <header>
+            <h1>man-cave</h1>
+            <p class="sub">local AI, local-only</p>
+        </header>
+
+        <section class="tiles" id="tiles">
+            <!-- Tiles injected by app.js. Default two: Lemonade + Gaia. -->
+        </section>
+
+        <button class="add" id="addBtn" title="add a custom panel">+</button>
+
+        <dialog id="editDlg">
+            <form method="dialog">
+                <h2 id="editTitle">add panel</h2>
+                <label>name <input id="fName" required maxlength="40"></label>
+                <label>url  <input id="fUrl" type="url" required placeholder="http://…"></label>
+                <label>emoji <input id="fEmoji" maxlength="4" placeholder="🪄"></label>
+                <div class="row">
+                    <button value="cancel">cancel</button>
+                    <button value="save" class="primary">save</button>
+                </div>
+            </form>
+        </dialog>
+    </main>
+
+    <footer>
+        <span id="wallpaperCredit"></span>
+        <span class="sep">·</span>
+        <a href="https://github.com/stampby/halo-ai-core" target="_blank" rel="noopener">halo-ai-core</a>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
