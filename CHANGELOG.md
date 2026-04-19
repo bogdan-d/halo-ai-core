@@ -8,6 +8,14 @@ rocm-cpp, agent-cpp, halo-1bit for conventional-commit prefixes
 
 ## 2026-04-19
 
+- **halo-ai-core**: docs: propagate post-session numbers + fix wiki service names
+- **halo-ai-core**: feat: halo CLI — unified package-manager wrapper
+- **agent-cpp**: fix(gateway): default port 8081 → 8090 to avoid halo-sd collision
+- **agent-cpp**: feat(voice): wire echo_ear to whisper-server, echo_mouth to halo-kokoro
+
+
+## 2026-04-19
+
 - **halo-ai-core**: ci: drop full-execution job; syntax-only checks on ubuntu-latest
 - **halo-ai-core**: ci: restore valid yaml after hand-edit mangled the workflow
 - **halo-ai-core**: docs: add MLX setup guide + surface session improvements in README
