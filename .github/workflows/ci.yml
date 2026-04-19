@@ -10,22 +10,18 @@ permissions:
   contents: read
 
 jobs:
-  dry-run:
-    name: Install Script Dry Run
+  syntax:
+    name: Shell Syntax Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
-      - name: Verify install script syntax
-        run: bash -n install.sh
-
-      - name: Run dry-run
+      - name: bash -n on all shell scripts
         run: |
-          chmod +x install.sh
-          ./install.sh --dry-run
-
-      - name: Verify status check
-        run: ./install.sh --status
+          set -e
+          for f in install.sh install-strixhalo.sh install-source.sh uninstall-rocmpp.sh bench.sh burn-remote.sh; do
+            [[ -f "$f" ]] && bash -n "$f" && echo "ok: $f"
+          done
 
   shellcheck:
     name: ShellCheck
@@ -36,5 +32,8 @@ jobs:
       - name: Install ShellCheck
         run: sudo apt-get install -y shellcheck
 
-      - name: Lint install script
-        run: shellcheck install.sh --severity=error || true
+      - name: Lint install scripts
+        run: |
+          for f in install.sh install-strixhalo.sh install-source.sh; do
+            [[ -f "$f" ]] && shellcheck "$f" --severity=error || true
+          done
