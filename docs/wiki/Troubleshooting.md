@@ -5,6 +5,23 @@ Private-mesh / Headscale / Caddy issues: jump to [Networking](#networking) below
 
 ## Install
 
+### "NPU not detected" / `amdxdna` driver missing / agent falls back to iGPU
+
+You're not on **[CachyOS](https://cachyos.org/)**. The XDNA2 NPU on Strix
+Halo only works correctly on CachyOS — stock Arch, Ubuntu, Fedora, Debian,
+EndeavourOS, Manjaro either miss the `amdxdna` kernel patches or ship an
+older driver that silently falls back to CPU/iGPU. Check:
+
+```bash
+lspci -k | grep -A3 amdxdna       # should show driver bound
+uname -r                          # should be 7.0.0-cachyos or newer
+```
+
+If `amdxdna` isn't bound or you're not on a `*-cachyos` kernel, **install
+CachyOS before continuing**. The GPU path (`rocm-cpp`) technically works on
+stock Arch but you lose the NPU specialists (`echo_ear`, lemond-FLM backends)
+and several `bench.sh` benchmarks.
+
 ### `rocminfo: command not found` / `hipcc: command not found`
 
 ROCm isn't installed. `install-strixhalo.sh` runs `pacman -S rocm-hip-sdk`
@@ -55,7 +72,8 @@ journalctl -u halo-bitnet -n 30
 
 Common causes:
 - Model file missing: check `/home/bcloud/halo-ai/models/halo-1bit-2b.h1b`
-  exists (should be 1.8 GB). Re-extract from the release tarball if not.
+  exists (should be ~1.1 GiB in TQ1_0 packing). Re-extract from the release
+  tarball if not.
 - Port 8080 already in use: change the unit's ExecStart to `--server 8081`
 
 ### `model not found` / HTTP 400
@@ -64,8 +82,8 @@ The model id must be exactly `bitnet-b1.58-2b-4t`. Anything else → reject.
 
 ### Very slow first token
 
-Cold cache. First request loads the 1.8 GB model into GPU memory (~1-2 s on
-Strix Halo). Subsequent requests hit ~85 tok/s steady-state.
+Cold cache. First request mmaps the ~1.1 GiB model into GPU-visible memory
+(< 2 s on Strix Halo). Subsequent requests hit ~83 tok/s @ 64 ctx (68.6 @ 1024) steady-state.
 
 ### agent-cpp exits immediately
 

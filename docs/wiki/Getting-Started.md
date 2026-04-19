@@ -33,16 +33,30 @@ Force either explicitly: `./install.sh --strixhalo` or `./install.sh --source`.
 
 ## 3. Verify
 
-After install, two systemd services should be running:
+After install, the halo services run under **user-systemd** (since 2026-04-19
+migration). Two are core; three more are optional:
 
 ```bash
-systemctl status halo-bitnet     # the inference server
-systemctl status halo-agent      # the 17-specialist agent runtime
+# Core
+systemctl --user status halo-bitnet    # LLM inference server (:8080)
+systemctl --user status halo-agent     # 17-specialist agent runtime
+
+# Optional (voice + image)
+systemctl --user status halo-sd        # native HIP SDXL (:8081, Caddy /sd/*)
+systemctl --user status halo-whisper   # whisper.cpp STT (:8082, echo_ear)
+systemctl --user status halo-kokoro    # Bun Kokoro TTS shim (:8083, echo_mouth)
 
 # Smoke test
 curl http://127.0.0.1:8080/v1/models
 # → {"data":[{"id":"bitnet-b1.58-2b-4t","object":"model","owned_by":"halo-ai"}],...}
+
+# One-shot health probe for the whole stack
+halo doctor
 ```
+
+`halo` is the unified ops CLI (see [docs/halo-cli.md](../halo-cli.md)); pacman +
+brew + systemctl pattern. `halo status`, `halo logs bitnet -f`, `halo restart sd`,
+`halo bench`, `halo update`.
 
 ## 4. First chat completion
 
@@ -56,7 +70,9 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
-Expected: ~300 ms round-trip, ~85 tok/s decode steady-state.
+Expected: <2 s cold start, **83 tok/s @ 64 ctx / 68.6 tok/s @ 1024 ctx** greedy
+decode (post-RoPE-fix + split-KV FD default), PPL 9.16 on wikitext-103 (1k
+window) — matching the BitNet-b1.58-2B-4T paper baseline.
 
 ## 5. Point your apps at it
 
@@ -86,19 +102,25 @@ printed bearer token. Zero port forwarding, zero cloud.
 
 ## 7. What's next
 
-- **Voice loop**: start `whisper-server` and `kokoro-tts` systemd units, then
+- **Voice loop**: `systemctl --user start halo-whisper halo-kokoro`, then
   see the STT→LLM→TTS example in [Integrations](Integrations.md).
+- **Image gen**: `systemctl --user start halo-sd` (native-HIP SDXL on :8081,
+  exposed through Caddy at `/sd/*`).
 - **Agent specialists**: `agent_cpp` is running in headless mode. To connect
   Discord, set `DISCORD_TOKEN` + `DISCORD_WATCH_CHANNELS` in the service
   environment. See [Agents](Agents.md).
+- **MCP bridge**: `halo-mcp` exposes the 17 specialists as JSON-RPC tools for
+  Claude Code (Phase 0 stubs live; BusBridge pending). See
+  [docs/mcp-nexus-design.md](../mcp-nexus-design.md).
 
 ## Uninstall
 
+The unified script handles every component installed by the monolith:
+
 ```bash
-sudo systemctl disable --now halo-bitnet halo-agent
-sudo rm /etc/systemd/system/halo-bitnet.service /etc/systemd/system/halo-agent.service
-sudo rm /usr/local/bin/{bitnet_decode,agent_cpp} /usr/local/lib/librocm_cpp.so
-rm -rf ~/halo-ai
+cd ~/halo-ai-core
+./uninstall.sh                  # interactive — confirms each block
+./uninstall.sh --yes-all        # non-interactive
 ```
 
-That's it. No system-wide state outside those paths.
+That's it. No system-wide state outside what the script cleans.

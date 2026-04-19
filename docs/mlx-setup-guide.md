@@ -74,7 +74,7 @@ url     = "http://127.0.0.1:8081/v1"
 
 | workload | rocm-cpp (default) | MLX (optional) |
 |---|---|---|
-| BitNet-b1.58 2B ternary decode | **yes, 85 tok/s, 1.1 GiB** | no ternary path |
+| BitNet-b1.58 2B ternary decode | **yes, 83 tok/s @ 64 ctx (68.6 @ 1024), 1.1 GiB** | no ternary path |
 | Dense Llama/Qwen fp16 decode | not supported (out of scope) | yes |
 | SDXL / diffusion | planned (sd.cpp port) | yes (`mlx-image`) |
 | Whisper STT | yes (whisper.cpp via echo_ear) | yes (`mlx-whisper`) |
@@ -95,6 +95,20 @@ If MLX ships ternary (likely inevitable — BitNet is too big to ignore),
 the sommelier routing lets you flip halo-ai's default backend with one
 TOML line. halo-1bit `.h1b` files are independent of the runtime — any
 engine that speaks ternary can consume them.
+
+### the exo-explore/mlx-bitnet prototype
+
+[exo-explore/mlx-bitnet](https://github.com/exo-explore/mlx-bitnet) is a
+prototype BitNet 1.58 implementation for MLX on **Apple Silicon only**.
+Not ROCm. Not gfx1151. If halo-ai ever ports to Mac, this is the nearest
+starting point — the `.h1b` loader would plug into MLX's array ops via
+this project's quant routines. Forked at
+[stampby/mlx-bitnet](https://github.com/stampby/mlx-bitnet) as a
+frozen reference so the port path stays available if upstream drifts.
+
+Status of upstream as of 2026-04: 17 commits, 1 contributor, 270 stars,
+roadmap has "optimized kernels / fine-tuning / demo app" still
+"In Progress" or "Not Started". Research-grade, not production.
 
 ---
 

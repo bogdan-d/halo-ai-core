@@ -66,6 +66,8 @@ why two scripts: every Strix Halo is the same silicon (gfx1151, wave32, 128 GB u
 
 **running something other than a strix halo and want the kernels built for your GPU?** see [`release/KERNELS.md`](release/KERNELS.md) for arch coverage, how to build your own, and how to share community builds back.
 
+**strix halo install support** — break something? stuck? drop into [r/MidlifeCrisisAI](https://www.reddit.com/r/MidlifeCrisisAI/) and post your `./install.sh --status` output. that's where support happens. don't DM the architect — the sub is the traffic log for everyone who came before you hit the same wall.
+
 [![Install Demo](https://img.shields.io/badge/asciinema-watch_install_demo-d40000?style=flat&logo=asciinema&logoColor=white)](docs/install-rocmpp.cast)
 
 ## the stack

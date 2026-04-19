@@ -4,6 +4,10 @@
 library, IDE extension, or paid desktop app that supports an OpenAI-compatible base URL
 works against it with zero adapter code.
 
+> **Runs on CachyOS.** The XDNA2 NPU path needs the `amdxdna` patches that
+> CachyOS carries out of the box. Other distros silently fall back to the
+> iGPU; see the warning at the top of the [main README](../README.md).
+
 After `install-strixhalo.sh` runs you have two equivalent endpoints — pick the one that
 matches where the client is:
 
@@ -262,10 +266,32 @@ speak_listen_reply("recording.wav")
 
 ## 5. Exposing the stack to your phone / tablet / LAN
 
-The services bind to `127.0.0.1` only by default (privacy-first). To reach them
-from another device:
+The services bind to `127.0.0.1` only by default (privacy-first). Reach them
+from another device via the private mesh `install-strixhalo.sh` stood up:
 
-### Option A: SSH tunnel (recommended, zero config)
+### Option A (default): the private Headscale mesh
+
+The installer stood up Caddy + Headscale and printed a QR code + a one-liner
+at the end. Any peer joins with:
+
+```bash
+# Arch-family (laptop, other halo box):
+curl -fsSL http://<halo-lan-ip>:8099/join.sh | sudo bash
+
+# Phone (iOS / Android): scan the QR code, follow the 3-step mobile page.
+
+# Other Linux / macOS: install Tailscale, set the alternate login server
+# to https://headscale.<halo-hostname>.local, paste the preauth key.
+```
+
+Once joined, your OpenAI-compatible client points at
+`https://<halo-hostname>.local/v1` with the bearer token from
+`/etc/caddy/token.secret` (or the installer output). Full walkthrough in
+**[NETWORKING.md](NETWORKING.md)**.
+
+### Option B: SSH tunnel (zero-config, single peer)
+
+If you don't want the mesh running:
 
 ```bash
 # From your laptop/phone:
@@ -276,32 +302,13 @@ ssh -L 8080:127.0.0.1:8080 \
 # Now apps on your laptop point at http://127.0.0.1:8080 and talk to the stack
 ```
 
-### Option B: caddy reverse proxy with bearer auth (planned)
+### Option C: bind to the tailnet interface directly
 
-`halo-ai-core` ships a caddy config template in `orchestrator/` (WIP) that:
-- Binds `:80` (or TLS `:443`) on all interfaces
-- Adds bearer token auth via `X-API-Key` header
-- Rate-limits to prevent abuse from LAN
-
-Until the caddy step is in the default install, either use Option A or stand up
-your own caddy with:
-
-```
-:80 {
-    @auth header Authorization "Bearer <your-token>"
-    handle @auth {
-        reverse_proxy /v1/* 127.0.0.1:8080
-        reverse_proxy /transcribe 127.0.0.1:8082
-        reverse_proxy /tts 127.0.0.1:5000
-    }
-    respond 401
-}
-```
-
-### Option C: WireGuard / Tailscale
-
-If your LAN uses a mesh VPN, just have the service listen on the VPN interface
-instead of `127.0.0.1`. Edit the systemd unit's `ExecStart` to pass the VPN IP.
+Skip the Caddy reverse proxy and have the services listen on the WireGuard
+interface. Edit the systemd unit's `ExecStart` to pass the tailnet IP
+(`100.64.0.1` on the strixhalo box by default). Peers reach it at
+`http://<tailnet-ip>:8080/v1` with no TLS / no bearer auth — only trust
+this if you trust every mesh member.
 
 ## 6. Listing running backends (sommelier)
 
@@ -339,8 +346,9 @@ Each specialist's contract is documented at the top of its `.cpp` file:
 **Empty response / 500** — check model path. The installed location is
 `~/halo-ai/models/halo-1bit-2b.h1b`; the systemd unit points at it directly.
 
-**Slow first token** — cold cache. First request loads 1.8 GB model into GPU
-memory. Subsequent requests hit ~85 tok/s.
+**Slow first token** — cold cache. First request mmaps the ~1.1 GiB model
+(TQ1_0 .h1b) into GPU-visible memory. Cold start < 2s; subsequent requests
+hit ~83 tok/s @ 64 ctx (68.6 @ 1024) steady-state.
 
 **`model not found`** — the model id is `bitnet-b1.58-2b-4t`. Pass any other
 string and the server rejects the request.

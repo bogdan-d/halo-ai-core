@@ -22,9 +22,14 @@ one thread per inbox, one structured `Message` struct.
 | 12 | **quartermaster** | GitHub issue triage + labelling | GH_TOKEN |
 | 13 | **magistrate** | GitHub PR policy scanner | GH_TOKEN |
 | 14 | **librarian** | CHANGELOG appender + docs-gap issue | GH_TOKEN |
-| 15 | **echo_ear** | whisper-server STT bridge | whisper-server :8082 |
-| 16 | **echo_mouth** | kokoro TTS bridge | kokoro-tts :5000 |
+| 15 | **echo_ear** | halo-whisper STT bridge | halo-whisper :8082 |
+| 16 | **echo_mouth** | kokoro TTS bridge | halo-kokoro :8083 |
 | 17 | **anvil** | clone → build → bench runner | GH_TOKEN + DISCORD_BENCH_CHANNEL |
+
+> **Canonical source for these 17 names**:
+> [`halo-mcp/src/tool_registry.cpp`](https://github.com/stampby/halo-mcp/blob/main/src/tool_registry.cpp)
+> (`kSpecialists[]`). The MCP bridge exposes each one as a `<name>_call` tool.
+> If you ever see this table drift from that array, tool_registry.cpp wins.
 
 ## How to wire each one
 
@@ -50,15 +55,15 @@ export GH_TOKEN="ghp_..."                            # classic PAT with repo sco
 
 ### Voice
 
-Both local services. If systemd units installed:
+Both local services, user-systemd:
 ```bash
-systemctl --user start whisper-server
-systemctl --user start kokoro-tts
+systemctl --user start halo-whisper    # :8082 — whisper.cpp
+systemctl --user start halo-kokoro     # :8083 — Bun shim over Kokoro native
 ```
 Then set overrides only if non-default ports:
 ```bash
 export WHISPER_URL="http://127.0.0.1:8082"
-export KOKORO_URL="http://127.0.0.1:5000"
+export KOKORO_URL="http://127.0.0.1:8083"
 export KOKORO_VOICE="af_heart"
 ```
 
@@ -133,6 +138,19 @@ tamper-evidence, no external store. Genesis line seeds from session path + time.
   stdin loop entirely, bus runs until SIGTERM. Used by `halo-agent.service`.
 
 Auto-detected via `isatty(STDIN_FILENO)`.
+
+## Reaching specialists from outside the agent_cpp process
+
+Three bridges (all post-2026-04-19):
+
+| bridge | what it does | auth |
+|---|---|---|
+| **halo-mcp** (stdio, C++20) | exposes each of the 17 specialists as an MCP tool (`<name>_call`). Claude Code spawns it per session. Phase 0 returns "not implemented"; BusBridge lands in Phase 1. | Ed25519 identity (Phase 1+) |
+| **discord-mcp** (stdio, Bun) | `discord_post_as_specialist` relays messages through an Echo webhook under any of the 17 specialist identities. Plus `discord_assign_role` / `discord_remove_role` / `discord_list_roles` and reads. | Discord bot token |
+| **echo-mcp** (stdio, Bun) | posts to reddit as `echo-halo-ai` via cookie-fetch. Not a specialist bridge — complementary outbound. | cookie jar |
+
+See [docs/mcp-nexus-design.md](../mcp-nexus-design.md) for the phased plan for
+halo-mcp and federation across the Headscale mesh.
 
 ## Adding a new specialist
 

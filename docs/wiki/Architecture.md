@@ -1,6 +1,7 @@
 # Architecture
 
-How the four repos fit together.
+How the three engineering repos (plus the `halo-ai-core` orchestrator) fit
+together.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -50,7 +51,8 @@ How the four repos fit together.
 ├─────────────────────────────────────────────────────────┤
 │  ternary model (.h1b v2)  ·  halo-1bit tokenizer (.htok) │ ← data
 ├─────────────────────────────────────────────────────────┤
-│          whisper-server (STT) · kokoro (TTS)             │ ← I/O
+│  halo-sd (:8081 SDXL HIP) · halo-whisper (:8082 STT) ·   │
+│  halo-kokoro (:8083 TTS, Bun shim)                       │ ← I/O
 ├─────────────────────────────────────────────────────────┤
 │              ROCm 7.13.0  ·  gfx1151 wave32              │ ← driver
 ├─────────────────────────────────────────────────────────┤
@@ -133,15 +135,51 @@ and agent state. No discrete GPU — consumer or datacenter — offers this.
 ## Why ternary
 
 BitNet-b1.58's ternary weights (−1, 0, +1) let us replace MatMul with
-accumulator-only ops. The kernel uses `v_dot4_i8_i8` or `wmma_f16_w32` with
-packed ternary operands — 5 tok/s → 85 tok/s vs a generic FP16 matmul on the
-same silicon.
+accumulator-only ops. The kernel uses `__builtin_amdgcn_sudot4` with packed
+ternary operands; the service hits **83 tok/s @ 64 ctx / 68.6 tok/s @ 1024 ctx**
+steady-state greedy decode on Strix Halo (post-RoPE-fix + split-KV FD default,
+2026-04-19). The ternary GEMV alone runs at ~92% of LPDDR5-8000 peak bandwidth.
+PPL on wikitext-103 1k window is **9.16** — matching the paper baseline for
+BitNet-b1.58-2B-4T.
+
+## Recent improvements (2026-04-19)
+
+| kernel / fix | effect | verified |
+|---|---|---|
+| RoPE split-half convention | PPL @ 1k wikitext-103: broken → **9.16** (paper baseline) | bit-exact vs HF reference |
+| Sherry ternary GEMV (LDS bank-conflict fix) | **1.44–1.66× halo v2** microbench | `max \|halo − sherry\| = 0` |
+| TQ1 ternary GEMV (`__builtin_amdgcn_perm` repack) | **1.45–1.66× halo, 197 GB/s** microbench | `max \|halo − tq1\| = 0` |
+| Split-KV Flash-Decoding attention | up to **6.78× at L=2048** microbench | `max \|fp16 − fd\| < 2e-4` |
+| `bitnet_decode --ppl <file>` | teacher-forced PPL harness + wikitext-103 on disk | new in this release |
+
+## Satellite services (post-session 2026-04-19)
+
+All run under user-systemd alongside `halo-bitnet` / `halo-agent`:
+
+| service | port | role |
+|---|---|---|
+| halo-sd | 8081 | native-HIP SDXL (zero hipBLAS), Caddy `/sd/*` |
+| halo-whisper | 8082 | whisper.cpp STT — echo_ear backend |
+| halo-kokoro | 8083 | Bun shim over Kokoro TTS — echo_mouth backend |
+
+Bridges to outside the box (also post-session):
+
+| bridge | what it does | transport |
+|---|---|---|
+| `halo-mcp` | 17 agent-cpp specialists as JSON-RPC tools (Phase 0 stubs) | stdio |
+| `discord-mcp` | 17 specialist identities via Echo webhook relay; roles | stdio (Bun) |
+| `echo-mcp` | reddit posting (echo-halo-ai) via cookie-fetch | stdio (Bun) |
+
+See [docs/mcp-nexus-design.md](../mcp-nexus-design.md) for the phased plan and
+[docs/INTEGRATIONS.md](../INTEGRATIONS.md) for wiring.
 
 ## What's next
 
 - **RDNA4 kernel port** (gfx1201 — 9070 XT) — `wmma-256b` → `wmma-512b` rewrite
+- **halo-mcp Phase 1** — BusBridge implementation; specialists reachable via
+  MCP instead of stub "not implemented"
 - **agent_cpp HTTP endpoint** — so external apps can drive the bus (currently
-  internal-only or via sentinel/herald)
+  internal-only, via sentinel/herald, or via halo-mcp stdio)
 - **Signed release pipeline** — GPG infrastructure + published pubkey
 - **CI on main** — anvil-driven release builds on tag push
 
