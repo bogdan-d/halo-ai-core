@@ -308,6 +308,14 @@ if [[ $DRY_RUN -eq 0 ]]; then
 ${HALO_HOSTNAME}.local, ${LAN_IP} {
     tls internal
     @authorized header_regexp Authorization ^Bearer\s+${BEARER_TOKEN}\$
+
+    # man-cave — LAN-only launcher page (Lemonade + Gaia + user tiles).
+    # No auth; exposure limited by Headscale hostname.
+    handle_path /mancave/* {
+        root * /srv/www/mancave
+        file_server
+    }
+
     handle @authorized {
         reverse_proxy 127.0.0.1:8080 {
             flush_interval -1
@@ -335,8 +343,16 @@ http://${LAN_IP}:8099 {
     file_server browse
 }
 CADDY_EOF
-    sudo mkdir -p /var/www/halo-bootstrap /var/log/caddy
-    sudo chown -R caddy:caddy /var/www/halo-bootstrap /var/log/caddy
+    sudo mkdir -p /var/www/halo-bootstrap /var/log/caddy /srv/www/mancave
+    sudo chown -R caddy:caddy /var/www/halo-bootstrap /var/log/caddy /srv/www/mancave
+
+    # ── man-cave static page — copy from repo tree and lock down perms ──
+    if [[ -d "$ROOT_DIR/man-cave" ]]; then
+        sudo rsync -a --delete "$ROOT_DIR/man-cave/" /srv/www/mancave/
+        sudo chown -R caddy:caddy /srv/www/mancave
+        sudo chmod -R o+rX /srv/www/mancave
+        log "man-cave served at https://${HALO_HOSTNAME}.local/mancave/"
+    fi
 
     # ── Headscale config patch ──────────────────────────────
     sudo sed -i \
