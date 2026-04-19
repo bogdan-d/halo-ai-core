@@ -16,13 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Verify install script synta
+      - name: Verify install script syntax
         run: bash -n install.sh
 
       - name: Run dry-run
-        run: 
-        env:
-            HALO_SKIP_CHECK: "1"|
+        run: |
           chmod +x install.sh
           ./install.sh --dry-run
 
