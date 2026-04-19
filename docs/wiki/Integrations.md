@@ -17,16 +17,35 @@ multi-device onboarding (phone, laptop, game PC, other halo boxes) is in
 | from another mesh peer | `https://<halo-hostname>.local/v1` | 443 | Caddy + bearer token |
 | mesh peer, direct | `http://<tailnet-ip>:8080/v1` | 8080 | straight to bitnet_decode over WireGuard |
 
-Secondary (optional) endpoints for voice workflows:
+Secondary (optional) endpoints for voice + image workflows:
 
-| what | port | protocol |
-|---|---|---|
-| `whisper-server` | 8082 | multipart POST /transcribe (speech-to-text) |
-| `kokoro-tts` | 5000 | JSON POST /tts → WAV (text-to-speech) |
+| what | port | protocol | Caddy path |
+|---|---|---|---|
+| `halo-sd` (SDXL, native HIP) | 8081 | JSON POST /sd/txt2img → PNG | `/sd/*` (bearer-gated) |
+| `halo-whisper` (STT, whisper.cpp) | 8082 | multipart POST /transcribe | — (loopback) |
+| `halo-kokoro` (TTS, Bun shim) | 8083 | JSON POST /tts → WAV | — (loopback) |
 
 Only Caddy (:443) and the Headscale/Tailscale daemons are exposed to the LAN.
 Everything else binds to `127.0.0.1` or the tailnet interface — the "opt-in" for
 network exposure is joining the Headscale mesh, not opening a port on your WAN.
+
+### Mancave launcher
+
+The installer drops a frosted-glass launcher page served by Caddy under
+`https://<host>.local/mancave/` (LAN-only, no bearer). Tiles link to halo
+services, Lemonade, Gaia, and anything else you pin. Files live at
+`/srv/www/mancave`.
+
+### MCP bridges
+
+Three Model Context Protocol servers sit next to the stack — all stdio, spawned
+per-session by the MCP client (Claude Code, Claude Desktop, etc.):
+
+| bridge | repo | what it does |
+|---|---|---|
+| **halo-mcp** | `stampby/halo-mcp` | 17 agent-cpp specialists as `<name>_call` JSON-RPC tools (Phase 0 stubs live; BusBridge pending) |
+| **discord-mcp** | Bun MCP server | `discord_post_as_specialist` relays 17 specialist identities via Echo webhook; `discord_assign_role` / `discord_remove_role` / `discord_list_roles` |
+| **echo-mcp** | Bun MCP server | reddit posting for `echo-halo-ai` via cookie-fetch |
 
 ## Point the apps you already pay for at it
 

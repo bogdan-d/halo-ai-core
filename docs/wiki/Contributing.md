@@ -26,25 +26,25 @@ Current coverage:
 | gfx1030 | RX 6900/6800 (RDNA2) | no native WMMA — DP4A fallback needed |
 | gfx908 / 90a / 942 | CDNA MI100/200/300 | wave64 — different kernel family |
 
-See [release/KERNELS.md](../release/../KERNELS.md) (wait, actually see
-[../../release/KERNELS.md](../../release/KERNELS.md)) for the detailed
+See [release/KERNELS.md](../../release/KERNELS.md) for the detailed
 contributor guide on submitting community builds.
 
-### 2. agent-cpp HTTP endpoint
+### 2. halo-mcp BusBridge (Phase 1)
 
 Right now the only way to get a message onto the bus from outside the process
-is stdin (interactive) or through sentinel (Discord events). We want an HTTP
-ingestion point so third-party apps can fire `tool_call`, `remember`, `recall`
-etc. without wrapping stdin.
+is stdin (interactive) or through sentinel (Discord events). **halo-mcp**
+(`stampby/halo-mcp`, C++20, stdio/JSON-RPC) is Phase 0 live — it registers 17
+`<name>_call` MCP tools that today return "not implemented". Phase 1 is the
+`BusBridge` that walks MCP `tools/call` → `agent-cpp` Message → awaits reply.
 
-Design sketch:
-- New specialist `gateway`
-- Listens on `:8081` (OpenAI-compat avoided; we want distinct API surface)
-- POST `/bus/:to` with a JSON body → converts to `Message`, emits
-- Bearer auth, rate-limited, behind the CVG gate for `tool_call` kinds
+Design is in [`docs/mcp-nexus-design.md`](../mcp-nexus-design.md). The short
+version:
+- Stdio JSON-RPC (Claude Code / Claude Desktop spawn per session)
+- Reuses `libagent_cpp.a` CVG gate + hash-chained audit chain
+- Phase 2+ adds nexus federation over the Headscale mesh
 
-See [agent-cpp#issues](https://github.com/stampby/agent-cpp/issues) — open an
-issue before starting.
+A plain agent-cpp HTTP ingest is still an option for callers that don't want
+MCP — open an issue before starting either.
 
 ### 3. Distillation of a better model
 
@@ -64,11 +64,16 @@ Tracking issue: TBD. If you work on build reproducibility, we'd love a PR.
 
 ### 5. WebUI / control panel
 
-OpenWebUI and LibreChat work out of the box as LLM frontends. But there's
-no halo-ai-core-specific control panel for managing the 17 specialists,
-viewing the scribe hash chain, inspecting CVG denials, etc. A minimal
-web dashboard (Bun + plain HTML + fetch) would be a great community
-contribution.
+OpenWebUI and LibreChat work out of the box as LLM frontends. The frosted-glass
+**mancave launcher** ships at `https://<host>.local/mancave/` and lists halo
+services alongside Lemonade + Gaia tiles, but it's a static launcher — there's
+still no halo-ai-core-specific control panel for managing the 17 specialists,
+viewing the scribe hash chain, inspecting CVG denials, etc. A minimal web
+dashboard (Bun + plain HTML + fetch) would be a great community contribution.
+
+Also of note: **CHANGELOG.md** is now seeded and maintained by the `librarian`
+specialist. If you add a feature / kernel / fix, the human-editable touchpoint
+is usually the PR body — librarian picks from there.
 
 ## Workflow
 
@@ -92,7 +97,9 @@ contribution.
 - **Telemetry / analytics / "opt-out" phone-home.** No.
 - **Required paid API keys.** Every paid backend must be opt-in via sommelier.
 - **Closed-source "enhancement" blobs.** Everything MIT, source included.
-- **Node.js runtime / Electron UIs.** Use Bun or a native stack.
+- **Node.js runtime / Electron UIs.** Use Bun or a native stack. (Bun is
+  explicitly allowed — `halo-kokoro`, `discord-mcp`, and `echo-mcp` all run
+  under Bun.)
 - **AI art / images in the repo.** Keep commits lean.
 
 ## Commit signing

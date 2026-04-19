@@ -62,19 +62,25 @@ If you're sure it's a Strix Halo and detection just fails: `GPU_ARCH=gfx1151
 
 ### `connection refused` on :8080
 
-`halo-bitnet.service` isn't running:
+`halo-bitnet.service` isn't running. Since 2026-04-19 every halo unit is
+user-scope (lives in `~/.config/systemd/user/`):
 
 ```bash
-systemctl status halo-bitnet
-# If failed, see logs:
-journalctl -u halo-bitnet -n 30
+systemctl --user status halo-bitnet
+# or use the unified CLI:
+halo status
+halo logs bitnet -n 30
+
+# Fallback: read the journal directly
+journalctl --user -u halo-bitnet -n 30
 ```
 
 Common causes:
 - Model file missing: check `/home/bcloud/halo-ai/models/halo-1bit-2b.h1b`
   exists (should be ~1.1 GiB in TQ1_0 packing). Re-extract from the release
   tarball if not.
-- Port 8080 already in use: change the unit's ExecStart to `--server 8081`
+- Port 8080 already in use: change the unit's ExecStart to `--server 9080`
+  (avoid 8081/8082/8083 — those are halo-sd / halo-whisper / halo-kokoro)
 
 ### `model not found` / HTTP 400
 
@@ -106,13 +112,35 @@ VRAM is full. Two processes fighting for GPU memory, or a previous crash
 left state behind. Restart:
 
 ```bash
-sudo systemctl restart halo-bitnet
+systemctl --user restart halo-bitnet
+# or
+halo restart bitnet
 ```
 
 ### Kernel panic / hang under load
 
 Known Strix Halo quirk with some kernel versions. Use mainline 7.0+ or the
 CachyOS `linux-cachyos` kernel — both tested working.
+
+## Satellite services (halo-sd / halo-whisper / halo-kokoro)
+
+All three are user-systemd units on 8081/8082/8083 respectively. Common drift:
+
+```bash
+halo status                                 # one-line-per-service summary
+halo logs sd -f                             # tail halo-sd
+halo logs kokoro -n 200                     # last 200 lines from Bun shim
+systemctl --user restart halo-whisper
+```
+
+- `halo-sd` failing to load model → check `~/halo-ai/models/sdxl/` exists and
+  is populated. The service probes for the model at startup and refuses to
+  bind if weights are missing.
+- `halo-kokoro` crash-looping under Bun → verify `HALO_KOKORO_BIN` points at
+  the native `kokoro_tts` binary (unit environment) and `bun --version`
+  resolves (`pacman -Q bun`).
+- `/sd/*` returning 401 through Caddy → Caddy bearer gate is separate from the
+  service auth; token lives in `/etc/caddy/token.secret`.
 
 ## Discord (if sentinel/herald enabled)
 

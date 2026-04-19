@@ -13,13 +13,18 @@ All numbers: **tok/s generation** · 5-run mean · 256-token completions · gree
 This is the one model this project is about. Apples-to-apples on the same
 box, same weights, same prompt:
 
-| Backend | Weight format | Model bytes | tok/s | PPL @ 1k wikitext-103 | Runtime deps |
+| Backend | Weight format | Model bytes | tok/s @ 64 / 1024 ctx | PPL @ 1k wikitext-103 | Runtime deps |
 |---|---|---|---:|---:|---|
-| **halo-ai (rocm-cpp)** | TQ1_0 ternary (.h1b v2) | **1.1 GiB** | **85** | **9.16** | **0 python** |
-| llama.cpp (Vulkan, Prism fork) | TQ1_0 | 1.1 GiB | ~65 | 9.16 (same weights) | python tooling |
-| llama.cpp (ROCm HIP) | TQ1_0 | 1.1 GiB | ~55 | 9.16 | python tooling |
+| **halo-ai (rocm-cpp)** | TQ1_0 ternary (.h1b v2) | **1.1 GiB** | **83 / 68.6** | **9.16** | **0 python** |
+| llama.cpp (Vulkan, Prism fork) | TQ1_0 | 1.1 GiB | ~65 / — | 9.16 (same weights) | python tooling |
+| llama.cpp (ROCm HIP) | TQ1_0 | 1.1 GiB | ~55 / — | 9.16 | python tooling |
 | MLX ROCm | (no ternary path) | — | — | — | python runtime |
 | vLLM ROCm | (no BitNet runtime) | — | — | — | python runtime |
+
+halo-ai context sweep (same box, post-session): `64 → 83.1 · 256 → 73.5 ·
+512 → 71.1 · 1024 → 68.6`. Long-context number is **1.83× the pre-session
+baseline** (37.5 → 68.6) thanks to split-KV Flash-Decoding becoming the
+default attention path.
 
 **The short version:** halo-ai is the only public gfx1151 stack that runs
 BitNet-b1.58 ternary end-to-end. MLX ROCm has no ternary mode (closest is
@@ -40,7 +45,7 @@ The ternary GEMV alone runs at **~92% of LPDDR5-8000 peak bandwidth**
 | **RoPE split-half convention** | PPL @ 1k wikitext-103: broken → **9.16** (paper baseline) | bit-exact vs HF reference |
 | Sherry ternary GEMV (LDS bank-conflict fix) | 1.44–1.66× halo v2 microbench | `max |halo − sherry| = 0` |
 | TQ1 ternary GEMV (`__builtin_amdgcn_perm` repack) | 1.45–1.66× halo, 197 GB/s microbench | `max |halo − tq1| = 0` |
-| Split-KV Flash-Decoding attention | up to **6.78× at L=2048** microbench | `max |fp16 − fd| < 2e-4` |
+| Split-KV Flash-Decoding attention | up to **6.78× at L=2048** microbench; **1.83× end-to-end lift at L=1024** (37.5 → 68.6 tok/s) | `max |fp16 − fd| < 2e-4` |
 | `bitnet_decode --ppl <file>` | teacher-forced PPL harness + wikitext-103 on disk | new in this release |
 
 RoPE was the big one — our kernel paired `(x[2i], x[2i+1])` (GPT-NeoX
@@ -102,7 +107,8 @@ advantage of the Ryzen AI MAX+ 395: not competing, complementing. The
 │  │  rocm-cpp    │  │  iGPU        │  │  XDNA2               │   │
 │  │              │  │              │  │                      │   │
 │  │ BitNet-2B-4T │  │ Qwen3-4B     │  │ Qwen3-0.6B / voice   │   │
-│  │ 83 tok/s @ 64 ctx (68.6 @ 1024)     │  │ 46.9 tok/s   │  │ 94.4 tok/s           │   │
+│  │ 83 / 68.6    │  │ 46.9 tok/s   │  │ 94.4 tok/s           │   │
+│  │ (64 / 1024)  │  │              │  │                      │   │
 │  │ TQ1_0 ternary│  │ 4-bit        │  │ FLM int8             │   │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘   │
 │                                                                  │

@@ -76,9 +76,9 @@ url     = "http://127.0.0.1:8081/v1"
 |---|---|---|
 | BitNet-b1.58 2B ternary decode | **yes, 83 tok/s @ 64 ctx (68.6 @ 1024), 1.1 GiB** | no ternary path |
 | Dense Llama/Qwen fp16 decode | not supported (out of scope) | yes |
-| SDXL / diffusion | planned (sd.cpp port) | yes (`mlx-image`) |
-| Whisper STT | yes (whisper.cpp via echo_ear) | yes (`mlx-whisper`) |
-| Kokoro TTS | yes (echo_mouth) | yes |
+| SDXL / diffusion | **yes** — native-HIP port (`halo-sd` on :8081, Caddy `/sd/*`) | yes (`mlx-image`) |
+| Whisper STT | yes — `halo-whisper` on :8082 (echo_ear) | yes (`mlx-whisper`) |
+| Kokoro TTS | yes — `halo-kokoro` on :8083 (echo_mouth, Bun shim) | yes |
 
 ## what killed MLX as the primary backend, in one paragraph
 

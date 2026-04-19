@@ -1,6 +1,13 @@
 # halo-mcp ↔ lemonade-nexus — design
 
-Status: draft (2026-04-18). Stamped for architect review.
+Status: **Phase 0 live (2026-04-19).** Phase 1 (`BusBridge`) pending.
+Original draft 2026-04-18; this doc now tracks the rollout.
+
+**Live repo:** `stampby/halo-mcp` (C++20, standalone binary, stdio JSON-RPC).
+17 specialist stubs registered via `src/tool_registry.cpp::make_default_registry()`
+(canonical source for the specialist list — if the wiki drifts from this array,
+the array wins). Each stub currently replies with a `"not implemented"` payload
+and a note that BusBridge is the next step.
 
 ## Goal
 
@@ -141,15 +148,17 @@ target_compile_features(halo_mcp PRIVATE cxx_std_20)
 
 ## Phased rollout
 
-**Phase 0 (v0.1, local-only):** StdioServer + ToolRegistry + BusBridge + CVGGate + AuditChain. No nexus. Claude Code → stdio → agent-cpp specialists. Read-only specialists only (scribe, librarian, cartograph, sentinel-read).
+**Phase 0 — Complete (2026-04-19, v0.1, local-only, stubs):** StdioServer + ToolRegistry + CVGGate + AuditChain scaffold in place. 17 specialist stubs return `not implemented`. No BusBridge yet, no nexus. Proves the MCP surface shape (tool list, schema passthrough) and the Ed25519 identity bootstrap. Claude Code can connect, list tools, call them, and get a structured not-implemented reply.
 
-**Phase 1 (v0.2, nexus-enrolled, local-only):** Add NexusClient, join mesh, advertise tool manifest to tree. Don't accept remote calls yet. Peers see us and our tools; we see theirs.
+**Phase 1 — Pending (BusBridge):** Implement `BusBridge` so `tools/call` on any of the 17 stubs routes an `mcp_call` Message onto the agent-cpp bus, awaits the specialist reply, and returns it. Read-only specialists first (scribe, librarian, cartograph, sentinel-read). Still local-only — no nexus.
 
-**Phase 2 (v0.3, federated):** Add private HTTPS :9200 server, RemoteDispatcher, remote-call CVG policy. Peer tools become callable through our StdioServer. Still read-only.
+**Phase 2 (v0.2, nexus-enrolled, local-only):** Add NexusClient, join mesh, advertise tool manifest to tree. Don't accept remote calls yet. Peers see us and our tools; we see theirs.
 
-**Phase 3 (v0.4, write specialists):** Allow herald/quartermaster/magistrate/anvil over remote call, one at a time, each gated by `allowed_callers` on the tool node. Per-specialist CVG consent scope.
+**Phase 3 (v0.3, federated):** Add private HTTPS :9200 server, RemoteDispatcher, remote-call CVG policy. Peer tools become callable through our StdioServer. Still read-only.
 
-**Phase 4 (v0.5, auto-switching + latency-aware routing):** Use `client.server_latencies()` and `RemoteDispatcher` picks the closest peer when multiple nodes advertise the same tool.
+**Phase 4 (v0.4, write specialists):** Allow herald/quartermaster/magistrate/anvil over remote call, one at a time, each gated by `allowed_callers` on the tool node. Per-specialist CVG consent scope.
+
+**Phase 5 (v0.5, auto-switching + latency-aware routing):** Use `client.server_latencies()` and `RemoteDispatcher` picks the closest peer when multiple nodes advertise the same tool.
 
 ## Open questions for the architect
 

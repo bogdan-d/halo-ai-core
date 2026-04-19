@@ -286,9 +286,9 @@ rounds of 256-token generation, reports mean ± stddev, saves to
 ## Expected results (Strix Halo gfx1151, 128GB, ROCm 7.13.0)
 
 ```
-BACKEND    MODEL                       HARDWARE     TOK/S   ±STDDEV
-──────────────────────────────────────────────────────────────────
-halo-ai    bitnet-b1.58-2b-4t (TQ1_0)  GPU-HIP       85.0   ±0.4
+BACKEND    MODEL                       HARDWARE     TOK/S   ±STDDEV   note
+───────────────────────────────────────────────────────────────────────────
+halo-ai    bitnet-b1.58-2b-4t (TQ1_0)  GPU-HIP       83.1   ±0.4     N=64 (68.6 @ 1024)
 mlx        Qwen3-0.6B-4bit             GPU-ROCm     149.3   ±0.3
 mlx        Qwen3-1.7B-4bit             GPU-ROCm      65.2   ±0.2
 mlx        Qwen3-4B-4bit               GPU-ROCm      44.5   ±0.1

@@ -55,34 +55,44 @@ This will:
 - Download the pre-built binaries from GH releases
 - Write `/etc/ld.so.conf.d/halo-ai.conf` (the Arch ldconfig fix)
 - Symlink the tokenizer path (workaround for bitnet_decode hardcoded path)
-- Create + enable `halo-bitnet.service` and `halo-agent.service`
+- Create + enable **user-scope** systemd units in `~/.config/systemd/user/`:
+  `halo-bitnet`, `halo-agent`, and (if opted in) `halo-sd`, `halo-whisper`,
+  `halo-kokoro` (migrated from system-scope as of 2026-04-19)
+- Drop `bin/halo` onto `$PATH` as the unified ops CLI (`halo status`,
+  `halo doctor`, etc.)
 
 ## Step 4 — restore secrets
 
+Halo services run under **user-systemd** (post-2026-04-19). Secrets live in
+the user config tree, drop-ins in the user unit directory — no `sudo`:
+
 ```sh
-sudo mkdir -p /etc/halo-ai
-sudo tee /etc/halo-ai/secrets.env >/dev/null <<'EOF'
+mkdir -p ~/.config/halo-ai
+cat > ~/.config/halo-ai/secrets.env <<'EOF'
 DISCORD_TOKEN=
 DISCORD_ANNOUNCEMENTS_CHANNEL=
 GH_TOKEN=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 EOF
-sudo chmod 600 /etc/halo-ai/secrets.env
+chmod 600 ~/.config/halo-ai/secrets.env
 
-# systemd drop-in to read the file:
-sudo mkdir -p /etc/systemd/system/halo-agent.service.d
-sudo tee /etc/systemd/system/halo-agent.service.d/10-secrets.conf >/dev/null <<'EOF'
+# user-systemd drop-in to read the file:
+mkdir -p ~/.config/systemd/user/halo-agent.service.d
+cat > ~/.config/systemd/user/halo-agent.service.d/10-secrets.conf <<EOF
 [Service]
-EnvironmentFile=-/etc/halo-ai/secrets.env
+EnvironmentFile=-$HOME/.config/halo-ai/secrets.env
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl restart halo-agent
+systemctl --user daemon-reload
+systemctl --user restart halo-agent
 ```
 
-Paste real token values into `/etc/halo-ai/secrets.env` when you want
-Discord / Github / external LLMs live.
+Paste real token values into `~/.config/halo-ai/secrets.env` when you want
+Discord / GitHub / external LLMs live. If you still have a
+`/etc/halo-ai/secrets.env` from the system-scope era, you can either migrate
+it (`cp /etc/halo-ai/secrets.env ~/.config/halo-ai/`) or point the
+EnvironmentFile= line at that path instead.
 
 ## Step 5 — re-authenticate `gh` if needed
 
@@ -107,12 +117,15 @@ recall everything (rules, decisions, project state) automatically.
 ## Step 7 — verify
 
 ```sh
-# Services
-systemctl status halo-bitnet halo-agent --no-pager | head -20
+# Full health probe (user-scope units; bitnet/sd/whisper/kokoro/agent)
+halo doctor
+
+# Manual equivalent:
+systemctl --user status halo-bitnet halo-agent --no-pager | head -20
 curl -s http://localhost:8080/v1/models
 
-# MCP server
-cd ~/repos/agent-cpp/mcp
+# MCP server (Phase 0 stubs live at stampby/halo-mcp)
+cd ~/repos/halo-mcp
 cmake --build build
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./build/halo_mcp | head -3
 
