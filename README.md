@@ -155,6 +155,7 @@ pick what you want. drop the rest.
 | **agent_cpp → anvil** | CI runner | optional |
 | **caddy** | reverse proxy + bearer auth | installed + configured |
 | **headscale** | self-hosted mesh (Tailscale-compatible) | installed + configured |
+| **man-cave launcher** | frosted-glass web page, Lemonade + Gaia tiles + add-your-own, at `https://<host>.local/mancave/` | installed + configured |
 | **man-cave TUI** | FTXUI dashboard over SSH | optional (v2) |
 | **orchestrator** | systemd unit wiring | included |
 
