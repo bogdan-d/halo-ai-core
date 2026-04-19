@@ -1,0 +1,562 @@
+#!/usr/bin/env bash
+# halo — halo-ai package-manager CLI.
+#
+# One tool, many sub-commands. Patterned after pacman / brew / systemctl:
+# terse, composable, read-only commands safe by default, write commands
+# announce what they touch.
+#
+# Lives in ~/halo-ai-core/bin/halo, symlinked to /usr/local/bin/halo.
+# Stays bash (not C++) because it's tooling, not an inference-path component —
+# users can read and edit it without a build step. Rule B only applies to
+# runtime components.
+
+set -euo pipefail
+
+# ── constants ───────────────────────────────────────────────
+HALO_ROOT="${HALO_ROOT:-/home/bcloud/halo-ai-core}"
+ROCM_CPP_ROOT="${ROCM_CPP_ROOT:-/home/bcloud/repos/rocm-cpp}"
+AGENT_CPP_ROOT="${AGENT_CPP_ROOT:-/home/bcloud/repos/agent-cpp}"
+MODELS_DIR="${HALO_MODELS_DIR:-$HOME/halo-ai/models}"
+PI_TAILNET_IP="${PI_TAILNET_IP:-100.64.0.4}"
+
+# All halo-ai units live in user-systemd (--user scope). The install scripts
+# are being migrated to user-systemd this session; system-scope fallback kept
+# for compatibility (checked if the user variant is missing).
+#
+# Service rows: display:unit:port (port empty → no network socket to probe)
+SERVICES=(
+    "bitnet:halo-bitnet:8080"
+    "sd:halo-sd:8081"
+    "whisper:halo-whisper:8082"
+    "kokoro:halo-kokoro:8083"
+    "agent:halo-agent:"
+    "archive:halo-archive:"
+)
+# Timers / background jobs (all user-scope)
+TIMERS=(
+    "anvil:halo-anvil.timer"
+    "gh-trio:halo-gh-trio.timer"
+    "memory-sync:halo-memory-sync.timer"
+    "archive-timer:halo-archive.timer"
+)
+
+# ── colors ──────────────────────────────────────────────────
+if [[ -t 1 ]]; then
+    RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'
+    CYAN=$'\033[0;36m'; DIM=$'\033[2m'; BOLD=$'\033[1m'; NC=$'\033[0m'
+else
+    RED=''; GREEN=''; YELLOW=''; CYAN=''; DIM=''; BOLD=''; NC=''
+fi
+
+log()  { printf "${CYAN}[halo]${NC} %s\n" "$*"; }
+ok()   { printf "${GREEN}[OK]${NC} %s\n" "$*"; }
+warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$*" >&2; }
+err()  { printf "${RED}[FAIL]${NC} %s\n" "$*" >&2; }
+die()  { err "$1"; exit "${2:-1}"; }
+
+# ── helpers ─────────────────────────────────────────────────
+_svc_parts() {   # "$1" row → unit / display / port via globals
+    local row=$1
+    _disp=${row%%:*}; local rest=${row#*:}
+    _unit=${rest%%:*}; _port=${rest#*:}
+}
+
+# Return "user" if unit is installed user-scope, "system" if system-scope,
+# "missing" if neither. Preference: user-scope first (post-migration default).
+_unit_scope() {
+    local unit=$1
+    # list-unit-files returns 0 with "0 unit files listed" even when unit
+    # is absent. Inspect its stdout to really know.
+    if systemctl --user list-unit-files "$unit" --no-legend 2>/dev/null | grep -q "^$unit"; then
+        echo "user"; return
+    fi
+    if systemctl list-unit-files "$unit" --no-legend 2>/dev/null | grep -q "^$unit"; then
+        echo "system"; return
+    fi
+    echo "missing"
+}
+
+_unit_state() {  # returns active|inactive|failed|missing
+    local unit=$1
+    local scope
+    scope=$(_unit_scope "$unit")
+    if [[ "$scope" == "missing" ]]; then
+        echo "missing"; return
+    fi
+    local flag=""
+    [[ "$scope" == "user" ]] && flag="--user"
+    systemctl $flag is-active "$unit" 2>/dev/null || true
+}
+
+_port_listening() {  # returns 0 if port is listening
+    local port=$1
+    [[ -z "$port" ]] && return 1
+    ss -H -tln "sport = :$port" 2>/dev/null | grep -q LISTEN
+}
+
+_status_symbol() {
+    local state=$1 port_ok=$2
+    if [[ "$state" == "active" ]]; then
+        if [[ -n "$port_ok" && "$port_ok" != "ok" ]]; then
+            printf "${YELLOW}●${NC}"   # running but port not listening
+        else
+            printf "${GREEN}●${NC}"
+        fi
+    elif [[ "$state" == "failed" ]]; then
+        printf "${RED}●${NC}"
+    elif [[ "$state" == "missing" ]]; then
+        printf "${DIM}○${NC}"
+    else
+        printf "${DIM}○${NC}"
+    fi
+}
+
+_resolve_service() {   # name → echo "unit scope"
+    local name=$1
+    local unit=""
+    for row in "${SERVICES[@]}"; do
+        _svc_parts "$row"
+        if [[ "$_disp" == "$name" ]]; then
+            unit="$_unit.service"
+            break
+        fi
+    done
+    if [[ -z "$unit" ]]; then
+        for row in "${TIMERS[@]}"; do
+            local disp=${row%%:*} u=${row#*:}
+            if [[ "$disp" == "$name" ]]; then
+                unit=${u%.timer}.service
+                break
+            fi
+        done
+    fi
+    [[ -z "$unit" ]] && return 1
+    local scope
+    scope=$(_unit_scope "$unit")
+    [[ "$scope" == "missing" ]] && return 1
+    echo "$unit $scope"
+}
+
+_git_sha() {
+    local dir=$1
+    [[ -d "$dir/.git" ]] || { echo "n/a"; return; }
+    git -C "$dir" rev-parse --short HEAD 2>/dev/null || echo "dirty?"
+}
+
+# ── sub-commands ────────────────────────────────────────────
+
+cmd_status() {
+    printf "${BOLD}halo-ai services${NC}  (host: %s)\n" "$(hostname)"
+    printf " %s %-12s  %-9s  %-6s  %-5s  %s\n" " " "service" "state" "port" "scope" "unit"
+    printf "%s\n" "──────────────────────────────────────────────────────────────────────"
+    for row in "${SERVICES[@]}"; do
+        _svc_parts "$row"
+        local unit="$_unit.service"
+        local scope; scope=$(_unit_scope "$unit")
+        local state; state=$(_unit_state "$unit")
+        local port_ok=""
+        if [[ -n "$_port" ]]; then
+            if _port_listening "$_port"; then port_ok="ok"; else port_ok="--"; fi
+        fi
+        local sym; sym=$(_status_symbol "$state" "$port_ok")
+        printf " %s %-12s  %-9s  %-6s  %-5s  %s\n" "$sym" "$_disp" "$state" "${_port:-—}" "$scope" "$unit"
+    done
+
+    printf "\n${BOLD}halo-ai timers${NC}\n"
+    printf " %s %-14s  %-9s  %-24s  %s\n" " " "timer" "state" "last fire" "unit"
+    printf "%s\n" "──────────────────────────────────────────────────────────────────────"
+    for row in "${TIMERS[@]}"; do
+        local disp=${row%%:*} unit=${row#*:}
+        local scope; scope=$(_unit_scope "$unit")
+        local flag=""
+        [[ "$scope" == "user" ]] && flag="--user"
+        local state
+        if [[ "$scope" == "missing" ]]; then
+            state="missing"
+        else
+            state=$(systemctl $flag is-active "$unit" 2>/dev/null || true)
+        fi
+        local last=""
+        if [[ "$scope" != "missing" ]]; then
+            last=$(systemctl $flag show "$unit" -p LastTriggerUSec --value 2>/dev/null)
+            [[ -z "$last" || "$last" == "n/a" ]] && last="never"
+        fi
+        local sym; sym=$(_status_symbol "$state" "ok")
+        printf " %s %-14s  %-9s  %-24s  %s\n" "$sym" "$disp" "$state" "${last:-—}" "$unit"
+    done
+}
+
+cmd_logs() {
+    local service=${1:-}
+    [[ -z "$service" ]] && die "usage: halo logs <service> [--follow|-f] [-n LINES]"
+    shift
+    local follow=0 lines=200
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --follow|-f) follow=1; shift ;;
+            -n) lines=$2; shift 2 ;;
+            -n=*|--lines=*) lines=${1#*=}; shift ;;
+            *) die "unknown logs flag: $1" ;;
+        esac
+    done
+    local resolved; resolved=$(_resolve_service "$service") || die "unknown service: $service"
+    local unit=${resolved%% *} scope=${resolved##* }
+    local jflag=""
+    [[ "$scope" == "user" ]] && jflag="--user"
+    if [[ $follow -eq 1 ]]; then
+        exec journalctl $jflag -u "$unit" -n "$lines" -f
+    else
+        exec journalctl $jflag -u "$unit" -n "$lines" --no-pager
+    fi
+}
+
+cmd_restart() {
+    local service=${1:-}
+    [[ -z "$service" ]] && die "usage: halo restart <service>"
+    local resolved; resolved=$(_resolve_service "$service") \
+        || die "unknown or uninstalled service: $service"
+    local unit=${resolved%% *} scope=${resolved##* }
+    if [[ "$scope" == "user" ]]; then
+        log "restarting $unit (user scope)"
+        systemctl --user restart "$unit"
+    else
+        log "restarting $unit (system scope — may prompt for sudo)"
+        sudo systemctl restart "$unit"
+    fi
+    ok "$unit restarted"
+}
+
+cmd_update() {
+    local rebuild=1 do_restart=1
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --no-build)   rebuild=0; shift ;;
+            --no-restart) do_restart=0; shift ;;
+            -h|--help)
+                cat <<'EOF'
+halo update — git pull every halo repo, rebuild affected binaries, restart touched services.
+
+  --no-build     pull only, skip rebuilds
+  --no-restart   skip systemctl restarts at the end
+EOF
+                return 0 ;;
+            *) die "unknown update flag: $1" ;;
+        esac
+    done
+
+    local touched_rocm=0 touched_agent=0 touched_core=0
+    for pair in \
+        "$HALO_ROOT:core" \
+        "$ROCM_CPP_ROOT:rocm" \
+        "$AGENT_CPP_ROOT:agent"; do
+        local dir=${pair%:*} tag=${pair##*:}
+        if [[ ! -d "$dir/.git" ]]; then
+            warn "$tag: $dir is not a git repo — skipping"
+            continue
+        fi
+        log "pulling $tag ($dir)"
+        local before after
+        before=$(git -C "$dir" rev-parse HEAD 2>/dev/null)
+        if git -C "$dir" pull --ff-only 2>&1 | sed 's/^/   /'; then
+            after=$(git -C "$dir" rev-parse HEAD 2>/dev/null)
+            if [[ "$before" != "$after" ]]; then
+                ok "$tag: ${before:0:7} → ${after:0:7}"
+                case "$tag" in
+                    rocm)  touched_rocm=1 ;;
+                    agent) touched_agent=1 ;;
+                    core)  touched_core=1 ;;
+                esac
+            else
+                log "$tag: already up to date"
+            fi
+        else
+            err "$tag: git pull failed"
+        fi
+    done
+
+    if [[ $rebuild -eq 1 ]]; then
+        if [[ $touched_rocm -eq 1 ]]; then
+            warn "rocm-cpp changed — rebuild strategy not yet wired into 'halo update'."
+            warn "run your anvil loop or rebuild manually: (cd $ROCM_CPP_ROOT && cmake --build build -j)"
+        fi
+        if [[ $touched_agent -eq 1 ]]; then
+            if [[ -f "$AGENT_CPP_ROOT/CMakeLists.txt" ]]; then
+                log "rebuilding agent-cpp"
+                cmake --build "$AGENT_CPP_ROOT/build" -j || warn "agent-cpp build failed"
+            fi
+        fi
+    fi
+
+    if [[ $do_restart -eq 1 ]]; then
+        if [[ $touched_rocm -eq 1 ]]; then
+            log "rocm-cpp touched — would restart halo-bitnet after rebuild (SKIPPED: see warning above)"
+        fi
+        if [[ $touched_agent -eq 1 ]]; then
+            local resolved
+            if resolved=$(_resolve_service agent 2>/dev/null); then
+                local unit=${resolved%% *} scope=${resolved##* }
+                local flag=""; [[ "$scope" == "user" ]] && flag="--user"
+                if [[ "$scope" == "user" ]]; then
+                    systemctl $flag restart "$unit" && ok "$unit restarted" \
+                        || warn "$unit restart skipped"
+                else
+                    sudo systemctl restart "$unit" && ok "$unit restarted" \
+                        || warn "$unit restart skipped"
+                fi
+            else
+                warn "halo-agent not installed — skipping restart"
+            fi
+        fi
+    fi
+}
+
+cmd_bench() {
+    local bench_script="$HALO_ROOT/bench.sh"
+    [[ -x "$bench_script" ]] || die "bench.sh not executable at $bench_script"
+    log "running bench.sh — results go to $HALO_ROOT/benchmarks/ and 'claude output/'"
+    exec "$bench_script" "$@"
+}
+
+cmd_doctor() {
+    local fails=0 warns=0
+    printf "${BOLD}halo doctor${NC}\n\n"
+
+    # --- GPU ----
+    printf "${BOLD}GPU${NC}\n"
+    if command -v rocminfo &>/dev/null; then
+        local arch
+        arch=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1 || true)
+        if [[ "$arch" == "gfx1151" ]]; then
+            ok "rocminfo: $arch (Strix Halo)"
+        elif [[ -n "$arch" ]]; then
+            warn "rocminfo: $arch — not gfx1151, halo prebuilt kernels will not run"; ((warns++))
+        else
+            err "rocminfo ran but found no gfx*"; ((fails++))
+        fi
+    else
+        err "rocminfo not installed — ROCm userspace missing"; ((fails++))
+    fi
+
+    # --- ports ----
+    printf "\n${BOLD}Listening ports${NC}\n"
+    for row in "${SERVICES[@]}"; do
+        _svc_parts "$row"
+        [[ -z "$_port" ]] && continue
+        if _port_listening "$_port"; then
+            ok "$_disp  :$_port  listening"
+        else
+            local state
+            state=$(_unit_state "$_unit.service")
+            if [[ "$state" == "active" ]]; then
+                err "$_disp  :$_port  NOT listening but unit is active"; ((fails++))
+            elif [[ "$state" == "missing" ]]; then
+                warn "$_disp  :$_port  — service not installed"; ((warns++))
+            else
+                warn "$_disp  :$_port  — service $state"; ((warns++))
+            fi
+        fi
+    done
+
+    # --- Caddy ----
+    printf "\n${BOLD}Caddy reverse proxy${NC}\n"
+    if systemctl is-active caddy &>/dev/null; then
+        ok "caddy.service active"
+        if curl -sSf --max-time 3 -o /dev/null -k "https://$(hostname).local/" 2>/dev/null; then
+            ok "https://$(hostname).local reachable"
+        elif curl -sS --max-time 3 -o /dev/null -k "https://$(hostname).local/" 2>/dev/null; then
+            ok "https://$(hostname).local responds (non-2xx, expected without bearer)"
+        else
+            warn "https://$(hostname).local did not respond within 3s"; ((warns++))
+        fi
+    else
+        warn "caddy.service not active"; ((warns++))
+    fi
+
+    # --- Headscale / tailnet ----
+    printf "\n${BOLD}Private mesh${NC}\n"
+    if systemctl is-active headscale &>/dev/null; then
+        ok "headscale.service active"
+    else
+        warn "headscale.service not active"; ((warns++))
+    fi
+    if command -v tailscale &>/dev/null; then
+        local tip
+        tip=$(tailscale ip -4 2>/dev/null | head -1)
+        if [[ -n "$tip" ]]; then
+            ok "tailnet IP: $tip"
+        else
+            warn "tailscale up but no IPv4 — tailnet may be down"; ((warns++))
+        fi
+    else
+        warn "tailscale CLI missing"; ((warns++))
+    fi
+
+    # --- Pi archive reachability ----
+    printf "\n${BOLD}Pi archive${NC}\n"
+    if ping -c1 -W2 "$PI_TAILNET_IP" &>/dev/null; then
+        ok "pi ($PI_TAILNET_IP) reachable"
+    else
+        warn "pi ($PI_TAILNET_IP) not reachable — archive sync will fail"; ((warns++))
+    fi
+
+    # --- user timers ----
+    printf "\n${BOLD}User timers${NC}\n"
+    for row in "${TIMERS[@]}"; do
+        local disp=${row%%:*} unit=${row#*:}
+        local scope; scope=$(_unit_scope "$unit")
+        local flag=""; [[ "$scope" == "user" ]] && flag="--user"
+        local state
+        if [[ "$scope" == "missing" ]]; then
+            state="missing"
+        else
+            state=$(systemctl $flag is-active "$unit" 2>/dev/null || true)
+        fi
+        if [[ "$state" == "active" ]]; then
+            ok "$disp ($unit) active"
+        elif [[ "$state" == "missing" ]]; then
+            warn "$disp ($unit) not installed"; ((warns++))
+        else
+            warn "$disp ($unit) $state"; ((warns++))
+        fi
+    done
+
+    # --- Models ----
+    printf "\n${BOLD}Models${NC}\n"
+    if [[ -f "$MODELS_DIR/halo-1bit-2b.h1b" ]]; then
+        local sz
+        sz=$(du -h "$MODELS_DIR/halo-1bit-2b.h1b" 2>/dev/null | awk '{print $1}')
+        ok "halo-1bit-2b.h1b present ($sz) in $MODELS_DIR"
+    else
+        warn "halo-1bit-2b.h1b missing from $MODELS_DIR"; ((warns++))
+    fi
+
+    printf "\n${BOLD}summary${NC}  fails=%d  warns=%d\n" "$fails" "$warns"
+    [[ $fails -eq 0 ]] || return 1
+    return 0
+}
+
+cmd_version() {
+    printf "${BOLD}halo${NC}  halo-ai-core CLI  v0.1.0\n"
+    printf "host: %s\n" "$(hostname)"
+    printf "\n${BOLD}component SHAs${NC}\n"
+    for pair in \
+        "halo-ai-core:$HALO_ROOT" \
+        "rocm-cpp:$ROCM_CPP_ROOT" \
+        "agent-cpp:$AGENT_CPP_ROOT"; do
+        local name=${pair%%:*} dir=${pair##*:}
+        local sha branch
+        sha=$(_git_sha "$dir")
+        if [[ -d "$dir/.git" ]]; then
+            branch=$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+        else
+            branch="-"
+        fi
+        printf "  %-14s  %-10s  %s\n" "$name" "$sha" "$branch @ $dir"
+    done
+
+    printf "\n${BOLD}binaries${NC}\n"
+    for b in bitnet_decode agent_cpp sd-cli whisper-cli kokoro_tts man-cave; do
+        if command -v "$b" &>/dev/null; then
+            printf "  %-16s  %s\n" "$b" "$(command -v "$b")"
+        fi
+    done
+}
+
+cmd_install() {
+    cat <<'EOF'
+halo install — coming soon.
+For now, run the monolithic installer:
+    ./install.sh              (auto-detects arch)
+    ./install-strixhalo.sh    (fast path, gfx1151)
+    ./install-source.sh       (build from source)
+EOF
+}
+
+cmd_uninstall() {
+    cat <<'EOF'
+halo uninstall — coming soon (per-component removal).
+For now, the unified installer-sibling is authoritative:
+    ./uninstall.sh            (removes the whole stack, keeps models/repos)
+    ./uninstall.sh --dry-run  (preview)
+EOF
+}
+
+cmd_list() {
+    cat <<EOF
+halo list — coming soon.
+Will enumerate components, installed/available/version.
+
+Known services on this host:
+EOF
+    for row in "${SERVICES[@]}"; do
+        _svc_parts "$row"
+        local state
+        state=$(_unit_state "$_unit.service")
+        printf "  %-12s  %s\n" "$_disp" "$state"
+    done
+}
+
+cmd_help() {
+    local topic=${1:-}
+    if [[ -n "$topic" ]]; then
+        case "$topic" in
+            status)    echo "halo status — one-line-per-service health (systemctl + port check)." ;;
+            logs)      echo "halo logs <service> [--follow|-f] [-n N] — journalctl wrapper." ;;
+            restart)   echo "halo restart <service> — systemctl restart halo-<service> (uses sudo for system units)." ;;
+            update)    echo "halo update [--no-build] [--no-restart] — git pull halo repos, rebuild affected binaries, restart touched services."
+                       echo "             NOTE: rocm-cpp rebuild is NOT wired in yet — see the warning printed at runtime." ;;
+            bench)     echo "halo bench — invoke $HALO_ROOT/bench.sh; results appear under benchmarks/." ;;
+            doctor)    echo "halo doctor — comprehensive health check: GPU, ports, Caddy, Headscale, Pi archive, timers, models." ;;
+            version)   echo "halo version — print CLI version + git SHAs of halo-ai-core / rocm-cpp / agent-cpp." ;;
+            install)   cmd_install ;;
+            uninstall) cmd_uninstall ;;
+            list)      cmd_list ;;
+            help)      cmd_help ;;
+            *)         die "no help for '$topic'" ;;
+        esac
+        return 0
+    fi
+    cat <<EOF
+${BOLD}halo${NC} — halo-ai package-manager CLI
+
+${BOLD}commands${NC}
+  status              one-line-per-service health
+  logs <svc> [-f]     journalctl wrapper (add --follow to tail)
+  restart <svc>       systemctl restart halo-<svc>
+  update              git pull every halo repo, rebuild, restart
+  bench               run the standard burn-suite (bench.sh)
+  doctor              comprehensive health check
+  version             version + component SHAs
+  help [command]      per-command help
+
+${BOLD}stretch (stubbed)${NC}
+  install <comp>      per-component install (coming soon)
+  uninstall <comp>    per-component removal (coming soon)
+  list                enumerate components (partial)
+
+${BOLD}services${NC}   bitnet · sd · whisper · kokoro · agent · archive
+${BOLD}timers${NC}     anvil · gh-trio · memory-sync
+EOF
+}
+
+# ── dispatch ────────────────────────────────────────────────
+main() {
+    local cmd=${1:-help}
+    [[ $# -gt 0 ]] && shift || true
+    case "$cmd" in
+        status|st)          cmd_status "$@" ;;
+        logs|log)           cmd_logs "$@" ;;
+        restart)            cmd_restart "$@" ;;
+        update|up)          cmd_update "$@" ;;
+        bench)              cmd_bench "$@" ;;
+        doctor|check)       cmd_doctor "$@" ;;
+        version|--version|-V) cmd_version "$@" ;;
+        install)            cmd_install "$@" ;;
+        uninstall|remove)   cmd_uninstall "$@" ;;
+        list|ls)            cmd_list "$@" ;;
+        help|--help|-h)     cmd_help "$@" ;;
+        *)                  err "unknown command: $cmd"; cmd_help; exit 2 ;;
+    esac
+}
+
+main "$@"
