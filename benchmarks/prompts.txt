@@ -1,0 +1,30 @@
+The capital of France is
+What is 2+2?
+Year 1969 happened when?
+Who wrote Hamlet?
+The largest planet in the solar system is
+Hi
+Name three primary colors.
+The chemical symbol for gold is
+What year did World War II end?
+The capital of Japan is
+Write a short python function that returns the nth fibonacci number.
+Implement bubble sort in python in under 10 lines.
+Write a bash one-liner to count lines in a file.
+Give me a SQL query that selects all rows from table users where age > 30.
+Write a C function that returns the factorial of n.
+If A implies B and B implies C, does A imply C? Answer yes or no and explain in one sentence.
+If all bloops are razzies and all razzies are lazzies, are all bloops definitely lazzies?
+A train leaves at 3pm going 60mph. Another leaves at 4pm going 90mph on the same track. When do they meet?
+You have 12 balls, one is heavier. How many weighings on a balance scale to find it?
+Is the statement "this statement is false" true, false, or neither?
+Write a short four-line poem about clouds drifting over mountains.
+Tell me a two-sentence horror story about an empty room.
+Describe the color blue to someone who has never seen it, in two sentences.
+Compose a haiku about a silent forest at dawn.
+Write a single-sentence elevator pitch for a time-travel startup.
+The following passage contains a hidden fact. Read it and answer the question at the end. In 1847, the chemist Karl Meier discovered a new element he named zephyrium while working in a small lab in Heidelberg. The element was later renamed and its discovery credited to another scientist during the political upheaval of 1849. Despite this, Meier's original notebooks, stored in the university archive, clearly document his priority. Question: in what year did Karl Meier discover the element he called zephyrium?
+Consider the following scenario: Alice has three apples. She gives one to Bob, who already has two apples. Bob then gives half of his apples to Carol, who started with zero. Finally, Carol eats one apple. How many apples does Carol have now?
+Read this paragraph and answer: The village of Hollowbrook was founded in the year when the great comet passed, which locals recorded as 1811. Over the following decades the village grew to about 400 residents by 1860, then declined after the railway bypassed it in 1873. Today only the old mill remains standing. Question: in what year was the railway built that caused the village decline?
+Below is a recipe followed by a question. Recipe: mix 2 cups flour, 1 cup sugar, 3 eggs, and 1 tsp baking powder. Bake at 350F for 25 minutes. Question: what is the oven temperature in the recipe, in Fahrenheit?
+Summarize the following in one sentence: A software engineer spent three years building a side project alone, released it to silence, rewrote it twice, and on the fourth year it finally gained a community of devoted users who kept it alive long after the original author moved on.
