@@ -157,7 +157,14 @@ pick what you want. drop the rest.
 | **headscale** | self-hosted mesh (Tailscale-compatible) | installed + configured |
 | **man-cave launcher** | frosted-glass web page, Lemonade + Gaia tiles + add-your-own, at `https://<host>.local/mancave/` | installed + configured |
 | **man-cave TUI** | FTXUI dashboard over SSH | optional (v2) |
-| **orchestrator** | systemd unit wiring | included |
+| **halo CLI** | `halo status / logs / restart / update / doctor / bench` — unified ops wrapper at `/usr/local/bin/halo` | installed + configured |
+| **halo-sd** | native HIP Stable Diffusion XL service on :8081 (Caddy `/sd/*`) | installed + configured |
+| **halo-whisper** | whisper.cpp STT on :8082 (echo_ear backend) | installed + configured |
+| **halo-kokoro** | Bun TTS shim on :8083 (echo_mouth backend) | installed + configured |
+| **halo-mcp** | C++20 MCP bridge — 17 specialists as JSON-RPC tools (Phase 0, stubs) | optional |
+| **discord-mcp** | Bun MCP server — Echo relays 17 specialist identities via per-message webhook override | installed + configured |
+| **echo-mcp** | Bun MCP server — reddit posting for echo-halo-ai via cookie-fetch | installed + configured |
+| **orchestrator** | systemd user units (all halo services run user-level post-2026-04-19) | included |
 
 ## private mesh
 
