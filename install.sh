@@ -16,7 +16,11 @@ PATH_CHOICE=""
 # NPU (XDNA2) specialists require the CachyOS kernel patches. Stock Arch and
 # other distros silently fall back to CPU/iGPU. Warn loud, don't block —
 # advanced users on a custom kernel with amdxdna backported can override with
-# HALO_SKIP_OS_CHECK=1.
+# HALO_SKIP_OS_CHECK=1. CI (GitHub Actions, GitLab, etc.) auto-skips via $CI
+# so dry-run / --status smoke tests pass without NPU silicon.
+if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    HALO_SKIP_OS_CHECK=1
+fi
 if [[ "${HALO_SKIP_OS_CHECK:-0}" != "1" ]]; then
     OS_ID=""
     if [[ -r /etc/os-release ]]; then
