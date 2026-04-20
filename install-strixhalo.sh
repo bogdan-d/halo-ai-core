@@ -233,18 +233,22 @@ if [[ $DRY_RUN -eq 0 ]]; then
     fi
     sudo ldconfig
 
-    # Tokenizer-path compat symlink. Some release binaries of bitnet_decode
-    # ship with ~/halo-1bit/models/*.htok as a hardcoded fallback path (older
-    # v0.2.x behaviour). Keep the symlink defensively — the rebuilt binary
-    # simply ignores it, but users on older tarballs need it to boot.
-    # Re-landed after 2026-04-19 external tester report: loadable path fallback
-    # in the shipped binary still reaches for ~/halo-1bit/models/*.
-    COMPAT_DIR="$HOME/halo-1bit/models"
+    # Tokenizer-path compat symlink. The release bitnet_decode binary has
+    # /home/bcloud/halo-1bit/models/* LITERALLY hardcoded as a fallback
+    # lookup path (not $HOME-relative) — leaked from the build host. The
+    # binary still uses argv[1] when present, but its tokenizer-resolution
+    # code path reaches for the hardcoded absolute string, so we plant a
+    # symlink tree at exactly that literal path.
+    #
+    # Re-landed + widened after 2026-04-19 external tester report: the
+    # $HOME-relative symlink we shipped first wasn't enough because the
+    # tester's $HOME is /home/halo, not /home/bcloud.
+    COMPAT_DIR="/home/bcloud/halo-1bit/models"
     if [[ -f "$MODELS_DIR/halo-1bit-2b.htok" && ! -e "$COMPAT_DIR/halo-1bit-2b.htok" ]]; then
-        mkdir -p "$COMPAT_DIR"
-        ln -sf "$MODELS_DIR/halo-1bit-2b.htok" "$COMPAT_DIR/halo-1bit-2b.htok"
-        ln -sf "$MODELS_DIR/halo-1bit-2b.h1b"  "$COMPAT_DIR/halo-1bit-2b.h1b"
-        log "linked $MODELS_DIR → $COMPAT_DIR (tokenizer path compat)"
+        sudo mkdir -p "$COMPAT_DIR"
+        sudo ln -sfn "$MODELS_DIR/halo-1bit-2b.htok" "$COMPAT_DIR/halo-1bit-2b.htok"
+        sudo ln -sfn "$MODELS_DIR/halo-1bit-2b.h1b"  "$COMPAT_DIR/halo-1bit-2b.h1b"
+        log "linked $MODELS_DIR → $COMPAT_DIR (binary has this path hardcoded)"
     fi
 else
     warn "dry-run: skipping install"
