@@ -393,8 +393,11 @@ CADDY_EOF
 
     # ── Trust Caddy's local CA ──────────────────────────────
     CADDY_ROOT=/var/lib/caddy/pki/authorities/local/root.crt
-    for _ in 1 2 3 4 5; do [[ -f $CADDY_ROOT ]] && break; sleep 1; done
-    if [[ -f $CADDY_ROOT ]]; then
+    # $CADDY_ROOT is root-owned 0600. Plain `[[ -f $CADDY_ROOT ]]` runs as
+    # the invoking user and returns false even when the file exists. Use
+    # `sudo test` so the check has permission to see it.
+    for _ in 1 2 3 4 5; do sudo test -f "$CADDY_ROOT" && break; sleep 1; done
+    if sudo test -f "$CADDY_ROOT"; then
         sudo install -m 644 "$CADDY_ROOT" \
             /etc/ca-certificates/trust-source/anchors/halo-local.crt
         sudo trust extract-compat
@@ -457,7 +460,7 @@ fi
 echo "joined — tailnet: \$(tailscale ip -4 | head -1)"
 JOIN_EOF
     sudo chmod 755 /var/www/halo-bootstrap/join.sh
-    [[ -f $CADDY_ROOT ]] && sudo install -m 644 "$CADDY_ROOT" \
+    sudo test -f "$CADDY_ROOT" && sudo install -m 644 "$CADDY_ROOT" \
         /var/www/halo-bootstrap/halo-local.crt
 
     # ── Mobile onboarding page (target of the QR) ───────────
