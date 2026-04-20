@@ -12,7 +12,7 @@
 #
 # "They mostly come at night. Mostly." — Newt
 
-set -eu
+set -euo pipefail
 
 DRY=0
 YES=0
