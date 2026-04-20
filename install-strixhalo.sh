@@ -265,7 +265,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$INSTALL_PREFIX/bin/bitnet_decode $MODELS_DIR/halo-1bit-2b.h1b --server 8080
+ExecStart=$INSTALL_PREFIX/bin/bitnet_decode $MODELS_DIR/halo-1bit-2b.h1b 1 --server 8080
 Restart=on-failure
 RestartSec=3
 User=$RUN_USER
