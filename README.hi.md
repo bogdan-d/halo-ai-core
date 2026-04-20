@@ -1,3 +1,9 @@
+<!--
+नोट: यह अनुवाद मशीन से उत्पन्न किया गया है। अंग्रेज़ी README आधिकारिक है। PRs का स्वागत है।
+-->
+
+> **नोट**: यह अनुवाद मशीन से उत्पन्न किया गया है। अंग्रेज़ी README आधिकारिक है। PRs का स्वागत है।
+
 <div align="center">
 
 🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | **हिन्दी** | [العربية](README.ar.md)

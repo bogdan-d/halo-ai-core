@@ -1,3 +1,9 @@
+<!--
+注記: この翻訳は機械生成です。英語版 README が正本です。PR を歓迎します。
+-->
+
+> **注記**: この翻訳は機械生成です。英語版 README が正本です。PR を歓迎します。
+
 <div align="center">
 
 🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | **日本語** | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)

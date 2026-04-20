@@ -1,3 +1,9 @@
+<!--
+참고: 이 번역은 기계 생성된 것입니다. 영어 README가 원본입니다. PR 환영합니다.
+-->
+
+> **참고**: 이 번역은 기계 생성된 것입니다. 영어 README가 원본입니다. PR 환영합니다.
+
 <div align="center">
 
 🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | [中文](README.zh.md) | **한국어** | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)

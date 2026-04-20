@@ -1,3 +1,9 @@
+<!--
+Nota: esta traducción es generada automáticamente. El README en inglés es la fuente autoritativa. Se aceptan PRs.
+-->
+
+> **Nota**: esta traducción es generada automáticamente. El README en inglés es la fuente autoritativa. Se aceptan PRs.
+
 <div align="center">
 
 🌐 [English](README.md) | [Français](README.fr.md) | **Español** | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)

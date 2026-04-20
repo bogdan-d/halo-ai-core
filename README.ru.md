@@ -1,3 +1,9 @@
+<!--
+Примечание: этот перевод сгенерирован машинно. Английский README является основным. PR приветствуются.
+-->
+
+> **Примечание**: этот перевод сгенерирован машинно. Английский README является основным. PR приветствуются.
+
 <div align="center">
 
 🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | **Русский** | [हिन्दी](README.hi.md) | [العربية](README.ar.md)

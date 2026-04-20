@@ -1,3 +1,9 @@
+<div dir="rtl">
+
+> **ملاحظة**: هذه الترجمة مُولَّدة آليًا. ملف README الإنجليزي هو المرجع الرسمي. نرحب بطلبات السحب (PRs).
+
+</div>
+
 <div align="center" dir="rtl">
 
 🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | **العربية**

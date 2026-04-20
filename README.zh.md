@@ -1,3 +1,9 @@
+<!--
+注意：此翻译由机器生成。英文 README 为权威版本。欢迎提交 PR。
+-->
+
+> **注意**：此翻译由机器生成。英文 README 为权威版本。欢迎提交 PR。
+
 <div align="center">
 
 🌐 [English](README.md) | [Français](README.fr.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Português](README.pt.md) | [日本語](README.ja.md) | **中文** | [한국어](README.ko.md) | [Русский](README.ru.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)
