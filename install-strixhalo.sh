@@ -14,6 +14,13 @@ set -euo pipefail
 # Pin PATH against a malicious inherit. All tools we use live here.
 PATH=/usr/bin:/bin
 
+# Allow running this script directly (not only from install.sh). When
+# install.sh is the entry point it passes ROOT_DIR via environment; when
+# invoked standalone we default to the script's own directory so
+# "$ROOT_DIR/man-cave" etc. resolve correctly.
+ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "$(readlink -f "$0")")" && pwd)}"
+export ROOT_DIR
+
 # ── Configuration ───────────────────────────────────────────
 REPO="${REPO:-stampby/halo-ai-core}"
 RELEASE_TAG="${RELEASE_TAG:-latest}"
